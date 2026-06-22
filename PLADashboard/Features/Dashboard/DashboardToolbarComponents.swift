@@ -8,20 +8,23 @@ enum DashboardToolbarMetrics {
 // MARK: - Toolbar filter label (align with searchable field)
 
 /// 默认选项使用 secondary；选中具体筛选项时使用 primary。
-private struct DashboardToolbarFilterLabelStyle: ViewModifier {
+/// 样式必须加在 `Menu` 的 `label` 文本上，外层 modifier 在 macOS Toolbar 中不会生效。
+private struct DashboardToolbarFilterLabel: View {
+    let title: String
     let usesPrimaryStyle: Bool
 
-    func body(content: Content) -> some View {
-        content
+    var body: some View {
+        Text(title)
             .font(.body)
             .foregroundStyle(usesPrimaryStyle ? .primary : .secondary)
-            .tint(usesPrimaryStyle ? .primary : .secondary)
     }
 }
 
 private extension View {
-    func dashboardToolbarFilterLabelStyle(usesPrimaryStyle: Bool) -> some View {
-        modifier(DashboardToolbarFilterLabelStyle(usesPrimaryStyle: usesPrimaryStyle))
+    func dashboardToolbarFilterMenuChrome(usesPrimaryStyle: Bool) -> some View {
+        menuStyle(.borderlessButton)
+            .buttonStyle(.plain)
+            .tint(usesPrimaryStyle ? .primary : .secondary)
     }
 }
 
@@ -49,19 +52,25 @@ extension View {
     }
 }
 
-// MARK: - Pop-Up Button (Picker + .menu)
+// MARK: - Pull-down filters (Menu + styled label)
 
 struct DashboardToolbarAlertFilterPicker: View {
     @Bindable var viewModel: DashboardViewModel
 
     var body: some View {
-        Picker("预警筛选", selection: $viewModel.selectedAlertFilter) {
+        Menu {
             ForEach(DashboardViewModel.alertFilterOptions, id: \.self) { value in
-                Text(value).tag(value)
+                Button(value) {
+                    viewModel.selectedAlertFilter = value
+                }
             }
+        } label: {
+            DashboardToolbarFilterLabel(
+                title: viewModel.selectedAlertFilter,
+                usesPrimaryStyle: viewModel.isAlertFilterActive
+            )
         }
-        .pickerStyle(.menu)
-        .dashboardToolbarFilterLabelStyle(usesPrimaryStyle: viewModel.isAlertFilterActive)
+        .dashboardToolbarFilterMenuChrome(usesPrimaryStyle: viewModel.isAlertFilterActive)
     }
 }
 
@@ -69,17 +78,23 @@ struct DashboardToolbarCustomLabelFilterPicker: View {
     @Bindable var viewModel: DashboardViewModel
 
     var body: some View {
-        Picker("自定义标签筛选", selection: $viewModel.selectedCustomLabel) {
+        Menu {
             ForEach(DashboardViewModel.customLabelOptions, id: \.self) { value in
-                Text(value).tag(value)
+                Button(value) {
+                    viewModel.selectedCustomLabel = value
+                }
             }
+        } label: {
+            DashboardToolbarFilterLabel(
+                title: viewModel.selectedCustomLabel,
+                usesPrimaryStyle: viewModel.isCustomLabelFilterActive
+            )
         }
-        .pickerStyle(.menu)
-        .dashboardToolbarFilterLabelStyle(usesPrimaryStyle: viewModel.isCustomLabelFilterActive)
+        .dashboardToolbarFilterMenuChrome(usesPrimaryStyle: viewModel.isCustomLabelFilterActive)
     }
 }
 
-// MARK: - Category Menu (Pull-down + nested submenus, single binding)
+// MARK: - Category Menu (nested submenus, single binding)
 
 struct DashboardToolbarCategoryFilter: View {
     @Bindable var viewModel: DashboardViewModel
@@ -117,8 +132,11 @@ struct DashboardToolbarCategoryFilter: View {
                 }
             }
         } label: {
-            Text(viewModel.selectedCategoryFilter.menuTitle)
+            DashboardToolbarFilterLabel(
+                title: viewModel.selectedCategoryFilter.menuTitle,
+                usesPrimaryStyle: viewModel.isCategoryFilterActive
+            )
         }
-        .dashboardToolbarFilterLabelStyle(usesPrimaryStyle: viewModel.isCategoryFilterActive)
+        .dashboardToolbarFilterMenuChrome(usesPrimaryStyle: viewModel.isCategoryFilterActive)
     }
 }
