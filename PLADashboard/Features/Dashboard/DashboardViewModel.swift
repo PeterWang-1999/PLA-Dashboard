@@ -6,7 +6,8 @@ final class DashboardViewModel {
     var dataSource: DashboardDataSource = .preview
     var searchText = ""
     var selectedAlertFilter = DashboardViewModel.alertFilterDefaultOption
-    var selectedCustomLabel = DashboardViewModel.customLabelDefaultOption
+    var customLabelCatalog: CustomLabelCatalog = .loadBundled()
+    var selectedCustomLabelFilter: CustomLabelFilterSelection = .all
     var categoryCatalog: GoogleProductCategoryCatalog = .loadBundled()
     var selectedCategoryFilter: CategoryFilterSelection = .all
     var currentPage = 1
@@ -50,23 +51,13 @@ final class DashboardViewModel {
     static let alertFilterDefaultOption = "全部预警标签"
     static let alertFilterOptions = ["全部预警标签", "正常", "关注", "预警"]
 
-    static let customLabelDefaultOption = "全部自定义标签"
-    static let customLabelOptions = [
-        "全部自定义标签",
-        "自定义标签 0",
-        "自定义标签 1",
-        "自定义标签 2",
-        "自定义标签 3",
-        "自定义标签 4",
-    ]
-
     /// 已选择非默认筛选项，按钮文字使用 primary 样式。
     var isAlertFilterActive: Bool {
         selectedAlertFilter != Self.alertFilterDefaultOption
     }
 
     var isCustomLabelFilterActive: Bool {
-        selectedCustomLabel != Self.customLabelDefaultOption
+        selectedCustomLabelFilter.isFiltered
     }
 
     /// 已选择具体类目（非「全部类目」）。
@@ -74,8 +65,10 @@ final class DashboardViewModel {
         selectedCategoryFilter.isFiltered
     }
 
-    func reloadCategoryCatalog(from tsvURL: URL) throws {
+    func reloadFilterCatalogs(from tsvURL: URL) throws {
         categoryCatalog = try GoogleProductCategoryCatalog.parse(from: tsvURL)
+        customLabelCatalog = try CustomLabelCatalog.parse(from: tsvURL)
         selectedCategoryFilter = .all
+        selectedCustomLabelFilter = .all
     }
 }

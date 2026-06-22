@@ -85,20 +85,39 @@ struct DashboardToolbarCustomLabelFilterPicker: View {
 
     var body: some View {
         Menu {
-            Button(DashboardViewModel.customLabelDefaultOption) {
-                viewModel.selectedCustomLabel = DashboardViewModel.customLabelDefaultOption
+            Button(CustomLabelFilterSelection.defaultTitle) {
+                viewModel.selectedCustomLabelFilter = .all
             }
 
             Divider()
 
-            ForEach(DashboardViewModel.customLabelOptions.dropFirst(), id: \.self) { value in
-                Button(value) {
-                    viewModel.selectedCustomLabel = value
+            ForEach(viewModel.customLabelCatalog.groups) { group in
+                if group.hasValueChildren {
+                    Menu(group.columnName) {
+                        Button("全部 \(group.columnName)") {
+                            viewModel.selectedCustomLabelFilter = .column(group.columnName)
+                        }
+
+                        Divider()
+
+                        ForEach(group.values, id: \.self) { value in
+                            Button(value) {
+                                viewModel.selectedCustomLabelFilter = .value(
+                                    column: group.columnName,
+                                    value: value
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Button(group.columnName) {
+                        viewModel.selectedCustomLabelFilter = .column(group.columnName)
+                    }
                 }
             }
         } label: {
             DashboardToolbarFilterLabel(
-                title: viewModel.selectedCustomLabel,
+                title: viewModel.selectedCustomLabelFilter.menuTitle,
                 usesPrimaryStyle: viewModel.isCustomLabelFilterActive
             )
         }
