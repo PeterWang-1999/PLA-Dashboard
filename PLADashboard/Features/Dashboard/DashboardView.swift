@@ -37,14 +37,20 @@ struct DashboardView: View {
             Button("数据更新") {
                 viewModel.refreshData()
             }
-            .dashboardGlassControl()
+            .dashboardFooterGlassChrome()
+            .buttonStyle(.plain)
+            .controlSize(.large)
 
-            Menu("快捷操作") {
+            Menu {
                 Button("导出当前视图") {}
                 Button("刷新聚合") {}
+            } label: {
+                Text("快捷操作")
+                    .dashboardFooterGlassChrome()
             }
             .menuStyle(.borderlessButton)
-            .dashboardGlassControl()
+            .buttonStyle(.plain)
+            .controlSize(.large)
 
             paginationControls
         }
@@ -74,9 +80,7 @@ struct DashboardView: View {
             }
             .disabled(viewModel.currentPage >= viewModel.totalPages)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .dashboardToolbarGlassChrome()
+        .dashboardFooterGlassChrome()
     }
 }
 

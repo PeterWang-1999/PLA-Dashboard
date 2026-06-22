@@ -9,9 +9,10 @@ enum DashboardToolbarMetrics {
     static let verticalPadding: CGFloat = 7
 }
 
-// MARK: - Liquid Glass / Material
+// MARK: - Liquid Glass
 
-/// Figma `LiquidGlass` → macOS 26 `glassEffect`,macOS 14–25 回退 `regularMaterial`。
+/// Figma `LiquidGlass` → `glassEffect(_:in:)`；旧系统回退 `regularMaterial`。
+/// 参考：https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views
 struct DashboardToolbarGlassChrome: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26.0, *) {
@@ -23,42 +24,16 @@ struct DashboardToolbarGlassChrome: ViewModifier {
 }
 
 extension View {
+    /// 在 padding 之后调用，与搜索框保持同一渲染路径。
     func dashboardToolbarGlassChrome() -> some View {
         modifier(DashboardToolbarGlassChrome())
     }
 }
 
-/// 交互控件的玻璃按钮样式：macOS 26 用系统 `.glass`，旧版用 Material 胶囊。
-struct DashboardGlassButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        if #available(macOS 26.0, *) {
-            configuration.label
-                .opacity(configuration.isPressed ? 0.88 : 1)
-        } else {
-            configuration.label
-                .dashboardToolbarGlassChrome()
-                .opacity(configuration.isPressed ? 0.88 : 1)
-        }
-    }
-}
+// MARK: - Pop-Up Button Label
 
-extension View {
-    @ViewBuilder
-    func dashboardGlassControl() -> some View {
-        if #available(macOS 26.0, *) {
-            buttonStyle(.glass)
-                .controlSize(.large)
-        } else {
-            buttonStyle(DashboardGlassButtonStyle())
-                .controlSize(.large)
-        }
-    }
-}
-
-// MARK: - Window/Pop-Up Button Label
-
-/// Figma `WindowPopUpButton` 固定标题 + 双箭头。
-struct DashboardToolbarPopupLabel: View {
+/// Figma `WindowPopUpButton` 固定标题 + 双箭头（不含背景，背景由外层 `glassEffect` 提供）。
+private struct DashboardToolbarPopupLabel: View {
     let title: String
 
     var body: some View {
@@ -70,14 +45,13 @@ struct DashboardToolbarPopupLabel: View {
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
-        .padding(.horizontal, DashboardToolbarMetrics.horizontalPadding)
-        .padding(.vertical, DashboardToolbarMetrics.verticalPadding)
     }
 }
 
-// MARK: - Window/Pop-Up Button (Menu + Picker)
+// MARK: - Pop-Up Button
 
-/// Figma `WindowPopUpButton` → `Menu` + `Picker(.inline)`，保持固定标题。
+/// Figma `WindowPopUpButton` → `Menu` + `Picker(.inline)`。
+/// 玻璃材质加在 `Menu` 外层，与 `DashboardSearchField` 使用相同 API 路径。
 struct DashboardToolbarPopupPicker<Option: Hashable>: View {
     let title: String
     @Binding var selection: Option
@@ -96,7 +70,11 @@ struct DashboardToolbarPopupPicker<Option: Hashable>: View {
             DashboardToolbarPopupLabel(title: title)
         }
         .menuStyle(.borderlessButton)
-        .dashboardGlassControl()
+        .buttonStyle(.plain)
+        .padding(.horizontal, DashboardToolbarMetrics.horizontalPadding)
+        .padding(.vertical, DashboardToolbarMetrics.verticalPadding)
+        .dashboardToolbarGlassChrome()
+        .controlSize(.large)
         .fixedSize()
     }
 }
@@ -128,14 +106,18 @@ struct DashboardToolbarCategoryFilter: View {
             DashboardToolbarPopupLabel(title: "二级类目 / 三级类目筛选")
         }
         .menuStyle(.borderlessButton)
-        .dashboardGlassControl()
+        .buttonStyle(.plain)
+        .padding(.horizontal, DashboardToolbarMetrics.horizontalPadding)
+        .padding(.vertical, DashboardToolbarMetrics.verticalPadding)
+        .dashboardToolbarGlassChrome()
+        .controlSize(.large)
         .fixedSize()
     }
 }
 
-// MARK: - Window/Search
+// MARK: - Search
 
-/// Figma `WindowSearch` → `TextField` + 玻璃胶囊背景。
+/// Figma `WindowSearch` → `TextField` + `glassEffect`。
 struct DashboardSearchField: View {
     @Binding var text: String
 
@@ -154,5 +136,16 @@ struct DashboardSearchField: View {
         .frame(width: DashboardToolbarMetrics.searchFieldWidth)
         .dashboardToolbarGlassChrome()
         .fixedSize()
+    }
+}
+
+// MARK: - Footer Controls
+
+extension View {
+    /// 底部操作按钮：与 Toolbar 控件共用玻璃胶囊样式。
+    func dashboardFooterGlassChrome() -> some View {
+        padding(.horizontal, DashboardToolbarMetrics.horizontalPadding)
+            .padding(.vertical, DashboardToolbarMetrics.verticalPadding)
+            .dashboardToolbarGlassChrome()
     }
 }
