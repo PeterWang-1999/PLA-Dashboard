@@ -8,7 +8,7 @@ enum DashboardToolbarMetrics {
 // MARK: - Toolbar filter label (align with searchable field)
 
 /// 默认选项使用 secondary；选中具体筛选项时使用 primary。
-/// 样式必须加在 `Menu` 的 `label` 文本上，外层 modifier 在 macOS Toolbar 中不会生效。
+/// Pull-down `Menu` 的标题样式；Pop-Up `Picker` 由系统绘制，用 `foregroundStyle` 修饰控件本身。
 private struct DashboardToolbarFilterLabel: View {
     let title: String
     let usesPrimaryStyle: Bool
@@ -21,10 +21,16 @@ private struct DashboardToolbarFilterLabel: View {
 }
 
 private extension View {
-    func dashboardToolbarFilterMenuChrome(usesPrimaryStyle: Bool) -> some View {
-        menuStyle(.borderlessButton)
-            .buttonStyle(.plain)
+    /// macOS Pull-down Button（含子菜单）— 官方 `Menu` + `borderedButton` 样式。
+    func dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: Bool) -> some View {
+        menuStyle(.borderedButton)
             .tint(usesPrimaryStyle ? .primary : .secondary)
+    }
+
+    /// macOS Pop-Up Button — 官方 `Picker` + `menu` 样式，系统负责内边距与 chevron 布局。
+    func dashboardToolbarPopUpPickerChrome(usesPrimaryStyle: Bool) -> some View {
+        pickerStyle(.menu)
+            .foregroundStyle(usesPrimaryStyle ? .primary : .secondary)
     }
 }
 
@@ -52,33 +58,28 @@ extension View {
     }
 }
 
-// MARK: - Pull-down filters (Menu + styled label)
+// MARK: - Pop-Up Button (Picker + .menu) — 预警筛选
 
 struct DashboardToolbarAlertFilterPicker: View {
     @Bindable var viewModel: DashboardViewModel
 
     var body: some View {
-        Menu {
-            Button(DashboardViewModel.alertFilterDefaultOption) {
-                viewModel.selectedAlertFilter = DashboardViewModel.alertFilterDefaultOption
+        Picker("预警筛选", selection: $viewModel.selectedAlertFilter) {
+            Section {
+                Text(DashboardViewModel.alertFilterDefaultOption)
+                    .tag(DashboardViewModel.alertFilterDefaultOption)
             }
-
-            Divider()
-
-            ForEach(DashboardViewModel.alertFilterOptions.dropFirst(), id: \.self) { value in
-                Button(value) {
-                    viewModel.selectedAlertFilter = value
+            Section {
+                ForEach(DashboardViewModel.alertFilterOptions.dropFirst(), id: \.self) { value in
+                    Text(value).tag(value)
                 }
             }
-        } label: {
-            DashboardToolbarFilterLabel(
-                title: viewModel.selectedAlertFilter,
-                usesPrimaryStyle: viewModel.isAlertFilterActive
-            )
         }
-        .dashboardToolbarFilterMenuChrome(usesPrimaryStyle: viewModel.isAlertFilterActive)
+        .dashboardToolbarPopUpPickerChrome(usesPrimaryStyle: viewModel.isAlertFilterActive)
     }
 }
+
+// MARK: - Pull-down filters (Menu + borderedButton)
 
 struct DashboardToolbarCustomLabelFilterPicker: View {
     @Bindable var viewModel: DashboardViewModel
@@ -121,7 +122,7 @@ struct DashboardToolbarCustomLabelFilterPicker: View {
                 usesPrimaryStyle: viewModel.isCustomLabelFilterActive
             )
         }
-        .dashboardToolbarFilterMenuChrome(usesPrimaryStyle: viewModel.isCustomLabelFilterActive)
+        .dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: viewModel.isCustomLabelFilterActive)
     }
 }
 
@@ -168,6 +169,6 @@ struct DashboardToolbarCategoryFilter: View {
                 usesPrimaryStyle: viewModel.isCategoryFilterActive
             )
         }
-        .dashboardToolbarFilterMenuChrome(usesPrimaryStyle: viewModel.isCategoryFilterActive)
+        .dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: viewModel.isCategoryFilterActive)
     }
 }
