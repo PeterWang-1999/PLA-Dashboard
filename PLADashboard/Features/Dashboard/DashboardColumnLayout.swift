@@ -18,17 +18,41 @@ enum DashboardColumn: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var width: CGFloat {
+    /// `TableColumn.width(min:ideal:max:)` 布局规格。
+    struct WidthSpec {
+        let min: CGFloat
+        let ideal: CGFloat
+        let max: CGFloat
+
+        static func fixed(min: CGFloat, ideal: CGFloat) -> WidthSpec {
+            WidthSpec(min: min, ideal: ideal, max: ideal)
+        }
+
+        static func flexible(min: CGFloat, ideal: CGFloat) -> WidthSpec {
+            WidthSpec(min: min, ideal: ideal, max: .infinity)
+        }
+    }
+
+    var widthSpec: WidthSpec {
         switch self {
-        case .lsin: 68
-        case .productImage: 48
-        case .cost: 56
-        case .roi: 40
-        case .warningLabel: 72
-        case .costTrend, .gsTrend: 56
-        case .cpa, .arpu, .cpc, .aos: 44
-        case .cvr: 52
-        case .clicks, .conversions: 56
+        case .lsin:
+            .fixed(min: 68, ideal: 88)
+        case .productImage:
+            .fixed(min: 48, ideal: 56)
+        case .cost:
+            .fixed(min: 56, ideal: 72)
+        case .roi:
+            .fixed(min: 40, ideal: 52)
+        case .warningLabel:
+            .fixed(min: 72, ideal: 88)
+        case .costTrend, .gsTrend:
+            .flexible(min: 56, ideal: 96)
+        case .cpa, .arpu, .cpc, .aos:
+            .flexible(min: 44, ideal: 64)
+        case .cvr:
+            .flexible(min: 52, ideal: 72)
+        case .clicks, .conversions:
+            .fixed(min: 56, ideal: 72)
         }
     }
 }

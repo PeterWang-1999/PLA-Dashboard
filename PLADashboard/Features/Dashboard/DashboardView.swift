@@ -12,9 +12,7 @@ struct DashboardView: View {
                 } else {
                     ProductPerformanceTable(
                         rows: viewModel.rows,
-                        visibleColumns: DashboardColumnLayout.visibleColumns(
-                            isSidebarVisible: windowState.isSidebarVisible
-                        )
+                        isSidebarVisible: windowState.isSidebarVisible
                     )
                 }
             }
