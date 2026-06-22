@@ -32,19 +32,37 @@ extension View {
 
 // MARK: - Pop-Up Button Label
 
-/// Figma `WindowPopUpButton` 固定标题 + 双箭头（不含背景，背景由外层 `glassEffect` 提供）。
+/// Figma `WindowPopUpButton`：标题左对齐，双箭头图标右对齐。
 private struct DashboardToolbarPopupLabel: View {
     let title: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 0) {
             Text(title)
                 .font(.subheadline)
                 .lineLimit(1)
+
+            Spacer(minLength: 10)
+
             Image(systemName: "chevron.up.chevron.down")
-                .font(.caption2.weight(.semibold))
+                .font(.system(size: 8, weight: .semibold))
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+// MARK: - Pop-Up Button Chrome
+
+private extension View {
+    func dashboardPopupMenuChrome() -> some View {
+        menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .buttonStyle(.plain)
+            .padding(.horizontal, DashboardToolbarMetrics.horizontalPadding)
+            .padding(.vertical, DashboardToolbarMetrics.verticalPadding)
+            .dashboardToolbarGlassChrome()
+            .controlSize(.large)
+            .fixedSize()
     }
 }
 
@@ -69,13 +87,7 @@ struct DashboardToolbarPopupPicker<Option: Hashable>: View {
         } label: {
             DashboardToolbarPopupLabel(title: title)
         }
-        .menuStyle(.borderlessButton)
-        .buttonStyle(.plain)
-        .padding(.horizontal, DashboardToolbarMetrics.horizontalPadding)
-        .padding(.vertical, DashboardToolbarMetrics.verticalPadding)
-        .dashboardToolbarGlassChrome()
-        .controlSize(.large)
-        .fixedSize()
+        .dashboardPopupMenuChrome()
     }
 }
 
@@ -105,13 +117,7 @@ struct DashboardToolbarCategoryFilter: View {
         } label: {
             DashboardToolbarPopupLabel(title: "二级类目 / 三级类目筛选")
         }
-        .menuStyle(.borderlessButton)
-        .buttonStyle(.plain)
-        .padding(.horizontal, DashboardToolbarMetrics.horizontalPadding)
-        .padding(.vertical, DashboardToolbarMetrics.verticalPadding)
-        .dashboardToolbarGlassChrome()
-        .controlSize(.large)
-        .fixedSize()
+        .dashboardPopupMenuChrome()
     }
 }
 
