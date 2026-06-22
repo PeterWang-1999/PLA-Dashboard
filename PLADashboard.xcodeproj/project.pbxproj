@@ -8,16 +8,33 @@
 
 /* Begin PBXBuildFile section */
 		PLA00012F5000001000DE303 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = PLA00022F5000001000DE303 /* GRDB */; };
+		PLA001E2F5000001000DE303 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = PLA00022F5000001000DE303 /* GRDB */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		PLA001F2F4056970012CB78 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = PLA000C2F4056970012CB78 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = PLA00082F4056970012CB78;
+			remoteInfo = PLADashboard;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		PLA00032F4056970012CB78 /* PLADashboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PLADashboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		PLA00202F4056970012CB78 /* PLADashboardTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PLADashboardTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		PLA00042FB48CF1000DE303 /* PLADashboard */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = PLADashboard;
+			sourceTree = "<group>";
+		};
+		PLA00212FB48CF1000DE303 /* PLADashboardTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PLADashboardTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -31,6 +48,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		PLA00152F4056970012CB78 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				PLA001E2F5000001000DE303 /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -38,6 +63,7 @@
 			isa = PBXGroup;
 			children = (
 				PLA00042FB48CF1000DE303 /* PLADashboard */,
+				PLA00212FB48CF1000DE303 /* PLADashboardTests */,
 				PLA00072F4056970012CB78 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +72,7 @@
 			isa = PBXGroup;
 			children = (
 				PLA00032F4056970012CB78 /* PLADashboard.app */,
+				PLA00202F4056970012CB78 /* PLADashboardTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,6 +103,30 @@
 			productReference = PLA00032F4056970012CB78 /* PLADashboard.app */;
 			productType = "com.apple.product-type.application";
 		};
+		PLA00222F4056970012CB78 /* PLADashboardTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = PLA00232F40569A0012CB78 /* Build configuration list for PBXNativeTarget "PLADashboardTests" */;
+			buildPhases = (
+				PLA00242F4056970012CB78 /* Sources */,
+				PLA00152F4056970012CB78 /* Frameworks */,
+				PLA00252F4056970012CB78 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				PLA00262F4056970012CB78 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				PLA00212FB48CF1000DE303 /* PLADashboardTests */,
+			);
+			name = PLADashboardTests;
+			packageProductDependencies = (
+				PLA00022F5000001000DE303 /* GRDB */,
+			);
+			productName = PLADashboardTests;
+			productReference = PLA00202F4056970012CB78 /* PLADashboardTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -88,6 +139,10 @@
 				TargetAttributes = {
 					PLA00082F4056970012CB78 = {
 						CreatedOnToolsVersion = 26.5;
+					};
+					PLA00222F4056970012CB78 = {
+						CreatedOnToolsVersion = 26.5;
+						TestTargetID = PLA00082F4056970012CB78;
 					};
 				};
 			};
@@ -110,12 +165,23 @@
 			projectRoot = "";
 			targets = (
 				PLA00082F4056970012CB78 /* PLADashboard */,
+				PLA00222F4056970012CB78 /* PLADashboardTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		PLA000B2F4056970012CB78 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		PLA00252F4056970012CB78 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -132,7 +198,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		PLA00242F4056970012CB78 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		PLA00262F4056970012CB78 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = PLA00082F4056970012CB78 /* PLADashboard */;
+			targetProxy = PLA001F2F4056970012CB78 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		PLA000F2F40569A0012CB78 /* Debug */ = {
@@ -327,6 +408,46 @@
 			};
 			name = Release;
 		};
+		PLA00272F40569A0012CB78 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Peter-Wang.PLADashboardTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PLADashboard.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PLADashboard";
+			};
+			name = Debug;
+		};
+		PLA00282F40569A0012CB78 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "Peter-Wang.PLADashboardTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/PLADashboard.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/PLADashboard";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -335,6 +456,15 @@
 			buildConfigurations = (
 				PLA00112F40569A0012CB78 /* Debug */,
 				PLA00122F40569A0012CB78 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		PLA00232F40569A0012CB78 /* Build configuration list for PBXNativeTarget "PLADashboardTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				PLA00272F40569A0012CB78 /* Debug */,
+				PLA00282F40569A0012CB78 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -3,6 +3,7 @@ import SwiftUI
 struct DashboardView: View {
     @Bindable var viewModel: DashboardViewModel
     @Bindable var windowState: WindowState
+    var onRequestDataUpdate: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
@@ -39,7 +40,7 @@ struct DashboardView: View {
             Spacer()
 
             Button("数据更新") {
-                viewModel.refreshData()
+                onRequestDataUpdate()
             }
             .dashboardFooterGlassChrome()
             .buttonStyle(.plain)

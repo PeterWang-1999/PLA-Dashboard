@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 actor DatabaseClient {
-    private let dbQueue: DatabaseQueue
+    let dbQueue: DatabaseQueue
 
     static let databaseDirectoryName = "PLA Dashboard"
     static let databaseFileName = "pla_dashboard.sqlite"
@@ -31,6 +31,17 @@ actor DatabaseClient {
 
         let queue = try DatabaseQueue(path: databaseURL.path, configuration: config)
 
+        return DatabaseClient(dbQueue: queue)
+    }
+
+    /// 内存数据库，供单元测试使用。
+    static func makeInMemoryForTesting() throws -> DatabaseClient {
+        var config = Configuration()
+        config.prepareDatabase { db in
+            try db.execute(sql: "PRAGMA foreign_keys = ON;")
+        }
+        let queue = try DatabaseQueue(configuration: config)
+        try AppDatabaseMigrator.migrate(queue)
         return DatabaseClient(dbQueue: queue)
     }
 

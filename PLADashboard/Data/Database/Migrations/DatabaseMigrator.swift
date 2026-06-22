@@ -20,6 +20,10 @@ struct AppDatabaseMigrator {
             try Migration_v1_InitialSchema.migrate(db)
         }
 
+        migrator.registerMigration("v2_import_row_errors") { db in
+            try Migration_v2_ImportRowErrors.migrate(db)
+        }
+
         try migrator.migrate(dbQueue)
     }
 }

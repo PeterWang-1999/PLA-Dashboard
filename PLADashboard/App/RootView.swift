@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct RootView: View {
     @Environment(\.databaseClient) private var databaseClient
@@ -6,6 +7,7 @@ struct RootView: View {
 
     @State private var windowState = WindowState()
     @State private var dashboardViewModel = DashboardViewModel()
+    @State private var importViewModel = ImportViewModel()
     @State private var selectedNavigationItem: AppNavigationItem? = .dashboard
 
     var body: some View {
@@ -14,17 +16,38 @@ struct RootView: View {
         } detail: {
             detailContent
                 .focusedSceneValue(\.windowState, windowState)
+                .focusedSceneValue(\.triggerImportPicker) {
+                    selectedNavigationItem = .imports
+                    importViewModel.presentImportPicker()
+                }
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 280)
+        .fileImporter(
+            isPresented: $importViewModel.showFileImporter,
+            allowedContentTypes: [.tabSeparatedText],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                importViewModel.handleImportedURLs(urls)
+            case .failure(let error):
+                importViewModel.errorMessage = error.localizedDescription
+            }
+        }
         .onAppear {
             windowState.syncFromSceneStorage(sidebarVisibleStorage)
+            configureImportViewModelIfNeeded()
         }
         .onChange(of: windowState.columnVisibility) { _, visibility in
             windowState.isSidebarVisible = visibility != .detailOnly
             sidebarVisibleStorage = windowState.isSidebarVisible
         }
+        .onChange(of: databaseClient != nil) { _, _ in
+            configureImportViewModelIfNeeded()
+        }
         .task {
             await bootstrapDatabaseIfNeeded()
+            configureImportViewModelIfNeeded()
         }
     }
 
@@ -58,12 +81,28 @@ struct RootView: View {
         switch selectedNavigationItem ?? .dashboard {
         case .dashboard:
             NavigationStack {
-                DashboardView(viewModel: dashboardViewModel, windowState: windowState)
+                DashboardView(
+                    viewModel: dashboardViewModel,
+                    windowState: windowState,
+                    onRequestDataUpdate: {
+                        selectedNavigationItem = .imports
+                        importViewModel.presentImportPicker()
+                    }
+                )
             }
         case .imports:
-            ContentUnavailableView("数据导入", systemImage: "square.and.arrow.down", description: Text("阶段 2 实现"))
+            NavigationStack {
+                ImportsView(viewModel: importViewModel)
+            }
         case .settings:
             ContentUnavailableView("设置", systemImage: "gearshape", description: Text("阶段 6 实现"))
+        }
+    }
+
+    private func configureImportViewModelIfNeeded() {
+        guard let databaseClient else { return }
+        importViewModel.configure(databaseClient: databaseClient) { url in
+            try? dashboardViewModel.reloadFilterCatalogs(from: url)
         }
     }
 
