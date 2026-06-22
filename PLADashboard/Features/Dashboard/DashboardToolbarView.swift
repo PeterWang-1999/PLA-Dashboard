@@ -13,8 +13,5 @@ struct DashboardToolbarContent: ToolbarContent {
         ToolbarItem(id: "category-filter", placement: .primaryAction) {
             DashboardToolbarCategoryFilter(viewModel: viewModel)
         }
-        ToolbarItem(id: "search", placement: .primaryAction) {
-            DashboardSearchField(text: $viewModel.searchText)
-        }
     }
 }

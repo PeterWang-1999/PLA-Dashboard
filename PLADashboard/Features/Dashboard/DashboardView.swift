@@ -29,6 +29,11 @@ struct DashboardView: View {
         .toolbar {
             DashboardToolbarContent(viewModel: viewModel)
         }
+        .searchable(
+            text: $viewModel.searchText,
+            placement: .toolbar,
+            prompt: "输入 LSIN 查询"
+        )
     }
 
     private var dashboardFooter: some View {

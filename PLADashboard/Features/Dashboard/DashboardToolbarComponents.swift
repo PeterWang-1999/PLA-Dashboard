@@ -1,36 +1,11 @@
 import SwiftUI
 
-// MARK: - Search
-
 enum DashboardToolbarMetrics {
-    static let searchFieldWidth: CGFloat = 200
     static let horizontalPadding: CGFloat = 12
     static let verticalPadding: CGFloat = 7
 }
 
-/// Figma `WindowSearch` → `TextField` + `glassEffect`。
-struct DashboardSearchField: View {
-    @Binding var text: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
-            TextField("输入 LSIN 查询", text: $text)
-                .textFieldStyle(.plain)
-                .font(.subheadline)
-        }
-        .padding(.horizontal, DashboardToolbarMetrics.horizontalPadding)
-        .padding(.vertical, DashboardToolbarMetrics.verticalPadding)
-        .frame(width: DashboardToolbarMetrics.searchFieldWidth)
-        .dashboardToolbarGlassChrome()
-        .fixedSize()
-    }
-}
-
-// MARK: - Liquid Glass (search field)
+// MARK: - Liquid Glass (footer controls)
 
 struct DashboardToolbarGlassChrome: ViewModifier {
     func body(content: Content) -> some View {
