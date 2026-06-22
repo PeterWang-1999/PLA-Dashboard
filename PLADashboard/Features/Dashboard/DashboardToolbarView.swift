@@ -5,65 +5,31 @@ struct DashboardToolbarContent: ToolbarContent {
 
     var body: some ToolbarContent {
         IndependentToolbarItem(id: "alert-filter", placement: .primaryAction) {
-            alertFilterButton
+            DashboardToolbarPopupPicker(
+                title: "预警筛选",
+                selection: $viewModel.selectedAlertFilter,
+                options: DashboardViewModel.alertFilterOptions,
+                optionTitle: { $0 }
+            )
         }
         IndependentToolbarItem(id: "custom-label-filter", placement: .primaryAction) {
-            customLabelFilterButton
+            DashboardToolbarPopupPicker(
+                title: "自定义标签筛选",
+                selection: $viewModel.selectedCustomLabel,
+                options: DashboardViewModel.customLabelOptions,
+                optionTitle: { $0 }
+            )
         }
         IndependentToolbarItem(id: "category-filter", placement: .primaryAction) {
-            categoryFilterButton
+            DashboardToolbarCategoryFilter(viewModel: viewModel)
         }
         IndependentToolbarItem(id: "search", placement: .primaryAction) {
             DashboardSearchField(text: $viewModel.searchText)
         }
     }
-
-    private var alertFilterButton: some View {
-        DashboardPopupButton(title: "预警筛选") {
-            Picker("预警筛选", selection: $viewModel.selectedAlertFilter) {
-                ForEach(DashboardViewModel.alertFilterOptions, id: \.self) { option in
-                    Text(option).tag(option)
-                }
-            }
-            .pickerStyle(.inline)
-        }
-    }
-
-    private var customLabelFilterButton: some View {
-        DashboardPopupButton(title: "自定义标签筛选") {
-            Picker("自定义标签筛选", selection: $viewModel.selectedCustomLabel) {
-                ForEach(DashboardViewModel.customLabelOptions, id: \.self) { option in
-                    Text(option).tag(option)
-                }
-            }
-            .pickerStyle(.inline)
-        }
-    }
-
-    private var categoryFilterButton: some View {
-        DashboardPopupButton(title: "二级类目 / 三级类目筛选") {
-            Section("二级类目") {
-                Picker("二级类目", selection: $viewModel.selectedCategory2) {
-                    ForEach(DashboardViewModel.category2Options, id: \.self) { option in
-                        Text(option).tag(option)
-                    }
-                }
-                .pickerStyle(.inline)
-            }
-
-            Section("三级类目") {
-                Picker("三级类目", selection: $viewModel.selectedCategory3) {
-                    ForEach(DashboardViewModel.category3Options, id: \.self) { option in
-                        Text(option).tag(option)
-                    }
-                }
-                .pickerStyle(.inline)
-            }
-        }
-    }
 }
 
-/// 每个 Toolbar 控件独立成组，避免 macOS 将多个控件包进同一块玻璃/胶囊背景。
+/// 每个 Toolbar 控件独立成组，避免 macOS 将多个控件包进同一块玻璃背景。
 private struct IndependentToolbarItem<Content: View>: ToolbarContent {
     let id: String
     let placement: ToolbarItemPlacement
