@@ -59,7 +59,13 @@ struct DashboardToolbarAlertFilterPicker: View {
 
     var body: some View {
         Menu {
-            ForEach(DashboardViewModel.alertFilterOptions, id: \.self) { value in
+            Button(DashboardViewModel.alertFilterDefaultOption) {
+                viewModel.selectedAlertFilter = DashboardViewModel.alertFilterDefaultOption
+            }
+
+            Divider()
+
+            ForEach(DashboardViewModel.alertFilterOptions.dropFirst(), id: \.self) { value in
                 Button(value) {
                     viewModel.selectedAlertFilter = value
                 }
@@ -79,7 +85,13 @@ struct DashboardToolbarCustomLabelFilterPicker: View {
 
     var body: some View {
         Menu {
-            ForEach(DashboardViewModel.customLabelOptions, id: \.self) { value in
+            Button(DashboardViewModel.customLabelDefaultOption) {
+                viewModel.selectedCustomLabel = DashboardViewModel.customLabelDefaultOption
+            }
+
+            Divider()
+
+            ForEach(DashboardViewModel.customLabelOptions.dropFirst(), id: \.self) { value in
                 Button(value) {
                     viewModel.selectedCustomLabel = value
                 }
