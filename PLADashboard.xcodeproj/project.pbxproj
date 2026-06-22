@@ -102,7 +102,7 @@
 			mainGroup = PLA00062F4056970012CB78;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				PLA000E2F5000001000DE303 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+				PLA000E2F5000001000DE303 /* XCRemoteSwiftPackageReference "GRDB" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = PLA00072F4056970012CB78 /* Products */;
@@ -330,15 +330,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		PLA000D2F4056970012CB78 /* Build configuration list for PBXProject "PLADashboard" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				PLA000F2F40569A0012CB78 /* Debug */,
-				PLA00102F40569A0012CB78 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		PLA00092F40569A0012CB78 /* Build configuration list for PBXNativeTarget "PLADashboard" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -348,10 +339,19 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		PLA000D2F4056970012CB78 /* Build configuration list for PBXProject "PLADashboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				PLA000F2F40569A0012CB78 /* Debug */,
+				PLA00102F40569A0012CB78 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		PLA000E2F5000001000DE303 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+		PLA000E2F5000001000DE303 /* XCRemoteSwiftPackageReference "GRDB" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/groue/GRDB.swift";
 			requirement = {
@@ -364,7 +364,7 @@
 /* Begin XCSwiftPackageProductDependency section */
 		PLA00022F5000001000DE303 /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = PLA000E2F5000001000DE303 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			package = PLA000E2F5000001000DE303 /* XCRemoteSwiftPackageReference "GRDB" */;
 			productName = GRDB;
 		};
 /* End XCSwiftPackageProductDependency section */
