@@ -178,9 +178,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXResourcesBuildPhase section */
-
-/* Begin PBXResourcesBuildPhase section */
 		PLA00252F4056970012CB78 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -460,20 +457,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		PLA00232F40569A0012CB78 /* Build configuration list for PBXNativeTarget "PLADashboardTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				PLA00272F40569A0012CB78 /* Debug */,
-				PLA00282F40569A0012CB78 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		PLA000D2F4056970012CB78 /* Build configuration list for PBXProject "PLADashboard" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				PLA000F2F40569A0012CB78 /* Debug */,
 				PLA00102F40569A0012CB78 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		PLA00232F40569A0012CB78 /* Build configuration list for PBXNativeTarget "PLADashboardTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				PLA00272F40569A0012CB78 /* Debug */,
+				PLA00282F40569A0012CB78 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

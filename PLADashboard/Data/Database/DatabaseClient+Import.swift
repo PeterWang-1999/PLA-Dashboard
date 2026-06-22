@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 extension DatabaseClient {
-    static let currentImportSchemaVersion = 1
+    static let currentImportSchemaVersion = 2
 
     // MARK: - Import jobs
 
@@ -107,6 +107,81 @@ extension DatabaseClient {
         return incomingTrimmed.count >= existingTrimmed.count ? incoming : existing
     }
 
+    // MARK: - Sales daily
+
+    func insertSalesDailyBatch(_ rows: [SalesDailyRecord]) throws {
+        guard !rows.isEmpty else { return }
+        try dbQueue.write { db in
+            for row in rows {
+                try row.insert(db, onConflict: .replace)
+            }
+        }
+    }
+
+    func countSalesDaily(importId: String) throws -> Int {
+        try dbQueue.read { db in
+            try SalesDailyRecord
+                .filter(SalesDailyRecord.Columns.importId == importId)
+                .fetchCount(db)
+        }
+    }
+
+    // MARK: - Ads product daily
+
+    func insertAdsProductDailyBatch(_ rows: [AdsProductDailyRecord]) throws {
+        guard !rows.isEmpty else { return }
+        try dbQueue.write { db in
+            for row in rows {
+                try row.insert(db, onConflict: .replace)
+            }
+        }
+    }
+
+    func countAdsProductDaily(importId: String) throws -> Int {
+        try dbQueue.read { db in
+            try AdsProductDailyRecord
+                .filter(AdsProductDailyRecord.Columns.importId == importId)
+                .fetchCount(db)
+        }
+    }
+
+    // MARK: - Product LSIN
+
+    func upsertProductLSINBatch(
+        _ entries: [(productId: String, lsin: String)],
+        importId: String,
+        importedAt: String
+    ) throws {
+        guard !entries.isEmpty else { return }
+        try dbQueue.write { db in
+            for entry in entries {
+                if var existing = try ProductRecord.fetchOne(db, key: entry.productId) {
+                    existing.lsin = entry.lsin
+                    existing.lastSeenAt = importedAt
+                    existing.updatedFromImportId = importId
+                    try existing.update(db)
+                } else {
+                    var product = ProductRecord(
+                        productId: entry.productId,
+                        title: nil,
+                        canonicalLink: nil,
+                        imageUrl: nil,
+                        customLabel0: nil,
+                        customLabel1: nil,
+                        customLabel2: nil,
+                        customLabel3: nil,
+                        customLabel4: nil,
+                        lsin: entry.lsin,
+                        firstSeenAt: importedAt,
+                        lastSeenAt: importedAt,
+                        updatedFromImportId: importId
+                    )
+                    try product.insert(db)
+                }
+            }
+        }
+    }
+
     // MARK: - Import errors
 
     func insertImportErrorsBatch(_ errors: [ImportRowErrorRecord]) throws {
@@ -172,12 +247,25 @@ extension DatabaseClient {
 
     // MARK: - Rollback
 
-    func rollbackImport(importId: String) throws {
+    func rollbackImport(importId: String, sourceKind: ImportSourceKind) throws {
         try dbQueue.write { db in
-            try db.execute(
-                sql: "DELETE FROM merchant_items WHERE import_id = ?;",
-                arguments: [importId]
-            )
+            switch sourceKind {
+            case .merchantCenter:
+                try db.execute(
+                    sql: "DELETE FROM merchant_items WHERE import_id = ?;",
+                    arguments: [importId]
+                )
+            case .salesReport:
+                try db.execute(
+                    sql: "DELETE FROM sales_daily WHERE import_id = ?;",
+                    arguments: [importId]
+                )
+            case .adsProduct:
+                try db.execute(
+                    sql: "DELETE FROM ads_product_daily WHERE import_id = ?;",
+                    arguments: [importId]
+                )
+            }
             try db.execute(
                 sql: "DELETE FROM import_row_errors WHERE import_id = ?;",
                 arguments: [importId]
@@ -187,6 +275,17 @@ extension DatabaseClient {
                 try job.update(db)
             }
         }
+    }
+
+    func rollbackImport(importId: String) throws {
+        let sourceKindRaw = try dbQueue.read { db in
+            try ImportJobRecord.fetchOne(db, key: importId)?.sourceKind
+        }
+        guard let sourceKindRaw,
+              let sourceKind = ImportSourceKind(rawValue: sourceKindRaw) else {
+            return
+        }
+        try rollbackImport(importId: importId, sourceKind: sourceKind)
     }
 
     func markImportCancelled(importId: String) throws {

@@ -24,7 +24,7 @@ struct RootView: View {
         .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 280)
         .fileImporter(
             isPresented: $importViewModel.showFileImporter,
-            allowedContentTypes: [.tabSeparatedText],
+            allowedContentTypes: [.commaSeparatedText, .tabSeparatedText],
             allowsMultipleSelection: false
         ) { result in
             switch result {

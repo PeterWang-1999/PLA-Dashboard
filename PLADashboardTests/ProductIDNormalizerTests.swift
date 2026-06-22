@@ -23,4 +23,18 @@ final class ProductIDNormalizerTests: XCTestCase {
         XCTAssertEqual(result.productID, "")
         XCTAssertEqual(result.sourceFormat, .empty)
     }
+
+    func testNormalizeLSINWithSPrefix() {
+        let result = ProductIDNormalizer.normalizeLSIN("S14429548")
+        XCTAssertEqual(result.rawValue, "S14429548")
+        XCTAssertEqual(result.productID, "14429548")
+        XCTAssertEqual(result.sourceFormat, .lsinPrefix)
+        XCTAssertEqual(result.confidence, .high)
+    }
+
+    func testNormalizeLSINCaseInsensitive() {
+        let result = ProductIDNormalizer.normalizeLSIN("s999")
+        XCTAssertEqual(result.productID, "999")
+        XCTAssertEqual(result.confidence, .high)
+    }
 }

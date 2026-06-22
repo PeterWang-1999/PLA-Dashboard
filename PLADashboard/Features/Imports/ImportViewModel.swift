@@ -3,6 +3,7 @@ import Observation
 
 @Observable
 final class ImportViewModel {
+    var selectedSourceKind: ImportSourceKind = .merchantCenter
     var showFileImporter = false
     var importJobs: [ImportJobRecord] = []
     var progress: ImportProgress?
@@ -40,18 +41,24 @@ final class ImportViewModel {
         guard let url = urls.first else { return }
         importTask?.cancel()
         importTask = Task {
-            await importMerchantFile(at: url)
+            await importFile(at: url)
         }
     }
 
     func importSampleFile() {
-        guard let url = Bundle.main.url(forResource: "SampleMerchant", withExtension: "tsv") else {
-            errorMessage = "未找到内置样例文件 SampleMerchant.tsv"
+        guard let url = Bundle.main.url(
+            forResource: selectedSourceKind.sampleResourceName,
+            withExtension: selectedSourceKind.sampleFileExtension
+        ) else {
+            errorMessage = "未找到内置样例文件 \(selectedSourceKind.sampleResourceName).\(selectedSourceKind.sampleFileExtension)"
             return
         }
         importTask?.cancel()
         importTask = Task {
-            await importMerchantFile(at: url, fileName: "SampleMerchant.tsv")
+            await importFile(
+                at: url,
+                fileName: "\(selectedSourceKind.sampleResourceName).\(selectedSourceKind.sampleFileExtension)"
+            )
         }
     }
 
@@ -59,7 +66,7 @@ final class ImportViewModel {
         importTask?.cancel()
     }
 
-    private func importMerchantFile(at url: URL, fileName: String? = nil) async {
+    private func importFile(at url: URL, fileName: String? = nil) async {
         guard let databaseClient else {
             errorMessage = "数据库未就绪"
             return
@@ -78,24 +85,46 @@ final class ImportViewModel {
         latestErrors = []
         progress = nil
 
-        let importer = MerchantCenterImporter(databaseClient: databaseClient)
-
         do {
-            let result = try await importer.importFile(sourceURL: url, fileName: fileName) { [weak self] update in
-                await MainActor.run {
-                    self?.progress = update
+            let result: ImportResult
+            switch selectedSourceKind {
+            case .merchantCenter:
+                let importer = MerchantCenterImporter(databaseClient: databaseClient)
+                result = try await importer.importFile(sourceURL: url, fileName: fileName) { [weak self] update in
+                    await MainActor.run {
+                        self?.progress = update
+                    }
+                }
+            case .salesReport:
+                let importer = SalesReportImporter(databaseClient: databaseClient)
+                result = try await importer.importFile(sourceURL: url, fileName: fileName) { [weak self] update in
+                    await MainActor.run {
+                        self?.progress = update
+                    }
+                }
+            case .adsProduct:
+                let importer = AdsProductImporter(databaseClient: databaseClient)
+                result = try await importer.importFile(sourceURL: url, fileName: fileName) { [weak self] update in
+                    await MainActor.run {
+                        self?.progress = update
+                    }
                 }
             }
+
             await MainActor.run {
                 latestResult = result
                 latestErrors = result.errors
                 isImporting = false
             }
-            onCatalogReload?(result.stagedFileURL)
+
+            if selectedSourceKind == .merchantCenter {
+                onCatalogReload?(result.stagedFileURL)
+            }
+
             await loadHistory()
-        } catch let merchantError as MerchantCenterImportError {
+        } catch let pipelineError as ImportPipelineError {
             await MainActor.run {
-                errorMessage = merchantError.localizedDescription
+                errorMessage = pipelineError.localizedDescription
                 isImporting = false
             }
             await loadHistory()

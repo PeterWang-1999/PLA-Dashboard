@@ -8,7 +8,7 @@ struct ImportHistoryView: View {
             ContentUnavailableView(
                 "暂无导入记录",
                 systemImage: "tray",
-                description: Text("导入 Merchant Center TSV 后将在此显示历史批次。")
+                description: Text("导入数据后将在此显示历史批次。")
             )
             .frame(minHeight: 160)
         } else {
@@ -18,6 +18,12 @@ struct ImportHistoryView: View {
                         .font(.system(size: 13))
                 }
                 .width(min: 140, ideal: 168, max: 200)
+
+                TableColumn("数据源") { job in
+                    Text(sourceDisplayName(job.sourceKind))
+                        .font(.system(size: 13))
+                }
+                .width(min: 88, ideal: 108, max: 140)
 
                 TableColumn("文件") { job in
                     Text(job.fileName)
@@ -42,6 +48,10 @@ struct ImportHistoryView: View {
             .tableStyle(.inset(alternatesRowBackgrounds: true))
             .frame(minHeight: 180)
         }
+    }
+
+    private func sourceDisplayName(_ raw: String) -> String {
+        ImportSourceKind(rawValue: raw)?.displayName ?? raw
     }
 
     private func formattedDate(_ iso: String) -> String {

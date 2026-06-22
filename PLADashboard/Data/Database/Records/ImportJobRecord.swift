@@ -1,8 +1,35 @@
 import Foundation
 import GRDB
 
-enum ImportSourceKind: String, Codable, Sendable {
+enum ImportSourceKind: String, Codable, Sendable, CaseIterable, Identifiable {
     case merchantCenter = "merchant_center"
+    case salesReport = "sales_report"
+    case adsProduct = "ads_product"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .merchantCenter: "Merchant Center"
+        case .salesReport: "自归因"
+        case .adsProduct: "Google Ads"
+        }
+    }
+
+    var sampleResourceName: String {
+        switch self {
+        case .merchantCenter: "SampleMerchant"
+        case .salesReport: "SampleSales"
+        case .adsProduct: "SampleAds"
+        }
+    }
+
+    var sampleFileExtension: String {
+        switch self {
+        case .merchantCenter: "tsv"
+        case .salesReport, .adsProduct: "csv"
+        }
+    }
 }
 
 enum ImportJobStatus: String, Codable, Sendable {

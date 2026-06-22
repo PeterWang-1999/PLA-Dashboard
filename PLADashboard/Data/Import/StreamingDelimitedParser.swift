@@ -8,10 +8,12 @@ struct StreamingDelimitedParser: Sendable {
 
     let fileURL: URL
     let delimiter: Character
+    let linesToSkip: Int
 
-    init(fileURL: URL, delimiter: DelimitedSeparator = .tab) {
+    init(fileURL: URL, delimiter: DelimitedSeparator = .tab, linesToSkip: Int = 0) {
         self.fileURL = fileURL
         self.delimiter = delimiter.rawValue
+        self.linesToSkip = max(0, linesToSkip)
     }
 
     /// 流式逐行解析，避免一次性读入整个文件。
@@ -21,7 +23,8 @@ struct StreamingDelimitedParser: Sendable {
 
         var buffer = Data()
         var rowNumber = 0
-        var isFirstLine = true
+        var headerEmitted = false
+        var skippedLines = 0
 
         while true {
             if let newlineIndex = buffer.firstIndex(of: UInt8(ascii: "\n")) {
@@ -34,9 +37,14 @@ struct StreamingDelimitedParser: Sendable {
                 let line = String(decoding: lineData, as: UTF8.self)
                 guard !line.isEmpty else { continue }
 
+                if skippedLines < linesToSkip {
+                    skippedLines += 1
+                    continue
+                }
+
                 let fields = TSVFieldParser.parseFields(line, delimiter: delimiter)
-                if isFirstLine {
-                    isFirstLine = false
+                if !headerEmitted {
+                    headerEmitted = true
                     try await handler(.header(fields))
                 } else {
                     rowNumber += 1
@@ -50,13 +58,17 @@ struct StreamingDelimitedParser: Sendable {
                     let line = String(decoding: buffer, as: UTF8.self)
                     buffer.removeAll(keepingCapacity: true)
                     if !line.isEmpty {
-                        let fields = TSVFieldParser.parseFields(line, delimiter: delimiter)
-                        if isFirstLine {
-                            isFirstLine = false
-                            try await handler(.header(fields))
+                        if skippedLines < linesToSkip {
+                            skippedLines += 1
                         } else {
-                            rowNumber += 1
-                            try await handler(.row(rowNumber: rowNumber, fields: fields))
+                            let fields = TSVFieldParser.parseFields(line, delimiter: delimiter)
+                            if !headerEmitted {
+                                headerEmitted = true
+                                try await handler(.header(fields))
+                            } else {
+                                rowNumber += 1
+                                try await handler(.row(rowNumber: rowNumber, fields: fields))
+                            }
                         }
                     }
                 }
