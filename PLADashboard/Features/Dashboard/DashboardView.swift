@@ -6,10 +6,6 @@ struct DashboardView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DashboardToolbarView(viewModel: viewModel)
-
-            Divider()
-
             ZStack {
                 if viewModel.isEmpty {
                     DashboardEmptyStateView()
@@ -28,9 +24,10 @@ struct DashboardView: View {
 
             dashboardFooter
         }
-        .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "搜索 LSIN / 标签")
         .navigationTitle("产品数据")
-        .navigationSubtitle(viewModel.selectedTimeDimension)
+        .toolbar {
+            DashboardToolbarContent(viewModel: viewModel)
+        }
     }
 
     private var dashboardFooter: some View {
@@ -77,18 +74,21 @@ struct DashboardView: View {
 }
 
 #Preview("Sidebar Expanded") {
-    DashboardView(
-        viewModel: DashboardViewModel(),
-        windowState: WindowState(isSidebarVisible: true)
-    )
+    NavigationStack {
+        DashboardView(
+            viewModel: DashboardViewModel(),
+            windowState: WindowState(isSidebarVisible: true)
+        )
+    }
     .frame(width: 783, height: 620)
 }
 
 #Preview("Sidebar Collapsed") {
-    let state = WindowState(isSidebarVisible: false)
-    return DashboardView(
-        viewModel: DashboardViewModel(),
-        windowState: state
-    )
+    NavigationStack {
+        DashboardView(
+            viewModel: DashboardViewModel(),
+            windowState: WindowState(isSidebarVisible: false)
+        )
+    }
     .frame(width: 1033, height: 620)
 }

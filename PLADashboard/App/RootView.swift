@@ -56,7 +56,9 @@ struct RootView: View {
     private var detailContent: some View {
         switch selectedNavigationItem ?? .dashboard {
         case .dashboard:
-            DashboardView(viewModel: dashboardViewModel, windowState: windowState)
+            NavigationStack {
+                DashboardView(viewModel: dashboardViewModel, windowState: windowState)
+            }
         case .imports:
             ContentUnavailableView("数据导入", systemImage: "square.and.arrow.down", description: Text("阶段 2 实现"))
         case .settings:

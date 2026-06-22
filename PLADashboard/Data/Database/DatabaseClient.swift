@@ -26,12 +26,10 @@ actor DatabaseClient {
         var config = Configuration()
         config.prepareDatabase { db in
             try db.execute(sql: "PRAGMA foreign_keys = ON;")
+            try db.execute(sql: "PRAGMA journal_mode = WAL;")
         }
 
         let queue = try DatabaseQueue(path: databaseURL.path, configuration: config)
-        try queue.write { db in
-            try db.execute(sql: "PRAGMA journal_mode = WAL;")
-        }
 
         return DatabaseClient(dbQueue: queue)
     }
