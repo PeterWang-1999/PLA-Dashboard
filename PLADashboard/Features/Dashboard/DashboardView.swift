@@ -25,6 +25,7 @@ struct DashboardView: View {
             dashboardFooter
         }
         .navigationTitle("产品数据")
+        .toolbar(removing: .sidebarToggle)
         .toolbar {
             DashboardToolbarContent(viewModel: viewModel)
         }

@@ -40,6 +40,7 @@ struct RootView: View {
         }
         .listStyle(.sidebar)
         .navigationTitle("PLA Dashboard")
+        .toolbar(removing: .sidebarToggle)
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button {
