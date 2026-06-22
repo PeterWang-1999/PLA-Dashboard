@@ -5,10 +5,10 @@ import Observation
 final class DashboardViewModel {
     var dataSource: DashboardDataSource = .preview
     var searchText = ""
-    var selectedAlertFilter = "全部预警"
-    var selectedCustomLabel = "全部标签"
-    var selectedCategory2 = "全部二级类目"
-    var selectedCategory3 = "全部三级类目"
+    var selectedAlertFilter = DashboardViewModel.alertFilterPlaceholder
+    var selectedCustomLabel = DashboardViewModel.customLabelPlaceholder
+    var categoryCatalog: GoogleProductCategoryCatalog = .loadBundled()
+    var selectedCategoryFilter: CategoryFilterSelection = .none
     var currentPage = 1
     let pageSize = 30
     let totalPages = 10
@@ -47,9 +47,11 @@ final class DashboardViewModel {
         // 阶段 2 接入导入与聚合后实现
     }
 
-    static let alertFilterOptions = ["全部预警", "正常", "关注", "预警"]
+    static let alertFilterPlaceholder = "预警筛选"
+    static let alertFilterValues = ["全部预警", "正常", "关注", "预警"]
 
-    static let customLabelOptions = [
+    static let customLabelPlaceholder = "自定义标签筛选"
+    static let customLabelValues = [
         "全部标签",
         "自定义标签 0",
         "自定义标签 1",
@@ -58,17 +60,20 @@ final class DashboardViewModel {
         "自定义标签 4",
     ]
 
-    static let category2Options = [
-        "全部二级类目",
-        "Women's Clothing",
-        "Women's Tops",
-        "Women's Dresses",
-    ]
+    var isAlertFilterActive: Bool {
+        selectedAlertFilter != Self.alertFilterPlaceholder
+    }
 
-    static let category3Options = [
-        "全部三级类目",
-        "Elite",
-        "Women's Tops",
-        "Women's Dresses",
-    ]
+    var isCustomLabelFilterActive: Bool {
+        selectedCustomLabel != Self.customLabelPlaceholder
+    }
+
+    var isCategoryFilterActive: Bool {
+        selectedCategoryFilter.isActive
+    }
+
+    func reloadCategoryCatalog(from tsvURL: URL) throws {
+        categoryCatalog = try GoogleProductCategoryCatalog.parse(from: tsvURL)
+        selectedCategoryFilter = .none
+    }
 }

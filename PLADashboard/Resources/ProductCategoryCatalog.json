@@ -1,0 +1,45 @@
+{
+  "groups": [
+    {
+      "level2": "Abbigliamento",
+      "level3": [
+        "Abiti",
+        "Pantaloni"
+      ]
+    },
+    {
+      "level2": "Bekleidung",
+      "level3": [
+        "Hosen"
+      ]
+    },
+    {
+      "level2": "Clothing",
+      "level3": [
+        "Dresses",
+        "One-Pieces",
+        "Outfit Sets",
+        "Pants",
+        "Shirts & Tops",
+        "Skirts",
+        "Swimwear"
+      ]
+    },
+    {
+      "level2": "Clothing Accessories",
+      "level3": []
+    },
+    {
+      "level2": "Shoes",
+      "level3": []
+    },
+    {
+      "level2": "衣料品",
+      "level3": [
+        "トップス",
+        "パンツ・ズボン",
+        "ワンピース・ドレス"
+      ]
+    }
+  ]
+}
