@@ -8,7 +8,7 @@ enum DashboardToolbarMetrics {
 // MARK: - Toolbar filter label (align with searchable field)
 
 /// 默认选项使用 secondary；选中具体筛选项时使用 primary。
-/// Pull-down `Menu` 的标题样式；Pop-Up `Picker` 由系统绘制，用 `foregroundStyle` 修饰控件本身。
+/// 样式加在 `Menu` 的 `label` 文本上。
 private struct DashboardToolbarFilterLabel: View {
     let title: String
     let usesPrimaryStyle: Bool
@@ -21,16 +21,10 @@ private struct DashboardToolbarFilterLabel: View {
 }
 
 private extension View {
-    /// macOS Pull-down Button（含子菜单）— 官方 `Menu` + `borderedButton` 样式。
+    /// macOS Pull-down Button — 官方 `Menu` + `borderedButton` 样式。
     func dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: Bool) -> some View {
         menuStyle(.borderedButton)
             .tint(usesPrimaryStyle ? .primary : .secondary)
-    }
-
-    /// macOS Pop-Up Button — 官方 `Picker` + `menu` 样式，系统负责内边距与 chevron 布局。
-    func dashboardToolbarPopUpPickerChrome(usesPrimaryStyle: Bool) -> some View {
-        pickerStyle(.menu)
-            .foregroundStyle(usesPrimaryStyle ? .primary : .secondary)
     }
 }
 
@@ -58,28 +52,33 @@ extension View {
     }
 }
 
-// MARK: - Pop-Up Button (Picker + .menu) — 预警筛选
+// MARK: - Pull-down filters (Menu + borderedButton)
 
 struct DashboardToolbarAlertFilterPicker: View {
     @Bindable var viewModel: DashboardViewModel
 
     var body: some View {
-        Picker("预警筛选", selection: $viewModel.selectedAlertFilter) {
-            Section {
-                Text(DashboardViewModel.alertFilterDefaultOption)
-                    .tag(DashboardViewModel.alertFilterDefaultOption)
+        Menu {
+            Button(DashboardViewModel.alertFilterDefaultOption) {
+                viewModel.selectedAlertFilter = DashboardViewModel.alertFilterDefaultOption
             }
-            Section {
-                ForEach(DashboardViewModel.alertFilterOptions.dropFirst(), id: \.self) { value in
-                    Text(value).tag(value)
+
+            Divider()
+
+            ForEach(DashboardViewModel.alertFilterOptions.dropFirst(), id: \.self) { value in
+                Button(value) {
+                    viewModel.selectedAlertFilter = value
                 }
             }
+        } label: {
+            DashboardToolbarFilterLabel(
+                title: viewModel.selectedAlertFilter,
+                usesPrimaryStyle: viewModel.isAlertFilterActive
+            )
         }
-        .dashboardToolbarPopUpPickerChrome(usesPrimaryStyle: viewModel.isAlertFilterActive)
+        .dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: viewModel.isAlertFilterActive)
     }
 }
-
-// MARK: - Pull-down filters (Menu + borderedButton)
 
 struct DashboardToolbarCustomLabelFilterPicker: View {
     @Bindable var viewModel: DashboardViewModel
