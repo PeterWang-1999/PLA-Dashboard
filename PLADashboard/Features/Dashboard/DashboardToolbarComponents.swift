@@ -5,6 +5,26 @@ enum DashboardToolbarMetrics {
     static let verticalPadding: CGFloat = 7
 }
 
+// MARK: - Toolbar filter label (align with searchable field)
+
+/// 默认选项使用 secondary；选中具体筛选项时使用 primary。
+private struct DashboardToolbarFilterLabelStyle: ViewModifier {
+    let usesPrimaryStyle: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .font(.body)
+            .foregroundStyle(usesPrimaryStyle ? .primary : .secondary)
+            .tint(usesPrimaryStyle ? .primary : .secondary)
+    }
+}
+
+private extension View {
+    func dashboardToolbarFilterLabelStyle(usesPrimaryStyle: Bool) -> some View {
+        modifier(DashboardToolbarFilterLabelStyle(usesPrimaryStyle: usesPrimaryStyle))
+    }
+}
+
 // MARK: - Liquid Glass (footer controls)
 
 struct DashboardToolbarGlassChrome: ViewModifier {
@@ -36,13 +56,12 @@ struct DashboardToolbarAlertFilterPicker: View {
 
     var body: some View {
         Picker("预警筛选", selection: $viewModel.selectedAlertFilter) {
-            Text(DashboardViewModel.alertFilterPlaceholder)
-                .tag(DashboardViewModel.alertFilterPlaceholder)
-            ForEach(DashboardViewModel.alertFilterValues, id: \.self) { value in
+            ForEach(DashboardViewModel.alertFilterOptions, id: \.self) { value in
                 Text(value).tag(value)
             }
         }
         .pickerStyle(.menu)
+        .dashboardToolbarFilterLabelStyle(usesPrimaryStyle: viewModel.isAlertFilterActive)
     }
 }
 
@@ -51,13 +70,12 @@ struct DashboardToolbarCustomLabelFilterPicker: View {
 
     var body: some View {
         Picker("自定义标签筛选", selection: $viewModel.selectedCustomLabel) {
-            Text(DashboardViewModel.customLabelPlaceholder)
-                .tag(DashboardViewModel.customLabelPlaceholder)
-            ForEach(DashboardViewModel.customLabelValues, id: \.self) { value in
+            ForEach(DashboardViewModel.customLabelOptions, id: \.self) { value in
                 Text(value).tag(value)
             }
         }
         .pickerStyle(.menu)
+        .dashboardToolbarFilterLabelStyle(usesPrimaryStyle: viewModel.isCustomLabelFilterActive)
     }
 }
 
@@ -68,8 +86,8 @@ struct DashboardToolbarCategoryFilter: View {
 
     var body: some View {
         Menu {
-            Button(CategoryFilterSelection.placeholderTitle) {
-                viewModel.selectedCategoryFilter = .none
+            Button(CategoryFilterSelection.defaultTitle) {
+                viewModel.selectedCategoryFilter = .all
             }
 
             Divider()
@@ -101,5 +119,6 @@ struct DashboardToolbarCategoryFilter: View {
         } label: {
             Text(viewModel.selectedCategoryFilter.menuTitle)
         }
+        .dashboardToolbarFilterLabelStyle(usesPrimaryStyle: viewModel.isCategoryFilterActive)
     }
 }

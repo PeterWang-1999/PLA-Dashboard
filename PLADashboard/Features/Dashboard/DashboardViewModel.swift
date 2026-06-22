@@ -5,10 +5,10 @@ import Observation
 final class DashboardViewModel {
     var dataSource: DashboardDataSource = .preview
     var searchText = ""
-    var selectedAlertFilter = DashboardViewModel.alertFilterPlaceholder
-    var selectedCustomLabel = DashboardViewModel.customLabelPlaceholder
+    var selectedAlertFilter = DashboardViewModel.alertFilterDefaultOption
+    var selectedCustomLabel = DashboardViewModel.customLabelDefaultOption
     var categoryCatalog: GoogleProductCategoryCatalog = .loadBundled()
-    var selectedCategoryFilter: CategoryFilterSelection = .none
+    var selectedCategoryFilter: CategoryFilterSelection = .all
     var currentPage = 1
     let pageSize = 30
     let totalPages = 10
@@ -47,12 +47,12 @@ final class DashboardViewModel {
         // 阶段 2 接入导入与聚合后实现
     }
 
-    static let alertFilterPlaceholder = "预警筛选"
-    static let alertFilterValues = ["全部预警", "正常", "关注", "预警"]
+    static let alertFilterDefaultOption = "全部预警标签"
+    static let alertFilterOptions = ["全部预警标签", "正常", "关注", "预警"]
 
-    static let customLabelPlaceholder = "自定义标签筛选"
-    static let customLabelValues = [
-        "全部标签",
+    static let customLabelDefaultOption = "全部自定义标签"
+    static let customLabelOptions = [
+        "全部自定义标签",
         "自定义标签 0",
         "自定义标签 1",
         "自定义标签 2",
@@ -60,20 +60,22 @@ final class DashboardViewModel {
         "自定义标签 4",
     ]
 
+    /// 已选择非默认筛选项，按钮文字使用 primary 样式。
     var isAlertFilterActive: Bool {
-        selectedAlertFilter != Self.alertFilterPlaceholder
+        selectedAlertFilter != Self.alertFilterDefaultOption
     }
 
     var isCustomLabelFilterActive: Bool {
-        selectedCustomLabel != Self.customLabelPlaceholder
+        selectedCustomLabel != Self.customLabelDefaultOption
     }
 
+    /// 已选择具体类目（非「全部类目」）。
     var isCategoryFilterActive: Bool {
-        selectedCategoryFilter.isActive
+        selectedCategoryFilter.isFiltered
     }
 
     func reloadCategoryCatalog(from tsvURL: URL) throws {
         categoryCatalog = try GoogleProductCategoryCatalog.parse(from: tsvURL)
-        selectedCategoryFilter = .none
+        selectedCategoryFilter = .all
     }
 }
