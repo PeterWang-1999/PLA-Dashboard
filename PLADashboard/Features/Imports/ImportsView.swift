@@ -9,12 +9,6 @@ struct ImportsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 headerSection
 
-                if viewModel.isImporting, let progress = viewModel.progress {
-                    ImportProgressView(progress: progress) {
-                        viewModel.cancelImport()
-                    }
-                }
-
                 if let result = viewModel.latestResult {
                     ImportResultView(job: result.job, errors: viewModel.latestErrors)
                 }
@@ -57,26 +51,36 @@ struct ImportsView: View {
                 .disabled(viewModel.isImporting)
             }
 
-            Text(sourceDescription)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(sourceDescription)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
-            HStack(spacing: 12) {
-                Button {
-                    viewModel.presentImportPicker()
-                } label: {
-                    Label(importButtonTitle, systemImage: "doc.badge.plus")
-                }
-                .disabled(viewModel.isImporting)
+                    HStack(spacing: 12) {
+                        Button {
+                            viewModel.presentImportPicker()
+                        } label: {
+                            Label(importButtonTitle, systemImage: "doc.badge.plus")
+                        }
+                        .disabled(viewModel.isImporting)
 
-                Button {
-                    viewModel.importSampleFile()
-                } label: {
-                    Label("导入样例文件", systemImage: "doc.text")
+                        Button {
+                            viewModel.importSampleFile()
+                        } label: {
+                            Label("导入样例文件", systemImage: "doc.text")
+                        }
+                        .disabled(viewModel.isImporting)
+                    }
+                    .controlSize(.large)
                 }
-                .disabled(viewModel.isImporting)
+
+                Spacer()
+
+                if viewModel.isImporting, let progress = viewModel.progress {
+                    ImportProgressView(progress: progress)
+                }
             }
-            .controlSize(.large)
         }
     }
 

@@ -62,10 +62,6 @@ final class ImportViewModel {
         }
     }
 
-    func cancelImport() {
-        importTask?.cancel()
-    }
-
     private func importFile(at url: URL, fileName: String? = nil) async {
         guard let databaseClient else {
             errorMessage = "数据库未就绪"
