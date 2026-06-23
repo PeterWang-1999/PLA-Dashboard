@@ -62,9 +62,7 @@ enum ImportValueParsers {
     }
 
     static func parseInteger(_ raw: String) -> Int? {
-        let cleaned = raw
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: ",", with: "")
+        let cleaned = stripNumericDecorations(raw)
         guard !cleaned.isEmpty, let value = Int(cleaned) else { return nil }
         return value
     }
@@ -75,16 +73,23 @@ enum ImportValueParsers {
     }
 
     private static func parseDecimalString(_ raw: String) -> Decimal? {
-        var cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleaned.isEmpty else { return nil }
-
-        cleaned = cleaned
+        let cleaned = stripNumericDecorations(raw)
             .replacingOccurrences(of: "$", with: "")
             .replacingOccurrences(of: "¥", with: "")
-            .replacingOccurrences(of: ",", with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-
         guard !cleaned.isEmpty else { return nil }
         return Decimal(string: cleaned, locale: Locale(identifier: "en_US_POSIX"))
+    }
+
+    /// 去除 Google Ads / Excel 导出常见的引号、千分位与空白。
+    private static func stripNumericDecorations(_ raw: String) -> String {
+        var cleaned = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.hasPrefix("\""), cleaned.hasSuffix("\""), cleaned.count >= 2 {
+            cleaned = String(cleaned.dropFirst().dropLast())
+        }
+        return cleaned
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: ",", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

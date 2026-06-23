@@ -18,6 +18,7 @@ final class ImportValueParsersTests: XCTestCase {
 
     func testParseIntegerAndDecimal() {
         XCTAssertEqual(ImportValueParsers.parseInteger("1,000"), 1000)
+        XCTAssertEqual(ImportValueParsers.parseInteger("\"1,259\""), 1259)
         XCTAssertEqual(ImportValueParsers.parseDecimal("2.5"), 2.5)
     }
 }

@@ -33,6 +33,12 @@ enum ProductIDNormalizer {
         options: [.caseInsensitive]
     )
 
+    /// Merchant / Google Ads 常见 item ID：`19556772_00006_us_en`
+    private static let merchantItemPattern = try! NSRegularExpression(
+        pattern: #"^([0-9]+)_[0-9]+_[a-z]{2}_[a-z]{2}$"#,
+        options: [.caseInsensitive]
+    )
+
     static func normalize(_ rawValue: String) -> NormalizedProductIdentifier {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -55,6 +61,18 @@ enum ProductIDNormalizer {
                 productID: String(trimmed[productRange]),
                 variantID: String(trimmed[variantRange]),
                 sourceFormat: .shopifyItemID,
+                confidence: .high
+            )
+        }
+
+        if let match = merchantItemPattern.firstMatch(in: trimmed, range: range),
+           match.numberOfRanges >= 2,
+           let productRange = Range(match.range(at: 1), in: trimmed) {
+            return NormalizedProductIdentifier(
+                rawValue: trimmed,
+                productID: String(trimmed[productRange]),
+                variantID: nil,
+                sourceFormat: .underscorePrefix,
                 confidence: .high
             )
         }
