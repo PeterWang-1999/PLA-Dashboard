@@ -31,6 +31,8 @@ struct ProductImageView: View {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 0.5)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(imageURL == nil ? "无产品图片" : "产品图片")
     }
 
     private var placeholder: some View {

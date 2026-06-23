@@ -32,10 +32,16 @@ final class DashboardViewModel {
     }
 
     var showsEmptyState: Bool {
-        dataSource == .empty && !isLoading
+        dataSource == .empty && !isLoading && errorMessage == nil
+    }
+
+    var showsErrorState: Bool {
+        errorMessage != nil && !isLoading
     }
 
     var isEmpty: Bool { rows.isEmpty }
+
+    private var bootstrapAction: (() async -> Void)?
 
     private var filteredPreviewRows: [ProductPerformanceRowModel] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -46,8 +52,24 @@ final class DashboardViewModel {
         }
     }
 
-    func configure(databaseClient: DatabaseClient) {
+    func configure(
+        databaseClient: DatabaseClient,
+        bootstrap: @escaping () async -> Void = {}
+    ) {
         self.databaseClient = databaseClient
+        self.bootstrapAction = bootstrap
+    }
+
+    func retryAfterError() {
+        refreshTask?.cancel()
+        refreshTask = Task { @MainActor in
+            errorMessage = nil
+            if dataSource == .empty, let bootstrapAction {
+                await bootstrapAction()
+            } else {
+                await refreshData()
+            }
+        }
     }
 
     func bootstrapDataSource(hasMetrics: Bool) {

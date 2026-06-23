@@ -17,6 +17,15 @@ struct WeeklyTrendBarChart: View {
             }
         }
 
+        var accessibilitySeriesName: String {
+            switch self {
+            case .cost:
+                "消费趋势"
+            case .sales:
+                "销售趋势"
+            }
+        }
+
         /// 分类轴上 `.ratio` 表示柱宽占类目间距的比例；销售趋势更紧凑。
         var barWidthRatio: CGFloat {
             switch self {
@@ -44,6 +53,23 @@ struct WeeklyTrendBarChart: View {
         }
     }
 
+    private var accessibilitySummary: String {
+        let series = style.accessibilitySeriesName
+        guard values.contains(where: { $0 > 0 }) else {
+            return "\(series)：近六周无数据"
+        }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        let amounts = values.enumerated().map { index, cents -> String in
+            let amount = Double(cents) / 100
+            let formatted = formatter.string(from: NSNumber(value: amount)) ?? String(format: "%.2f", amount)
+            return "第\(index + 1)周 \(formatted)"
+        }
+        return "\(series)：\(amounts.joined(separator: "，"))"
+    }
+
     var body: some View {
         Chart(points) { point in
             BarMark(
@@ -57,5 +83,7 @@ struct WeeklyTrendBarChart: View {
         .chartYAxis(.hidden)
         .chartLegend(.hidden)
         .frame(minWidth: 50, idealWidth: 65, maxWidth: .infinity, minHeight: 28, idealHeight: 28, maxHeight: 28)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilitySummary)
     }
 }

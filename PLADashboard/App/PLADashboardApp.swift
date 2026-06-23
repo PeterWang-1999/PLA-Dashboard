@@ -2,19 +2,34 @@ import SwiftUI
 
 @main
 struct PLADashboardApp: App {
-    @State private var databaseClient: DatabaseClient?
+    @State private var launchState = AppLaunchState.loading
 
     var body: some Scene {
         WindowGroup {
             Group {
-                if let databaseClient {
-                    RootView()
-                        .environment(\.databaseClient, databaseClient)
-                } else {
+                switch launchState {
+                case .loading:
                     ProgressView("正在初始化数据库…")
                         .task {
                             await initializeDatabase()
                         }
+                case .ready(let client):
+                    RootView()
+                        .environment(\.databaseClient, client)
+                case .failed(let message):
+                    ContentUnavailableView {
+                        Label("无法打开数据库", systemImage: "externaldrive.badge.exclamationmark")
+                    } description: {
+                        Text(message)
+                    } actions: {
+                        Button("重试") {
+                            launchState = .loading
+                            Task {
+                                await initializeDatabase()
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
             }
         }
@@ -30,13 +45,28 @@ struct PLADashboardApp: App {
         do {
             let client = try DatabaseClient.make()
             try await client.migrateIfNeeded()
-            databaseClient = client
+            launchState = .ready(client)
         } catch {
-            #if DEBUG
-            fatalError("无法初始化 DatabaseClient: \(error)")
-            #else
-            fatalError("无法初始化 DatabaseClient。")
-            #endif
+            launchState = .failed(error.localizedDescription)
+        }
+    }
+}
+
+private enum AppLaunchState: Equatable {
+    case loading
+    case ready(DatabaseClient)
+    case failed(String)
+
+    static func == (lhs: AppLaunchState, rhs: AppLaunchState) -> Bool {
+        switch (lhs, rhs) {
+        case (.loading, .loading):
+            true
+        case (.ready(let l), .ready(let r)):
+            l === r
+        case (.failed(let l), .failed(let r)):
+            l == r
+        default:
+            false
         }
     }
 }

@@ -1,14 +1,8 @@
 import SwiftUI
 
-enum DashboardToolbarMetrics {
-    static let horizontalPadding: CGFloat = 12
-    static let verticalPadding: CGFloat = 7
-}
-
 // MARK: - Toolbar filter label (align with searchable field)
 
 /// 默认选项使用 secondary；选中具体筛选项时使用 primary。
-/// 样式加在 `Menu` 的 `label` 文本上。
 private struct DashboardToolbarFilterLabel: View {
     let title: String
     let usesPrimaryStyle: Bool
@@ -21,34 +15,10 @@ private struct DashboardToolbarFilterLabel: View {
 }
 
 private extension View {
-    /// macOS Pull-down Button — 官方 `Menu` + `borderedButton` 样式。
+    /// macOS Pull-down — 官方 `Menu` + `borderedButton`。
     func dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: Bool) -> some View {
         menuStyle(.borderedButton)
             .tint(usesPrimaryStyle ? .primary : .secondary)
-    }
-}
-
-// MARK: - Liquid Glass (footer controls)
-
-struct DashboardToolbarGlassChrome: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content.glassEffect(.regular.interactive(), in: .capsule)
-        } else {
-            content.background(.regularMaterial, in: Capsule())
-        }
-    }
-}
-
-extension View {
-    func dashboardToolbarGlassChrome() -> some View {
-        modifier(DashboardToolbarGlassChrome())
-    }
-
-    func dashboardFooterGlassChrome() -> some View {
-        padding(.horizontal, DashboardToolbarMetrics.horizontalPadding)
-            .padding(.vertical, DashboardToolbarMetrics.verticalPadding)
-            .dashboardToolbarGlassChrome()
     }
 }
 
@@ -77,6 +47,8 @@ struct DashboardToolbarAlertFilterPicker: View {
             )
         }
         .dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: viewModel.isAlertFilterActive)
+        .accessibilityLabel("预警筛选")
+        .accessibilityValue(viewModel.selectedAlertFilter)
     }
 }
 
@@ -122,10 +94,10 @@ struct DashboardToolbarCustomLabelFilterPicker: View {
             )
         }
         .dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: viewModel.isCustomLabelFilterActive)
+        .accessibilityLabel("自定义标签筛选")
+        .accessibilityValue(viewModel.selectedCustomLabelFilter.menuTitle)
     }
 }
-
-// MARK: - Category Menu (nested submenus, single binding)
 
 struct DashboardToolbarCategoryFilter: View {
     @Bindable var viewModel: DashboardViewModel
@@ -169,5 +141,7 @@ struct DashboardToolbarCategoryFilter: View {
             )
         }
         .dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: viewModel.isCategoryFilterActive)
+        .accessibilityLabel("类目筛选")
+        .accessibilityValue(viewModel.selectedCategoryFilter.menuTitle)
     }
 }

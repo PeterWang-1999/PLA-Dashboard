@@ -9,6 +9,7 @@ struct RootView: View {
     @State private var dashboardViewModel = DashboardViewModel()
     @State private var importViewModel = ImportViewModel()
     @State private var selectedNavigationItem: AppNavigationItem? = .dashboard
+    @State private var didBootstrap = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $windowState.columnVisibility) {
@@ -41,18 +42,16 @@ struct RootView: View {
         }
         .onAppear {
             windowState.syncFromSceneStorage(sidebarVisibleStorage)
-            configureViewModelsIfNeeded()
         }
         .onChange(of: windowState.columnVisibility) { _, visibility in
             windowState.isSidebarVisible = visibility != .detailOnly
             sidebarVisibleStorage = windowState.isSidebarVisible
         }
-        .onChange(of: databaseClient != nil) { _, _ in
+        .task(id: databaseClient != nil) {
+            guard databaseClient != nil, !didBootstrap else { return }
             configureViewModelsIfNeeded()
-        }
-        .task {
-            await bootstrapDatabaseIfNeeded()
-            configureViewModelsIfNeeded()
+            await bootstrapDashboardIfNeeded()
+            didBootstrap = true
         }
     }
 
@@ -77,6 +76,7 @@ struct RootView: View {
                     Image(systemName: "sidebar.leading")
                 }
                 .help("切换侧边栏")
+                .accessibilityLabel("切换侧边栏")
             }
         }
     }
@@ -106,7 +106,9 @@ struct RootView: View {
 
     private func configureViewModelsIfNeeded() {
         guard let databaseClient else { return }
-        dashboardViewModel.configure(databaseClient: databaseClient)
+        dashboardViewModel.configure(databaseClient: databaseClient) {
+            await bootstrapDashboardIfNeeded()
+        }
         importViewModel.configure(databaseClient: databaseClient) { url in
             try? dashboardViewModel.reloadFilterCatalogs(from: url)
         } onImportCompleted: {
@@ -115,8 +117,10 @@ struct RootView: View {
         }
     }
 
-    private func bootstrapDatabaseIfNeeded() async {
+    private func bootstrapDashboardIfNeeded() async {
         guard let databaseClient else { return }
+        dashboardViewModel.isLoading = true
+        dashboardViewModel.errorMessage = nil
         do {
             try await databaseClient.migrateIfNeeded()
             var metricsCount = try await databaseClient.productWeeklyMetricsCount()
@@ -127,11 +131,12 @@ struct RootView: View {
             dashboardViewModel.bootstrapDataSource(hasMetrics: metricsCount > 0)
             if metricsCount > 0 {
                 await dashboardViewModel.refreshData()
+            } else {
+                dashboardViewModel.isLoading = false
             }
         } catch {
-            #if DEBUG
-            print("Database bootstrap failed: \(error)")
-            #endif
+            dashboardViewModel.errorMessage = error.localizedDescription
+            dashboardViewModel.isLoading = false
         }
     }
 }

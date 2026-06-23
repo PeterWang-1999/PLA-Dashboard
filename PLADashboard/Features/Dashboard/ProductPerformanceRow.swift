@@ -13,6 +13,8 @@ struct MetricDeltaCell: View {
                 .foregroundStyle(deltaColor)
         }
         .frame(maxHeight: .infinity, alignment: .center)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(value)，相较整体 \(delta)")
     }
 
     private var deltaColor: Color {
@@ -39,6 +41,7 @@ struct WarningLabelView: View {
                 .background(backgroundColor)
                 .foregroundStyle(foregroundColor)
                 .clipShape(Capsule())
+                .accessibilityLabel("预警标签，\(text)")
         }
     }
 
