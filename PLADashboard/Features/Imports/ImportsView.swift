@@ -43,16 +43,20 @@ struct ImportsView: View {
 
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("数据源", selection: $viewModel.selectedSourceKind) {
-                ForEach(ImportSourceKind.allCases) { kind in
-                    Text(kind.displayName).tag(kind)
+            HStack(alignment: .firstTextBaseline) {
+                Text(sourceTitle)
+                    .font(.title2.weight(.semibold))
+                Spacer()
+                Picker("数据源", selection: $viewModel.selectedSourceKind) {
+                    ForEach(ImportSourceKind.allCases) { kind in
+                        Text(kind.displayName).tag(kind)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .disabled(viewModel.isImporting)
             }
-            .pickerStyle(.segmented)
-            .disabled(viewModel.isImporting)
 
-            Text(sourceTitle)
-                .font(.title2.weight(.semibold))
             Text(sourceDescription)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
