@@ -5,34 +5,37 @@ struct ImportsView: View {
     @Bindable var viewModel: ImportViewModel
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                headerSection
+        VStack(alignment: .leading, spacing: 20) {
+            headerSection
 
-                if let result = viewModel.latestResult {
-                    ImportResultView(job: result.job, errors: viewModel.latestErrors)
-                }
-
-                if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .padding(.horizontal, 4)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("导入历史")
-                        .font(.headline)
-                    // 嵌套在页面 `ScrollView` 内；历史表自身禁用滚动，按数据源条数固定高度。
-                    ImportHistoryView(jobs: ImportJobRecord.latestPerSourceKind(from: viewModel.importJobs))
-                }
+            if let result = viewModel.latestResult {
+                ImportResultView(job: result.job, errors: viewModel.latestErrors)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                Spacer(minLength: 0)
             }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            historySection
         }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .navigationTitle("数据导入")
         .task {
             await viewModel.loadHistory()
+        }
+    }
+
+    private var historySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("导入历史")
+                .font(.headline)
+            ImportHistoryView(jobs: ImportJobRecord.latestPerSourceKind(from: viewModel.importJobs))
         }
     }
 

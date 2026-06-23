@@ -35,7 +35,7 @@ struct ProductImageView: View {
 
     private var placeholder: some View {
         Image(systemName: "photo")
-            .font(.system(size: 16))
+            .font(.body)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(.quaternarySystemFill))

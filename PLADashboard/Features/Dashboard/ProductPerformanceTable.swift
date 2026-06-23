@@ -31,19 +31,19 @@ struct ProductPerformanceTable: View {
         switch column {
         case .lsin:
             Text(row.lsin)
-                .font(.system(size: 13))
+                .font(.body)
 
         case .productImage:
             ProductImageView(imageURL: row.imageURL)
 
         case .cost:
             VStack(alignment: .leading, spacing: 2) {
-                Text(row.cost).font(.system(size: 13))
-                Text(row.costShare).font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(row.cost).font(.body)
+                Text(row.costShare).font(.caption).foregroundStyle(.secondary)
             }
 
         case .roi:
-            Text(row.roi).font(.system(size: 13))
+            Text(row.roi).font(.body)
 
         case .warningLabel:
             WarningLabelView(text: row.warningLabel, style: row.warningStyle)
@@ -67,10 +67,10 @@ struct ProductPerformanceTable: View {
             MetricDeltaCell(value: row.aos, delta: row.aosDelta)
 
         case .clicks:
-            Text(row.clicks ?? "—").font(.system(size: 13))
+            Text(row.clicks ?? "—").font(.body)
 
         case .conversions:
-            Text(row.conversions ?? "—").font(.system(size: 13))
+            Text(row.conversions ?? "—").font(.body)
         }
     }
 }

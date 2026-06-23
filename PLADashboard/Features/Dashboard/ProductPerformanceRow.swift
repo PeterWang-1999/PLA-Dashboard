@@ -7,9 +7,9 @@ struct MetricDeltaCell: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value)
-                .font(.system(size: 13))
+                .font(.body)
             Text(delta)
-                .font(.system(size: 11))
+                .font(.caption)
                 .foregroundStyle(deltaColor)
         }
         .frame(maxHeight: .infinity, alignment: .center)
@@ -29,7 +29,7 @@ struct TrendPlaceholderView: View {
             .frame(width: 52, height: 28)
             .overlay {
                 Image(systemName: "chart.xyaxis.line")
-                    .font(.system(size: 12))
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
     }
@@ -41,7 +41,7 @@ struct WarningLabelView: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .medium))
+            .font(.caption.weight(.medium))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(backgroundColor)

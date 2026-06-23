@@ -17,33 +17,33 @@ struct ImportHistoryView: View {
             Table(jobs) {
                 TableColumn("时间") { job in
                     Text(formattedDate(job.importedAt))
-                        .font(.system(size: 13))
+                        .font(.body)
                 }
                 .width(min: 140, ideal: 168, max: 200)
 
                 TableColumn("数据源") { job in
                     Text(sourceDisplayName(job.sourceKind))
-                        .font(.system(size: 13))
+                        .font(.body)
                 }
                 .width(min: 88, ideal: 108, max: 140)
 
                 TableColumn("文件") { job in
                     Text(job.fileName)
-                        .font(.system(size: 13))
+                        .font(.body)
                         .lineLimit(1)
                 }
                 .width(min: 120, ideal: 200, max: .infinity)
 
                 TableColumn("状态") { job in
                     Text(statusLabel(job.status))
-                        .font(.system(size: 13))
+                        .font(.body)
                         .foregroundStyle(statusColor(job.status))
                 }
                 .width(min: 56, ideal: 72, max: 88)
 
                 TableColumn("有效/总计") { job in
                     Text("\(job.validRows) / \(job.totalRows)")
-                        .font(.system(size: 13))
+                        .font(.body)
                 }
                 .width(min: 72, ideal: 88, max: 100)
             }

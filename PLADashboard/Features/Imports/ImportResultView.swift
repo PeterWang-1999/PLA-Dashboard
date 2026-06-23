@@ -26,26 +26,26 @@ struct ImportResultView: View {
                 Table(errors) {
                     TableColumn("行号") { error in
                         Text("\(error.rowNumber)")
-                            .font(.system(size: 13))
+                            .font(.body)
                     }
                     .width(min: 48, ideal: 56, max: 64)
 
                     TableColumn("级别") { error in
                         Text(error.severity)
-                            .font(.system(size: 13))
+                            .font(.body)
                             .foregroundStyle(error.severity == ImportRowSeverity.error.rawValue ? .red : .orange)
                     }
                     .width(min: 48, ideal: 56, max: 72)
 
                     TableColumn("字段") { error in
                         Text(error.fieldName ?? "—")
-                            .font(.system(size: 13))
+                            .font(.body)
                     }
                     .width(min: 56, ideal: 80, max: 120)
 
                     TableColumn("说明") { error in
                         Text(error.message)
-                            .font(.system(size: 13))
+                            .font(.body)
                             .lineLimit(2)
                     }
                     .width(min: 120, ideal: 200, max: .infinity)
