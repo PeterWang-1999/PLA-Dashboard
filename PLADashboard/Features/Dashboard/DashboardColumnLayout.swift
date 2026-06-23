@@ -1,13 +1,13 @@
 import Foundation
 
 enum DashboardColumn: String, CaseIterable, Identifiable {
-    case lsin = "LSIN"
+    case lsin = "产品 ID"
     case productImage = "产品图"
     case cost = "消费"
     case roi = "ROI"
     case warningLabel = "预警标签"
     case costTrend = "消费趋势"
-    case gsTrend = "GS 趋势"
+    case gsTrend = "销售趋势"
     case cpa = "CPA"
     case arpu = "ARPU"
     case cpc = "CPC"
@@ -36,7 +36,7 @@ enum DashboardColumn: String, CaseIterable, Identifiable {
     var widthSpec: WidthSpec {
         switch self {
         case .lsin:
-            .fixed(min: 68, ideal: 88)
+            .fixed(min: 96, ideal: 112)
         case .productImage:
             .fixed(min: 48, ideal: 56)
         case .cost:
