@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 
+@MainActor
 @Observable
 final class ImportViewModel {
     var selectedSourceKind: ImportSourceKind = .merchantCenter
@@ -40,7 +41,7 @@ final class ImportViewModel {
     func handleImportedURLs(_ urls: [URL]) {
         guard let url = urls.first else { return }
         importTask?.cancel()
-        importTask = Task {
+        importTask = Task { @MainActor in
             await importFile(at: url)
         }
     }
@@ -54,7 +55,7 @@ final class ImportViewModel {
             return
         }
         importTask?.cancel()
-        importTask = Task {
+        importTask = Task { @MainActor in
             await importFile(
                 at: url,
                 fileName: "\(selectedSourceKind.sampleResourceName).\(selectedSourceKind.sampleFileExtension)"
@@ -86,32 +87,30 @@ final class ImportViewModel {
             switch selectedSourceKind {
             case .merchantCenter:
                 let importer = MerchantCenterImporter(databaseClient: databaseClient)
-                result = try await importer.importFile(sourceURL: url, fileName: fileName) { [weak self] update in
-                    await MainActor.run {
+                result = try await importer.importFile(sourceURL: url, fileName: fileName) { update in
+                    await MainActor.run { [weak self] in
                         self?.progress = update
                     }
                 }
             case .salesReport:
                 let importer = SalesReportImporter(databaseClient: databaseClient)
-                result = try await importer.importFile(sourceURL: url, fileName: fileName) { [weak self] update in
-                    await MainActor.run {
+                result = try await importer.importFile(sourceURL: url, fileName: fileName) { update in
+                    await MainActor.run { [weak self] in
                         self?.progress = update
                     }
                 }
             case .adsProduct:
                 let importer = AdsProductImporter(databaseClient: databaseClient)
-                result = try await importer.importFile(sourceURL: url, fileName: fileName) { [weak self] update in
-                    await MainActor.run {
+                result = try await importer.importFile(sourceURL: url, fileName: fileName) { update in
+                    await MainActor.run { [weak self] in
                         self?.progress = update
                     }
                 }
             }
 
-            await MainActor.run {
-                latestResult = result
-                latestErrors = result.errors
-                isImporting = false
-            }
+            latestResult = result
+            latestErrors = result.errors
+            isImporting = false
 
             if selectedSourceKind == .merchantCenter {
                 onCatalogReload?(result.stagedFileURL)
@@ -119,16 +118,12 @@ final class ImportViewModel {
 
             await loadHistory()
         } catch let pipelineError as ImportPipelineError {
-            await MainActor.run {
-                errorMessage = pipelineError.localizedDescription
-                isImporting = false
-            }
+            errorMessage = pipelineError.localizedDescription
+            isImporting = false
             await loadHistory()
         } catch {
-            await MainActor.run {
-                errorMessage = error.localizedDescription
-                isImporting = false
-            }
+            errorMessage = error.localizedDescription
+            isImporting = false
             await loadHistory()
         }
     }

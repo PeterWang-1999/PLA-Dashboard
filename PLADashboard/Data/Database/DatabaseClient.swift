@@ -73,6 +73,7 @@ private struct DatabaseClientKey: EnvironmentKey {
 import SwiftUI
 
 extension EnvironmentValues {
+    @MainActor
     var databaseClient: DatabaseClient? {
         get { self[DatabaseClientKey.self] }
         set { self[DatabaseClientKey.self] = newValue }

@@ -161,7 +161,7 @@ extension DatabaseClient {
                     existing.updatedFromImportId = importId
                     try existing.update(db)
                 } else {
-                    var product = ProductRecord(
+                    let product = ProductRecord(
                         productId: entry.productId,
                         title: nil,
                         canonicalLink: nil,
