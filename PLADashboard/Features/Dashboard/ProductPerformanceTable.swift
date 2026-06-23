@@ -52,7 +52,7 @@ struct ProductPerformanceTable: View {
             WeeklyTrendBarChart(values: row.costTrendWeeks)
 
         case .gsTrend:
-            WeeklyTrendBarChart(values: row.gsTrendWeeks)
+            WeeklyTrendBarChart(values: row.gsTrendWeeks, style: .sales)
 
         case .cpa:
             MetricDeltaCell(value: row.cpa, delta: row.cpaDelta)
