@@ -1,7 +1,7 @@
 import Foundation
 
 actor SalesReportImporter {
-    static let batchSize = 500
+    private var batchSize: Int { BenchmarkConfiguration.importBatchSize }
 
     private let databaseClient: DatabaseClient
 
@@ -183,7 +183,7 @@ actor SalesReportImporter {
                     lsinBatch.append((productId: normalized.productID, lsin: normalized.rawValue))
                     validRows += 1
 
-                    if salesBatch.count >= Self.batchSize {
+                    if salesBatch.count >= batchSize {
                         try await flushBatches(
                             salesBatch: &salesBatch,
                             lsinBatch: &lsinBatch,
@@ -285,7 +285,7 @@ actor SalesReportImporter {
         importId: String,
         force: Bool = false
     ) async throws {
-        guard force || errors.count >= Self.batchSize else { return }
+        guard force || errors.count >= batchSize else { return }
         let batch = errors
         errors.removeAll(keepingCapacity: true)
         try await databaseClient.insertImportErrorsBatch(batch)

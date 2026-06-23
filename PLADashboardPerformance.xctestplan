@@ -1,0 +1,40 @@
+{
+  "configurations" : [
+    {
+      "id" : "PLA-PERF-RELEASE",
+      "name" : "Release",
+      "options" : {
+        "codeCoverage" : false,
+        "targetForVariableExpansion" : {
+          "containerPath" : "container:PLADashboard.xcodeproj",
+          "identifier" : "PLA00222F4056970012CB78",
+          "name" : "PLADashboardTests"
+        }
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:PLADashboard.xcodeproj",
+      "identifier" : "PLA00222F4056970012CB78",
+      "name" : "PLADashboardTests"
+    },
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "selectedTests" : [
+        "AdsImportPerformanceTests",
+        "DashboardQueryPerformanceTests"
+      ],
+      "target" : {
+        "containerPath" : "container:PLADashboard.xcodeproj",
+        "identifier" : "PLA00222F4056970012CB78",
+        "name" : "PLADashboardTests"
+      }
+    }
+  ],
+  "version" : 1
+}

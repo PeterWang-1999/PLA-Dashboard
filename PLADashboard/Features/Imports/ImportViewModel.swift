@@ -116,14 +116,26 @@ final class ImportViewModel {
 
             latestResult = result
             latestErrors = result.errors
-            isImporting = false
 
             if selectedSourceKind == .merchantCenter {
                 onCatalogReload?(result.stagedFileURL)
             }
 
+            progress = ImportProgress(
+                phase: .finalizing,
+                processedRows: result.job.totalRows,
+                totalRowsEstimate: result.job.totalRows,
+                validRows: result.job.validRows,
+                invalidRows: result.job.invalidRows,
+                warningRows: result.job.warningRows,
+                message: "正在重建周聚合…"
+            )
+
             try await databaseClient.rebuildProductWeeklyMetrics()
             await onImportCompleted?()
+
+            isImporting = false
+            progress = nil
 
             await loadHistory()
         } catch let pipelineError as ImportPipelineError {

@@ -46,48 +46,103 @@ extension DatabaseClient {
 
     func insertMerchantItemsBatch(_ items: [MerchantItemRecord]) throws {
         guard !items.isEmpty else { return }
+        let signpost = PerformanceSignposts.beginImportFlush()
+        defer { PerformanceSignposts.endImportFlush(signpost) }
         try dbQueue.write { db in
-            for item in items {
-                try item.insert(db, onConflict: .replace)
-            }
+            try db.insertRecords(items, onConflict: .replace)
         }
+        invalidateDashboardCache()
+    }
+
+    /// Merchant 导入批次：单次事务写入 merchant_items + products。
+    func flushMerchantImportBatch(
+        merchantItems: [MerchantItemRecord],
+        productCandidates: [ProductRecord],
+        importId: String,
+        importedAt: String
+    ) throws {
+        guard !merchantItems.isEmpty else { return }
+        let signpost = PerformanceSignposts.beginImportFlush()
+        defer { PerformanceSignposts.endImportFlush(signpost) }
+        try dbQueue.write { db in
+            try db.insertRecords(merchantItems, onConflict: .replace)
+            try upsertProductsInDatabase(
+                db,
+                candidates: productCandidates,
+                importId: importId,
+                importedAt: importedAt
+            )
+        }
+        invalidateDashboardCache()
     }
 
     // MARK: - Products
 
     func upsertProductsBatch(_ candidates: [ProductRecord], importId: String, importedAt: String) throws {
         guard !candidates.isEmpty else { return }
+        let signpost = PerformanceSignposts.beginImportFlush()
+        defer { PerformanceSignposts.endImportFlush(signpost) }
         try dbQueue.write { db in
-            for candidate in candidates {
-                if var existing = try ProductRecord.fetchOne(db, key: candidate.productId) {
-                    if shouldReplaceProduct(existing: existing, incoming: candidate, importId: importId) {
-                        existing.title = pickBetterString(existing.title, candidate.title)
-                        existing.canonicalLink = pickBetterString(existing.canonicalLink, candidate.canonicalLink)
-                        existing.imageUrl = pickBetterString(existing.imageUrl, candidate.imageUrl)
-                        existing.customLabel0 = pickBetterString(existing.customLabel0, candidate.customLabel0)
-                        existing.customLabel1 = pickBetterString(existing.customLabel1, candidate.customLabel1)
-                        existing.customLabel2 = pickBetterString(existing.customLabel2, candidate.customLabel2)
-                        existing.customLabel3 = pickBetterString(existing.customLabel3, candidate.customLabel3)
-                        existing.customLabel4 = pickBetterString(existing.customLabel4, candidate.customLabel4)
-                        existing.googleProductCategory = pickBetterString(
-                            existing.googleProductCategory,
-                            candidate.googleProductCategory
-                        )
-                        existing.lastSeenAt = importedAt
-                        existing.updatedFromImportId = importId
-                        try existing.update(db)
-                    } else {
-                        existing.lastSeenAt = importedAt
-                        try existing.update(db)
-                    }
+            try upsertProductsInDatabase(
+                db,
+                candidates: candidates,
+                importId: importId,
+                importedAt: importedAt
+            )
+        }
+        invalidateDashboardCache()
+    }
+
+    private func upsertProductsInDatabase(
+        _ db: Database,
+        candidates: [ProductRecord],
+        importId: String,
+        importedAt: String
+    ) throws {
+        let ids = candidates.map(\.productId)
+        let existingRows = try ProductRecord
+            .filter(ids.contains(ProductRecord.Columns.productId))
+            .fetchAll(db)
+        let existingByID = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.productId, $0) })
+
+        var toInsert: [ProductRecord] = []
+        var toUpdate: [ProductRecord] = []
+
+        for candidate in candidates {
+            if var existing = existingByID[candidate.productId] {
+                if shouldReplaceProduct(existing: existing, incoming: candidate, importId: importId) {
+                    existing.title = pickBetterString(existing.title, candidate.title)
+                    existing.canonicalLink = pickBetterString(existing.canonicalLink, candidate.canonicalLink)
+                    existing.imageUrl = pickBetterString(existing.imageUrl, candidate.imageUrl)
+                    existing.customLabel0 = pickBetterString(existing.customLabel0, candidate.customLabel0)
+                    existing.customLabel1 = pickBetterString(existing.customLabel1, candidate.customLabel1)
+                    existing.customLabel2 = pickBetterString(existing.customLabel2, candidate.customLabel2)
+                    existing.customLabel3 = pickBetterString(existing.customLabel3, candidate.customLabel3)
+                    existing.customLabel4 = pickBetterString(existing.customLabel4, candidate.customLabel4)
+                    existing.googleProductCategory = pickBetterString(
+                        existing.googleProductCategory,
+                        candidate.googleProductCategory
+                    )
+                    existing.lastSeenAt = importedAt
+                    existing.updatedFromImportId = importId
                 } else {
-                    var newProduct = candidate
-                    newProduct.firstSeenAt = importedAt
-                    newProduct.lastSeenAt = importedAt
-                    newProduct.updatedFromImportId = importId
-                    try newProduct.insert(db)
+                    existing.lastSeenAt = importedAt
                 }
+                toUpdate.append(existing)
+            } else {
+                var newProduct = candidate
+                newProduct.firstSeenAt = importedAt
+                newProduct.lastSeenAt = importedAt
+                newProduct.updatedFromImportId = importId
+                toInsert.append(newProduct)
             }
+        }
+
+        if !toInsert.isEmpty {
+            try db.insertRecords(toInsert)
+        }
+        for product in toUpdate {
+            try product.update(db)
         }
     }
 
@@ -115,11 +170,12 @@ extension DatabaseClient {
 
     func insertSalesDailyBatch(_ rows: [SalesDailyRecord]) throws {
         guard !rows.isEmpty else { return }
+        let signpost = PerformanceSignposts.beginImportFlush()
+        defer { PerformanceSignposts.endImportFlush(signpost) }
         try dbQueue.write { db in
-            for row in rows {
-                try row.insert(db, onConflict: .replace)
-            }
+            try db.insertRecords(rows, onConflict: .replace)
         }
+        invalidateDashboardCache()
     }
 
     func countSalesDaily(importId: String) throws -> Int {
@@ -134,11 +190,12 @@ extension DatabaseClient {
 
     func insertAdsProductDailyBatch(_ rows: [AdsProductDailyRecord]) throws {
         guard !rows.isEmpty else { return }
+        let signpost = PerformanceSignposts.beginImportFlush()
+        defer { PerformanceSignposts.endImportFlush(signpost) }
         try dbQueue.write { db in
-            for row in rows {
-                try row.insert(db, onConflict: .replace)
-            }
+            try db.bulkInsertAdsProductDaily(rows)
         }
+        invalidateDashboardCache()
     }
 
     func countAdsProductDaily(importId: String) throws -> Int {
@@ -146,6 +203,15 @@ extension DatabaseClient {
             try AdsProductDailyRecord
                 .filter(AdsProductDailyRecord.Columns.importId == importId)
                 .fetchCount(db)
+        }
+    }
+
+    func fetchAdsProductDaily(importId: String, limit: Int = 10) throws -> [AdsProductDailyRecord] {
+        try dbQueue.read { db in
+            try AdsProductDailyRecord
+                .filter(AdsProductDailyRecord.Columns.importId == importId)
+                .limit(limit)
+                .fetchAll(db)
         }
     }
 
@@ -157,13 +223,24 @@ extension DatabaseClient {
         importedAt: String
     ) throws {
         guard !entries.isEmpty else { return }
+        let signpost = PerformanceSignposts.beginImportFlush()
+        defer { PerformanceSignposts.endImportFlush(signpost) }
         try dbQueue.write { db in
+            let ids = entries.map(\.productId)
+            let existingRows = try ProductRecord
+                .filter(ids.contains(ProductRecord.Columns.productId))
+                .fetchAll(db)
+            let existingByID = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.productId, $0) })
+
+            var toInsert: [ProductRecord] = []
+            var toUpdate: [ProductRecord] = []
+
             for entry in entries {
-                if var existing = try ProductRecord.fetchOne(db, key: entry.productId) {
+                if var existing = existingByID[entry.productId] {
                     existing.lsin = entry.lsin
                     existing.lastSeenAt = importedAt
                     existing.updatedFromImportId = importId
-                    try existing.update(db)
+                    toUpdate.append(existing)
                 } else {
                     let product = ProductRecord(
                         productId: entry.productId,
@@ -176,14 +253,23 @@ extension DatabaseClient {
                         customLabel3: nil,
                         customLabel4: nil,
                         lsin: entry.lsin,
+                        googleProductCategory: nil,
                         firstSeenAt: importedAt,
                         lastSeenAt: importedAt,
                         updatedFromImportId: importId
                     )
-                    try product.insert(db)
+                    toInsert.append(product)
                 }
             }
+
+            if !toInsert.isEmpty {
+                try db.insertRecords(toInsert)
+            }
+            for product in toUpdate {
+                try product.update(db)
+            }
         }
+        invalidateDashboardCache()
     }
 
     // MARK: - Import errors
@@ -191,9 +277,7 @@ extension DatabaseClient {
     func insertImportErrorsBatch(_ errors: [ImportRowErrorRecord]) throws {
         guard !errors.isEmpty else { return }
         try dbQueue.write { db in
-            for error in errors {
-                try error.insert(db)
-            }
+            try db.insertRecords(errors)
         }
     }
 
@@ -217,27 +301,50 @@ extension DatabaseClient {
                     sql: "DELETE FROM product_search WHERE product_id = ?;",
                     arguments: [product.productId]
                 )
-                try db.execute(
-                    sql: """
-                        INSERT INTO product_search (
-                          product_id, title, canonical_link,
-                          custom_label_0, custom_label_1, custom_label_2,
-                          custom_label_3, custom_label_4
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-                        """,
-                    arguments: [
-                        product.productId,
-                        product.title,
-                        product.canonicalLink,
-                        product.customLabel0,
-                        product.customLabel1,
-                        product.customLabel2,
-                        product.customLabel3,
-                        product.customLabel4,
-                    ]
-                )
+                try insertProductSearchRow(db, product: product)
             }
         }
+    }
+
+    /// 全量重建 FTS 索引（Merchant 导入结束后调用）。
+    func rebuildAllProductSearchIndex() throws {
+        try dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM product_search;")
+            try db.execute(sql: """
+                INSERT INTO product_search (
+                  product_id, title, canonical_link,
+                  custom_label_0, custom_label_1, custom_label_2,
+                  custom_label_3, custom_label_4
+                )
+                SELECT
+                  product_id, title, canonical_link,
+                  custom_label_0, custom_label_1, custom_label_2,
+                  custom_label_3, custom_label_4
+                FROM products;
+                """)
+        }
+    }
+
+    private func insertProductSearchRow(_ db: Database, product: ProductRecord) throws {
+        try db.execute(
+            sql: """
+                INSERT INTO product_search (
+                  product_id, title, canonical_link,
+                  custom_label_0, custom_label_1, custom_label_2,
+                  custom_label_3, custom_label_4
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+            arguments: [
+                product.productId,
+                product.title,
+                product.canonicalLink,
+                product.customLabel0,
+                product.customLabel1,
+                product.customLabel2,
+                product.customLabel3,
+                product.customLabel4,
+            ]
+        )
     }
 
     func fetchProducts(ids: [String]) throws -> [ProductRecord] {
@@ -279,6 +386,7 @@ extension DatabaseClient {
                 try job.update(db)
             }
         }
+        invalidateDashboardCache()
     }
 
     func rollbackImport(importId: String) throws {

@@ -123,3 +123,7 @@ CREATE INDEX IF NOT EXISTS idx_ads_campaign_date ON ads_product_daily(campaign, 
 CREATE INDEX IF NOT EXISTS idx_weekly_week_cost ON product_weekly_metrics(week_start, cost_cents DESC);
 CREATE INDEX IF NOT EXISTS idx_weekly_week_roi ON product_weekly_metrics(week_start, roi DESC);
 CREATE INDEX IF NOT EXISTS idx_weekly_product ON product_weekly_metrics(product_id);
+CREATE INDEX IF NOT EXISTS idx_import_jobs_checksum ON import_jobs(file_checksum);
+CREATE INDEX IF NOT EXISTS idx_import_jobs_status ON import_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_ads_import_id ON ads_product_daily(import_id);
+CREATE INDEX IF NOT EXISTS idx_weekly_week_start ON product_weekly_metrics(week_start);

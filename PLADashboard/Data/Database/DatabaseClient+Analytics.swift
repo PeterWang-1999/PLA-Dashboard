@@ -20,43 +20,104 @@ extension DatabaseClient {
     }
 
     func rebuildProductWeeklyMetrics() throws {
+        let signpost = PerformanceSignposts.beginETLRebuild()
+        defer { PerformanceSignposts.endETLRebuild(signpost) }
+
         try dbQueue.write { db in
             try db.execute(sql: "DELETE FROM product_weekly_metrics;")
-
-            let adsDaily = try fetchDedupedAdsDaily(db: db)
-
-            var buckets: [String: [String: AggregatedMetrics]] = [:]
-
-            for row in adsDaily {
-                guard let weekStart = WeekCalendar.weekStartSunday(forDay: row.date) else { continue }
-                var weekMap = buckets[row.productId, default: [:]]
-                var metrics = weekMap[weekStart, default: AggregatedMetrics()]
-                metrics.costCents += WeekCalendar.microsToCents(row.costMicros)
-                metrics.impressions += row.impressions
-                metrics.clicks += row.clicks
-                metrics.conversions += row.conversions
-                metrics.conversionValueCents += row.conversionValueCents
-                weekMap[weekStart] = metrics
-                buckets[row.productId] = weekMap
-            }
-
-            var records: [ProductWeeklyMetricsRecord] = []
-            records.reserveCapacity(buckets.values.reduce(0) { $0 + $1.count })
-
-            for (productId, weekMap) in buckets {
-                for (weekStart, metrics) in weekMap {
-                    records.append(ProductWeeklyMetricsRecord.make(
-                        productId: productId,
-                        weekStart: weekStart,
-                        metrics: metrics
-                    ))
-                }
-            }
-
-            for record in records {
-                try record.insert(db, onConflict: .replace)
-            }
+            try db.execute(sql: """
+                INSERT INTO product_weekly_metrics (
+                  product_id,
+                  week_start,
+                  cost_cents,
+                  impressions,
+                  clicks,
+                  conversions,
+                  conversion_value_cents,
+                  gross_sales_cents,
+                  roi,
+                  cpa_cents,
+                  cpc_cents,
+                  cvr,
+                  aos,
+                  warning_label
+                )
+                SELECT
+                  product_id,
+                  week_start,
+                  cost_cents,
+                  impressions,
+                  clicks,
+                  conversions,
+                  conversion_value_cents,
+                  0 AS gross_sales_cents,
+                  CASE
+                    WHEN cost_cents > 0
+                    THEN CAST(conversion_value_cents AS REAL) / CAST(cost_cents AS REAL)
+                    ELSE NULL
+                  END AS roi,
+                  CASE
+                    WHEN conversions > 0
+                    THEN CAST(ROUND(CAST(cost_cents AS REAL) / conversions) AS INTEGER)
+                    ELSE NULL
+                  END AS cpa_cents,
+                  CASE
+                    WHEN clicks > 0 THEN cost_cents / clicks
+                    ELSE NULL
+                  END AS cpc_cents,
+                  CASE
+                    WHEN clicks > 0 THEN conversions / CAST(clicks AS REAL)
+                    ELSE NULL
+                  END AS cvr,
+                  CASE
+                    WHEN conversions > 0
+                    THEN CAST(conversion_value_cents AS REAL) / conversions / 100.0
+                    ELSE NULL
+                  END AS aos,
+                  NULL AS warning_label
+                FROM (
+                  SELECT
+                    product_id,
+                    date(date, '-' || CAST(strftime('%w', date) AS INTEGER) || ' days') AS week_start,
+                    SUM(cost_micros) / 10000 AS cost_cents,
+                    SUM(impressions) AS impressions,
+                    SUM(clicks) AS clicks,
+                    SUM(conversions) AS conversions,
+                    SUM(conversion_value_cents) AS conversion_value_cents
+                  FROM (
+                    WITH ranked AS (
+                      SELECT
+                        a.product_id,
+                        a.date,
+                        a.cost_micros,
+                        a.impressions,
+                        a.clicks,
+                        a.conversions,
+                        a.conversion_value_cents,
+                        ROW_NUMBER() OVER (
+                          PARTITION BY a.date, a.item_id, a.campaign, a.currency_code
+                          ORDER BY j.imported_at DESC
+                        ) AS rn
+                      FROM ads_product_daily a
+                      INNER JOIN import_jobs j ON j.id = a.import_id
+                      WHERE j.status = ?
+                    )
+                    SELECT
+                      product_id,
+                      date,
+                      cost_micros,
+                      impressions,
+                      clicks,
+                      conversions,
+                      conversion_value_cents
+                    FROM ranked
+                    WHERE rn = 1
+                  ) AS deduped_daily
+                  GROUP BY product_id, week_start
+                ) AS weekly_rollup;
+                """, arguments: [ImportJobStatus.succeeded.rawValue])
         }
+        invalidateDashboardCache()
     }
 
     func fetchWeeklyMetrics(
@@ -149,58 +210,5 @@ extension DatabaseClient {
                 return WeeklyProductMetrics(productId: "__overall__", weekStart: weekStart, metrics: metrics)
             }
         }
-    }
-
-    private struct DedupedAdsDailyRow: FetchableRecord, Decodable {
-        let productId: String
-        let date: String
-        let costMicros: Int
-        let impressions: Int
-        let clicks: Int
-        let conversions: Double
-        let conversionValueCents: Int
-
-        enum CodingKeys: String, CodingKey {
-            case productId = "product_id"
-            case date
-            case costMicros = "cost_micros"
-            case impressions
-            case clicks
-            case conversions
-            case conversionValueCents = "conversion_value_cents"
-        }
-    }
-
-    private func fetchDedupedAdsDaily(db: Database) throws -> [DedupedAdsDailyRow] {
-        try DedupedAdsDailyRow.fetchAll(db, sql: """
-            WITH ranked AS (
-                SELECT
-                    a.product_id,
-                    a.date,
-                    a.cost_micros,
-                    a.impressions,
-                    a.clicks,
-                    a.conversions,
-                    a.conversion_value_cents,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY a.date, a.item_id, a.campaign, a.currency_code
-                        ORDER BY j.imported_at DESC
-                    ) AS rn
-                FROM ads_product_daily a
-                INNER JOIN import_jobs j ON j.id = a.import_id
-                WHERE j.status = ?
-            )
-            SELECT
-                product_id,
-                date,
-                SUM(cost_micros) AS cost_micros,
-                SUM(impressions) AS impressions,
-                SUM(clicks) AS clicks,
-                SUM(conversions) AS conversions,
-                SUM(conversion_value_cents) AS conversion_value_cents
-            FROM ranked
-            WHERE rn = 1
-            GROUP BY product_id, date;
-            """, arguments: [ImportJobStatus.succeeded.rawValue])
     }
 }

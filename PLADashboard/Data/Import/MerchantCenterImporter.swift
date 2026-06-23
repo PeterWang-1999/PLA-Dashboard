@@ -1,7 +1,7 @@
 import Foundation
 
 actor MerchantCenterImporter {
-    static let batchSize = 500
+    private var batchSize: Int { BenchmarkConfiguration.importBatchSize }
 
     private let databaseClient: DatabaseClient
 
@@ -164,7 +164,7 @@ actor MerchantCenterImporter {
                     ))
                     validRows += 1
 
-                    if merchantBatch.count >= Self.batchSize {
+                    if merchantBatch.count >= batchSize {
                         try await flushBatches(
                             merchantBatch: &merchantBatch,
                             productBatch: &productBatch,
@@ -219,8 +219,9 @@ actor MerchantCenterImporter {
             ))
 
             let productIds = try await databaseClient.fetchDistinctProductIds(importId: importId)
-            let products = try await databaseClient.fetchProducts(ids: productIds)
-            try await databaseClient.replaceProductSearchEntries(products)
+            if !productIds.isEmpty {
+                try await databaseClient.rebuildAllProductSearchIndex()
+            }
 
             await onProgress(ImportProgress(
                 phase: .completed,
@@ -269,8 +270,12 @@ actor MerchantCenterImporter {
         importedAt: String
     ) async throws {
         guard !merchantBatch.isEmpty else { return }
-        try await databaseClient.insertMerchantItemsBatch(merchantBatch)
-        try await databaseClient.upsertProductsBatch(productBatch, importId: importId, importedAt: importedAt)
+        try await databaseClient.flushMerchantImportBatch(
+            merchantItems: merchantBatch,
+            productCandidates: productBatch,
+            importId: importId,
+            importedAt: importedAt
+        )
         merchantBatch.removeAll(keepingCapacity: true)
         productBatch.removeAll(keepingCapacity: true)
     }
@@ -280,7 +285,7 @@ actor MerchantCenterImporter {
         importId: String,
         force: Bool = false
     ) async throws {
-        guard force || errors.count >= Self.batchSize else { return }
+        guard force || errors.count >= batchSize else { return }
         let batch = errors
         errors.removeAll(keepingCapacity: true)
         try await databaseClient.insertImportErrorsBatch(batch)

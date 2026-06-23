@@ -19,6 +19,26 @@ Google 购物广告产品数据看板 — macOS 本地应用。
 xcodebuild -scheme PLADashboard -destination 'platform=macOS' build
 ```
 
+## 性能基准（阶段 5）
+
+```bash
+# 功能 + 性能回归（Debug，含 10k 行基准）
+xcodebuild -scheme PLADashboard -destination 'platform=macOS' test
+
+# Release 性能 Test Plan（仅性能用例）
+xcodebuild -scheme PLADashboard -testPlan PLADashboardPerformance \
+  -destination 'platform=macOS' test
+
+# 生成百万行 fixture（不入 Git）
+python3 Scripts/generate_ads_benchmark.py --ads-rows 1000000 --merchant-rows 50000
+
+# 完整百万行基准
+PLA_RUN_FULL_BENCHMARK=1 xcodebuild -scheme PLADashboard -testPlan PLADashboardPerformance \
+  -destination 'platform=macOS' test
+```
+
+详见仓库内 [BenchmarkReport.md](BenchmarkReport.md)。
+
 ## 工程结构
 
 - 方案文档：`../Vibe Coding/PLA_Dashboard_产品数据看板需求与技术栈方案_2026-06-22.md`

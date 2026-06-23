@@ -3,6 +3,7 @@ import GRDB
 
 actor DatabaseClient {
     let dbQueue: DatabaseQueue
+    private var dashboardMetricsCache: DashboardMetricsCache?
 
     static let databaseDirectoryName = "PLA Dashboard"
     static let databaseFileName = "pla_dashboard.sqlite"
@@ -63,6 +64,21 @@ actor DatabaseClient {
         try dbQueue.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM product_weekly_metrics;") ?? 0
         }
+    }
+
+    func invalidateDashboardCache() {
+        dashboardMetricsCache = nil
+    }
+
+    func cachedDashboardMetrics(for weekStarts: [String]) -> DashboardMetricsCache? {
+        guard let cache = dashboardMetricsCache, cache.weekStartsKey == weekStarts.cacheKey else {
+            return nil
+        }
+        return cache
+    }
+
+    func storeDashboardMetricsCache(_ cache: DashboardMetricsCache) {
+        dashboardMetricsCache = cache
     }
 }
 

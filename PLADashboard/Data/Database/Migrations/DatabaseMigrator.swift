@@ -28,6 +28,10 @@ struct AppDatabaseMigrator {
             try Migration_v3_ProductCategory.migrate(db)
         }
 
+        migrator.registerMigration("v4_performance_indexes") { db in
+            try Migration_v4_PerformanceIndexes.migrate(db)
+        }
+
         try migrator.migrate(dbQueue)
     }
 }

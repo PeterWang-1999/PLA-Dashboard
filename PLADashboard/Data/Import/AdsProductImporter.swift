@@ -1,7 +1,7 @@
 import Foundation
 
 actor AdsProductImporter {
-    static let batchSize = 500
+    private var batchSize: Int { BenchmarkConfiguration.importBatchSize }
     static let linesToSkip = 2
 
     private let databaseClient: DatabaseClient
@@ -270,7 +270,7 @@ actor AdsProductImporter {
                     ))
                     validRows += 1
 
-                    if adsBatch.count >= Self.batchSize {
+                    if adsBatch.count >= batchSize {
                         try await flushBatch(&adsBatch)
                     }
 
@@ -355,7 +355,7 @@ actor AdsProductImporter {
         importId: String,
         force: Bool = false
     ) async throws {
-        guard force || errors.count >= Self.batchSize else { return }
+        guard force || errors.count >= batchSize else { return }
         let batch = errors
         errors.removeAll(keepingCapacity: true)
         try await databaseClient.insertImportErrorsBatch(batch)
