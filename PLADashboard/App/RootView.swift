@@ -20,6 +20,11 @@ struct RootView: View {
                     selectedNavigationItem = .imports
                     importViewModel.presentImportPicker()
                 }
+                .focusedSceneValue(\.refreshDashboardAggregation) {
+                    Task { @MainActor in
+                        await dashboardViewModel.rebuildMetricsAndRefresh()
+                    }
+                }
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 280)
         .fileImporter(
@@ -36,18 +41,18 @@ struct RootView: View {
         }
         .onAppear {
             windowState.syncFromSceneStorage(sidebarVisibleStorage)
-            configureImportViewModelIfNeeded()
+            configureViewModelsIfNeeded()
         }
         .onChange(of: windowState.columnVisibility) { _, visibility in
             windowState.isSidebarVisible = visibility != .detailOnly
             sidebarVisibleStorage = windowState.isSidebarVisible
         }
         .onChange(of: databaseClient != nil) { _, _ in
-            configureImportViewModelIfNeeded()
+            configureViewModelsIfNeeded()
         }
         .task {
             await bootstrapDatabaseIfNeeded()
-            configureImportViewModelIfNeeded()
+            configureViewModelsIfNeeded()
         }
     }
 
@@ -99,10 +104,14 @@ struct RootView: View {
         }
     }
 
-    private func configureImportViewModelIfNeeded() {
+    private func configureViewModelsIfNeeded() {
         guard let databaseClient else { return }
+        dashboardViewModel.configure(databaseClient: databaseClient)
         importViewModel.configure(databaseClient: databaseClient) { url in
             try? dashboardViewModel.reloadFilterCatalogs(from: url)
+        } onImportCompleted: {
+            dashboardViewModel.dataSource = .database
+            await dashboardViewModel.refreshData()
         }
     }
 
@@ -110,9 +119,14 @@ struct RootView: View {
         guard let databaseClient else { return }
         do {
             try await databaseClient.migrateIfNeeded()
-            let count = try await databaseClient.productWeeklyMetricsCount()
-            if count == 0 && dashboardViewModel.dataSource == .database {
-                dashboardViewModel.dataSource = .empty
+            var metricsCount = try await databaseClient.productWeeklyMetricsCount()
+            if metricsCount == 0, try await databaseClient.hasFactTableData() {
+                try await databaseClient.rebuildProductWeeklyMetrics()
+                metricsCount = try await databaseClient.productWeeklyMetricsCount()
+            }
+            dashboardViewModel.bootstrapDataSource(hasMetrics: metricsCount > 0)
+            if metricsCount > 0 {
+                await dashboardViewModel.refreshData()
             }
         } catch {
             #if DEBUG

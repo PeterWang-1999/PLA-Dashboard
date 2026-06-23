@@ -24,6 +24,10 @@ struct AppDatabaseMigrator {
             try Migration_v2_ImportRowErrors.migrate(db)
         }
 
+        migrator.registerMigration("v3_product_category") { db in
+            try Migration_v3_ProductCategory.migrate(db)
+        }
+
         try migrator.migrate(dbQueue)
     }
 }

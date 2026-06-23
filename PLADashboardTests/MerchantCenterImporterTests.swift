@@ -27,5 +27,9 @@ Invalid Row\t\thttps://example.com/missing\thttps://example.com/missing.jpg\t\t\
 
         let productIds = try await databaseClient.fetchDistinctProductIds(importId: result.importId)
         XCTAssertEqual(Set(productIds), Set(["10416614474003", "15091206"]))
+
+        let products = try await databaseClient.fetchProducts(ids: productIds)
+        let dress = try XCTUnwrap(products.first { $0.productId == "10416614474003" })
+        XCTAssertEqual(dress.googleProductCategory, "Apparel & Accessories > Clothing > Dresses")
     }
 }

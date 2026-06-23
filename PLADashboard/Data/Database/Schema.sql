@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS products (
   custom_label_3 TEXT,
   custom_label_4 TEXT,
   lsin TEXT,
+  google_product_category TEXT,
   first_seen_at TEXT,
   last_seen_at TEXT,
   updated_from_import_id TEXT

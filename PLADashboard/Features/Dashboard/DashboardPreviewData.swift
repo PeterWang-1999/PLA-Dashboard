@@ -9,8 +9,8 @@ enum DashboardPreviewData {
             cost: "13,468",
             costShare: "5.78%",
             roi: "0.92",
-            warningLabel: "正常",
-            warningStyle: .normal,
+            warningLabel: "高消高效",
+            warningStyle: .highSpendHighEfficiency,
             cpa: "55.65",
             cpaDelta: "+5%",
             arpu: "0.72",
@@ -22,7 +22,9 @@ enum DashboardPreviewData {
             aos: "51.36",
             aosDelta: "+5%",
             clicks: "15,806",
-            conversions: "210"
+            conversions: "210",
+            costTrendWeeks: [1200, 1500, 1800, 2100, 2400, 2700],
+            gsTrendWeeks: [800, 900, 1000, 1100, 1200, 1300]
         ),
         ProductPerformanceRowModel(
             id: "S17053046",
@@ -31,8 +33,8 @@ enum DashboardPreviewData {
             cost: "4,676",
             costShare: "2.43%",
             roi: "0.76",
-            warningLabel: "关注",
-            warningStyle: .warning,
+            warningLabel: "高消费",
+            warningStyle: .highSpend,
             cpa: "47.71",
             cpaDelta: "-20%",
             arpu: "0.30",
@@ -44,7 +46,9 @@ enum DashboardPreviewData {
             aos: "36.35",
             aosDelta: "-12%",
             clicks: "5,817",
-            conversions: "155"
+            conversions: "155",
+            costTrendWeeks: [400, 500, 600, 700, 800, 900],
+            gsTrendWeeks: [300, 320, 340, 360, 380, 400]
         ),
         ProductPerformanceRowModel(
             id: "S19954192",
@@ -53,8 +57,8 @@ enum DashboardPreviewData {
             cost: "4,166",
             costShare: "2.21%",
             roi: "1.14",
-            warningLabel: "正常",
-            warningStyle: .normal,
+            warningLabel: "高消高效",
+            warningStyle: .highSpendHighEfficiency,
             cpa: "23.25",
             cpaDelta: "-37%",
             arpu: "0.73",
@@ -66,7 +70,9 @@ enum DashboardPreviewData {
             aos: "26.59",
             aosDelta: "-23%",
             clicks: "5,817",
-            conversions: "155"
+            conversions: "155",
+            costTrendWeeks: [350, 420, 490, 560, 630, 700],
+            gsTrendWeeks: [250, 270, 290, 310, 330, 350]
         ),
         ProductPerformanceRowModel(
             id: "S9628590",
@@ -75,8 +81,8 @@ enum DashboardPreviewData {
             cost: "2,317",
             costShare: "2.18%",
             roi: "0.77",
-            warningLabel: "预警",
-            warningStyle: .critical,
+            warningLabel: "高消低效",
+            warningStyle: .highSpendLowEfficiency,
             cpa: "28.26",
             cpaDelta: "-32%",
             arpu: "0.30",
@@ -88,7 +94,9 @@ enum DashboardPreviewData {
             aos: "21.68",
             aosDelta: "-26%",
             clicks: "5,817",
-            conversions: "155"
+            conversions: "155",
+            costTrendWeeks: [200, 220, 240, 260, 280, 300],
+            gsTrendWeeks: [150, 160, 170, 180, 190, 200]
         ),
         ProductPerformanceRowModel(
             id: "S11854438",
@@ -97,8 +105,8 @@ enum DashboardPreviewData {
             cost: "2,203",
             costShare: "2.16%",
             roi: "1.16",
-            warningLabel: "正常",
-            warningStyle: .normal,
+            warningLabel: "低消费",
+            warningStyle: .lowSpend,
             cpa: "55.65",
             cpaDelta: "-17%",
             arpu: "0.72",
@@ -110,7 +118,9 @@ enum DashboardPreviewData {
             aos: "51.36",
             aosDelta: "-10%",
             clicks: "4,102",
-            conversions: "98"
+            conversions: "98",
+            costTrendWeeks: [180, 190, 200, 210, 220, 230],
+            gsTrendWeeks: [120, 130, 140, 150, 160, 170]
         ),
     ]
 }

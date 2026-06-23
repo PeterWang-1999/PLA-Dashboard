@@ -69,6 +69,10 @@ extension DatabaseClient {
                         existing.customLabel2 = pickBetterString(existing.customLabel2, candidate.customLabel2)
                         existing.customLabel3 = pickBetterString(existing.customLabel3, candidate.customLabel3)
                         existing.customLabel4 = pickBetterString(existing.customLabel4, candidate.customLabel4)
+                        existing.googleProductCategory = pickBetterString(
+                            existing.googleProductCategory,
+                            candidate.googleProductCategory
+                        )
                         existing.lastSeenAt = importedAt
                         existing.updatedFromImportId = importId
                         try existing.update(db)

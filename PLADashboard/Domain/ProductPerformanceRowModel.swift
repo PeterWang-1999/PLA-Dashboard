@@ -21,11 +21,16 @@ struct ProductPerformanceRowModel: Identifiable, Hashable, Sendable {
     let aosDelta: String
     let clicks: String?
     let conversions: String?
+    let costTrendWeeks: [Int]
+    let gsTrendWeeks: [Int]
 
     enum WarningLabelStyle: String, Hashable, Sendable {
-        case normal
-        case warning
-        case critical
+        case none
+        case lowSpend
+        case highSpendHighEfficiency
+        case highSpendLowEfficiency
+        case highSpend
+        case lowEfficiency
     }
 }
 

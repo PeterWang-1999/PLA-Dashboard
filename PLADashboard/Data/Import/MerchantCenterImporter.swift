@@ -128,6 +128,8 @@ actor MerchantCenterImporter {
                         ))
                     }
 
+                    let category = columnMap.value(at: columnMap.categoryIndex, in: fields)
+
                     let merchantItem = MerchantItemRecord(
                         importId: importId,
                         itemId: itemId,
@@ -155,6 +157,7 @@ actor MerchantCenterImporter {
                         customLabel3: merchantItem.customLabel3,
                         customLabel4: merchantItem.customLabel4,
                         lsin: nil,
+                        googleProductCategory: category,
                         firstSeenAt: nil,
                         lastSeenAt: nil,
                         updatedFromImportId: nil

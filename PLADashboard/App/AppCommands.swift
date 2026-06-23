@@ -3,6 +3,7 @@ import SwiftUI
 struct AppCommands: Commands {
     @FocusedValue(\.windowState) private var windowState
     @FocusedValue(\.triggerImportPicker) private var triggerImportPicker
+    @FocusedValue(\.refreshDashboardAggregation) private var refreshDashboardAggregation
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
@@ -11,8 +12,10 @@ struct AppCommands: Commands {
             }
             .keyboardShortcut("I", modifiers: [.command, .shift])
 
-            Button("刷新聚合") {}
-                .keyboardShortcut("R", modifiers: [.command, .shift])
+            Button("刷新聚合") {
+                refreshDashboardAggregation?()
+            }
+            .keyboardShortcut("R", modifiers: [.command, .shift])
         }
 
         CommandGroup(after: .sidebar) {
@@ -32,6 +35,10 @@ private struct TriggerImportPickerFocusedKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct RefreshDashboardAggregationFocusedKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var windowState: WindowState? {
         get { self[WindowStateFocusedKey.self] }
@@ -41,5 +48,10 @@ extension FocusedValues {
     var triggerImportPicker: (() -> Void)? {
         get { self[TriggerImportPickerFocusedKey.self] }
         set { self[TriggerImportPickerFocusedKey.self] = newValue }
+    }
+
+    var refreshDashboardAggregation: (() -> Void)? {
+        get { self[RefreshDashboardAggregationFocusedKey.self] }
+        set { self[RefreshDashboardAggregationFocusedKey.self] = newValue }
     }
 }

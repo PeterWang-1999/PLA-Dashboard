@@ -14,6 +14,7 @@ struct ProductRecord: Codable, FetchableRecord, PersistableRecord, Identifiable,
     var customLabel3: String?
     var customLabel4: String?
     var lsin: String?
+    var googleProductCategory: String?
     var firstSeenAt: String?
     var lastSeenAt: String?
     var updatedFromImportId: String?
@@ -31,6 +32,7 @@ struct ProductRecord: Codable, FetchableRecord, PersistableRecord, Identifiable,
         case customLabel3 = "custom_label_3"
         case customLabel4 = "custom_label_4"
         case lsin
+        case googleProductCategory = "google_product_category"
         case firstSeenAt = "first_seen_at"
         case lastSeenAt = "last_seen_at"
         case updatedFromImportId = "updated_from_import_id"
@@ -47,6 +49,7 @@ struct ProductRecord: Codable, FetchableRecord, PersistableRecord, Identifiable,
         case customLabel3 = "custom_label_3"
         case customLabel4 = "custom_label_4"
         case lsin
+        case googleProductCategory = "google_product_category"
         case firstSeenAt = "first_seen_at"
         case lastSeenAt = "last_seen_at"
         case updatedFromImportId = "updated_from_import_id"
@@ -65,6 +68,7 @@ struct ProductRecord: Codable, FetchableRecord, PersistableRecord, Identifiable,
         score += customLabels.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .count
+        if let googleProductCategory, !googleProductCategory.isEmpty { score += 1 }
         return score
     }
 }

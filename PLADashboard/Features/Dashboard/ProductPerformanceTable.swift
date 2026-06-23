@@ -48,8 +48,11 @@ struct ProductPerformanceTable: View {
         case .warningLabel:
             WarningLabelView(text: row.warningLabel, style: row.warningStyle)
 
-        case .costTrend, .gsTrend:
-            TrendPlaceholderView()
+        case .costTrend:
+            WeeklyTrendBarChart(values: row.costTrendWeeks)
+
+        case .gsTrend:
+            WeeklyTrendBarChart(values: row.gsTrendWeeks)
 
         case .cpa:
             MetricDeltaCell(value: row.cpa, delta: row.cpaDelta)

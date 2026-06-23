@@ -8,7 +8,7 @@ struct DashboardView: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack {
-                if viewModel.isEmpty {
+                if viewModel.showsEmptyState {
                     DashboardEmptyStateView()
                 } else {
                     ProductPerformanceTable(
@@ -33,6 +33,18 @@ struct DashboardView: View {
             placement: .toolbar,
             prompt: "输入 LSIN 查询"
         )
+        .onChange(of: viewModel.searchText) { _, _ in
+            viewModel.onSearchTextChanged()
+        }
+        .onChange(of: viewModel.selectedAlertFilter) { _, _ in
+            viewModel.onFiltersChanged()
+        }
+        .onChange(of: viewModel.selectedCustomLabelFilter) { _, _ in
+            viewModel.onFiltersChanged()
+        }
+        .onChange(of: viewModel.selectedCategoryFilter) { _, _ in
+            viewModel.onFiltersChanged()
+        }
     }
 
     private var dashboardFooter: some View {
@@ -48,7 +60,9 @@ struct DashboardView: View {
 
             Menu {
                 Button("导出当前视图") {}
-                Button("刷新聚合") {}
+                Button("刷新聚合") {
+                    Task { await viewModel.rebuildMetricsAndRefresh() }
+                }
             } label: {
                 Text("快捷操作")
                     .dashboardFooterGlassChrome()
@@ -92,7 +106,11 @@ struct DashboardView: View {
 #Preview("Sidebar Expanded") {
     NavigationStack {
         DashboardView(
-            viewModel: DashboardViewModel(),
+            viewModel: {
+                let model = DashboardViewModel()
+                model.dataSource = .preview
+                return model
+            }(),
             windowState: WindowState(isSidebarVisible: true)
         )
     }
@@ -102,7 +120,11 @@ struct DashboardView: View {
 #Preview("Sidebar Collapsed") {
     NavigationStack {
         DashboardView(
-            viewModel: DashboardViewModel(),
+            viewModel: {
+                let model = DashboardViewModel()
+                model.dataSource = .preview
+                return model
+            }(),
             windowState: WindowState(isSidebarVisible: false)
         )
     }

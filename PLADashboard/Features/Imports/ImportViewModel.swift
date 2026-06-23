@@ -16,13 +16,16 @@ final class ImportViewModel {
     private var databaseClient: DatabaseClient?
     private var importTask: Task<Void, Never>?
     private var onCatalogReload: ((URL) -> Void)?
+    private var onImportCompleted: (() async -> Void)?
 
     func configure(
         databaseClient: DatabaseClient,
-        onCatalogReload: @escaping (URL) -> Void
+        onCatalogReload: @escaping (URL) -> Void,
+        onImportCompleted: @escaping () async -> Void
     ) {
         self.databaseClient = databaseClient
         self.onCatalogReload = onCatalogReload
+        self.onImportCompleted = onImportCompleted
     }
 
     func presentImportPicker() {
@@ -115,6 +118,9 @@ final class ImportViewModel {
             if selectedSourceKind == .merchantCenter {
                 onCatalogReload?(result.stagedFileURL)
             }
+
+            try await databaseClient.rebuildProductWeeklyMetrics()
+            await onImportCompleted?()
 
             await loadHistory()
         } catch let pipelineError as ImportPipelineError {
