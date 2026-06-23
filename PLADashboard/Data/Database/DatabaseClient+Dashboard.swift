@@ -92,7 +92,7 @@ extension DatabaseClient {
             }
 
             let sixWeekTotals = productWeeks.map(\.metrics).reduce(AggregatedMetrics()) { $0 + $1 }
-            guard sixWeekTotals.costCents > 0 || sixWeekTotals.grossSalesCents > 0 else { continue }
+            guard sixWeekTotals.costCents > 0 || sixWeekTotals.conversionValueCents > 0 else { continue }
 
             let warning = WeeklyMetricsRules.resolveWarningLabel(
                 productWeeks: productWeeks,
@@ -107,7 +107,7 @@ extension DatabaseClient {
             }
 
             let costTrend = weekStarts.map { recordByWeek[$0]?.costCents ?? 0 }
-            let gsTrend = weekStarts.map { recordByWeek[$0]?.grossSalesCents ?? 0 }
+            let gsTrend = weekStarts.map { recordByWeek[$0]?.conversionValueCents ?? 0 }
 
             mappedRows.append(ProductPerformanceRowMapper.map(
                 product: product,

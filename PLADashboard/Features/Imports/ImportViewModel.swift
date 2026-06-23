@@ -26,6 +26,9 @@ final class ImportViewModel {
         self.databaseClient = databaseClient
         self.onCatalogReload = onCatalogReload
         self.onImportCompleted = onImportCompleted
+        if !ImportSourceKind.importPickerCases.contains(selectedSourceKind) {
+            selectedSourceKind = .merchantCenter
+        }
     }
 
     func presentImportPicker() {

@@ -5,9 +5,7 @@ extension DatabaseClient {
     func hasFactTableData() throws -> Bool {
         try dbQueue.read { db in
             let count = try Int.fetchOne(db, sql: """
-                SELECT
-                  (SELECT COUNT(*) FROM ads_product_daily) +
-                  (SELECT COUNT(*) FROM sales_daily) AS total;
+                SELECT COUNT(*) FROM ads_product_daily;
                 """) ?? 0
             return count > 0
         }
@@ -16,11 +14,7 @@ extension DatabaseClient {
     func fetchLatestMetricDay() throws -> String? {
         try dbQueue.read { db in
             try String.fetchOne(db, sql: """
-                SELECT MAX(day) FROM (
-                    SELECT date AS day FROM ads_product_daily
-                    UNION ALL
-                    SELECT date AS day FROM sales_daily
-                );
+                SELECT MAX(date) FROM ads_product_daily;
                 """)
         }
     }
@@ -30,7 +24,6 @@ extension DatabaseClient {
             try db.execute(sql: "DELETE FROM product_weekly_metrics;")
 
             let adsDaily = try fetchDedupedAdsDaily(db: db)
-            let salesDaily = try fetchDedupedSalesDaily(db: db)
 
             var buckets: [String: [String: AggregatedMetrics]] = [:]
 
@@ -45,16 +38,6 @@ extension DatabaseClient {
                 metrics.conversionValueCents += row.conversionValueCents
                 weekMap[weekStart] = metrics
                 buckets[row.productId] = weekMap
-            }
-
-            for row in salesDaily {
-                guard let productId = row.productId, !productId.isEmpty,
-                      let weekStart = WeekCalendar.weekStartSunday(forDay: row.date) else { continue }
-                var weekMap = buckets[productId, default: [:]]
-                var metrics = weekMap[weekStart, default: AggregatedMetrics()]
-                metrics.grossSalesCents += row.grossSalesCents
-                weekMap[weekStart] = metrics
-                buckets[productId] = weekMap
             }
 
             var records: [ProductWeeklyMetricsRecord] = []
@@ -188,18 +171,6 @@ extension DatabaseClient {
         }
     }
 
-    private struct DedupedSalesDailyRow: FetchableRecord, Decodable {
-        let productId: String?
-        let date: String
-        let grossSalesCents: Int
-
-        enum CodingKeys: String, CodingKey {
-            case productId = "product_id"
-            case date
-            case grossSalesCents = "gross_sales_cents"
-        }
-    }
-
     private func fetchDedupedAdsDaily(db: Database) throws -> [DedupedAdsDailyRow] {
         try DedupedAdsDailyRow.fetchAll(db, sql: """
             WITH ranked AS (
@@ -227,29 +198,6 @@ extension DatabaseClient {
                 SUM(clicks) AS clicks,
                 SUM(conversions) AS conversions,
                 SUM(conversion_value_cents) AS conversion_value_cents
-            FROM ranked
-            WHERE rn = 1
-            GROUP BY product_id, date;
-            """, arguments: [ImportJobStatus.succeeded.rawValue])
-    }
-
-    private func fetchDedupedSalesDaily(db: Database) throws -> [DedupedSalesDailyRow] {
-        try DedupedSalesDailyRow.fetchAll(db, sql: """
-            WITH ranked AS (
-                SELECT
-                    COALESCE(s.product_id, p.product_id) AS product_id,
-                    s.date,
-                    s.gross_sales_cents,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY s.date, s.lsin
-                        ORDER BY j.imported_at DESC
-                    ) AS rn
-                FROM sales_daily s
-                INNER JOIN import_jobs j ON j.id = s.import_id
-                LEFT JOIN products p ON p.lsin = s.lsin
-                WHERE j.status = ?
-            )
-            SELECT product_id, date, SUM(gross_sales_cents) AS gross_sales_cents
             FROM ranked
             WHERE rn = 1
             GROUP BY product_id, date;

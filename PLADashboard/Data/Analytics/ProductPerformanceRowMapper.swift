@@ -83,6 +83,7 @@ enum ProductPerformanceRowMapper {
         totalCostCents: Int,
         overallBenchmark: AggregatedMetrics,
         weeklyCostTrend: [Int],
+        /// 销售趋势列：近 6 周 Google Ads `conversion_value_cents` 周汇总（非自归因 Gross Sales）。
         weeklyGSTrend: [Int],
         warningLabel: ProductWarningLabel?
     ) -> ProductPerformanceRowModel {

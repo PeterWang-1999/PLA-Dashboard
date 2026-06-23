@@ -5,6 +5,7 @@ import Charts
 struct WeeklyTrendBarChart: View {
     enum Style {
         case cost
+        /// 销售趋势：展示 Google Ads Conversion Value 周汇总（cents → 金额）。
         case sales
 
         var barColor: Color {

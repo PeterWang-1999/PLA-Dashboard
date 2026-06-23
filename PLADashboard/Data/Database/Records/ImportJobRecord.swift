@@ -8,6 +8,9 @@ enum ImportSourceKind: String, Codable, Sendable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// 导入页 `Picker` 可选数据源（自归因已停用，历史任务仍保留 `salesReport` 枚举值）。
+    static let importPickerCases: [ImportSourceKind] = [.merchantCenter, .adsProduct]
+
     var displayName: String {
         switch self {
         case .merchantCenter: "Merchant Center"
