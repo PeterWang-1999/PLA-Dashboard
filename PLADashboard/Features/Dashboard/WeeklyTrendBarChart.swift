@@ -12,7 +12,7 @@ struct WeeklyTrendBarChart: View {
             case .cost:
                 Color.accentColor.opacity(0.85)
             case .sales:
-                Color(red: 1.0, green: 0.62, blue: 0.18).opacity(0.9)
+                Color.orange.opacity(0.85)
             }
         }
 
