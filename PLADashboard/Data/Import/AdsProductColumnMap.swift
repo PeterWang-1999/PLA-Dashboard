@@ -12,8 +12,10 @@ struct AdsProductColumnMap: Sendable {
     let conversionValueIndex: Int
 
     init(headers: [String]) throws {
+        let normalizedHeaders = headers.map(ImportTextEncoding.normalizeHeaderField)
+
         func index(of column: String) throws -> Int {
-            guard let found = headers.firstIndex(of: column) else {
+            guard let found = normalizedHeaders.firstIndex(of: column) else {
                 throw AdsProductColumnMapError.missingColumn(column)
             }
             return found

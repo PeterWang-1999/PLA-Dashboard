@@ -32,4 +32,31 @@ final class SalesReportImporterTests: XCTestCase {
         let product = try await databaseClient.fetchProducts(ids: ["14429548"]).first
         XCTAssertEqual(product?.lsin, "S14429548")
     }
+
+    func testImportGBKEncodedCSV() async throws {
+        let csv = """
+日期,LSIN,Gross Sales($)
+2026-06-20,S14429548,$100.00
+2026-06-22,Total,$100.00
+"""
+        guard let gbkData = csv.data(using: ImportTextEncoding.gb18030) else {
+            XCTFail("GB18030 encoding unavailable")
+            return
+        }
+
+        let databaseClient = try DatabaseClient.makeInMemoryForTesting()
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("csv")
+        try gbkData.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let importer = SalesReportImporter(databaseClient: databaseClient)
+        let result = try await importer.importFile(sourceURL: tempURL) { _ in }
+
+        XCTAssertEqual(result.job.status, ImportJobStatus.succeeded.rawValue)
+        XCTAssertEqual(result.job.validRows, 1)
+        let rowCount = try await databaseClient.countSalesDaily(importId: result.importId)
+        XCTAssertEqual(rowCount, 1)
+    }
 }

@@ -42,6 +42,7 @@ enum ImportStagingStore {
             try fileManager.removeItem(at: destinationURL)
         }
         try fileManager.copyItem(at: sourceURL, to: destinationURL)
+        _ = try ImportTextEncoding.normalizeToUTF8IfNeeded(at: destinationURL)
 
         let checksum = try sha256(of: destinationURL)
         let bookmarkData = try destinationURL.bookmarkData(
