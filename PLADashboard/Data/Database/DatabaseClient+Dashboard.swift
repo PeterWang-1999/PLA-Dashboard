@@ -175,15 +175,24 @@ extension DatabaseClient {
                 for id in searchIDs { arguments += [id] }
             }
 
-            if let column = filters.customLabelFilter.filterColumn,
-               let value = filters.customLabelFilter.filterValue {
+            switch filters.customLabelFilter.sqlClause {
+            case .none:
+                break
+            case .columnNotEmpty(let column):
+                sql += " AND p.\(column) IS NOT NULL AND TRIM(p.\(column)) != ''"
+            case .equals(let column, let value):
                 sql += " AND p.\(column) = ?"
                 arguments += [value]
             }
 
-            if let prefix = filters.categoryFilter.filterPathPrefix {
-                sql += " AND (p.google_product_category = ? OR p.google_product_category LIKE ?)"
-                arguments += [prefix, "\(prefix) >%"]
+            if let categoryMatch = filters.categoryFilter.sqlMatch {
+                sql += """
+                 AND (
+                    p.google_product_category LIKE ?
+                    OR p.google_product_category LIKE ?
+                 )
+                """
+                arguments += [categoryMatch.exactSuffixPattern, categoryMatch.nestedSuffixPattern]
             }
 
             sql += " ORDER BY p.product_id ASC;"
