@@ -23,6 +23,7 @@ struct ImportsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("导入历史")
                         .font(.headline)
+                    // 嵌套在页面 `ScrollView` 内；历史表自身禁用滚动，按数据源条数固定高度。
                     ImportHistoryView(jobs: ImportJobRecord.latestPerSourceKind(from: viewModel.importJobs))
                 }
             }

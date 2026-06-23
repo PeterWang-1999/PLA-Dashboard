@@ -3,6 +3,13 @@ import SwiftUI
 struct ImportHistoryView: View {
     let jobs: [ImportJobRecord]
 
+    private enum Metrics {
+        /// macOS inset `Table` 表头近似高度。
+        static let headerHeight: CGFloat = 28
+        /// macOS inset `Table` 单行近似高度。
+        static let rowHeight: CGFloat = 28
+    }
+
     var body: some View {
         if jobs.isEmpty {
             ContentUnavailableView(
@@ -46,8 +53,18 @@ struct ImportHistoryView: View {
                 .width(min: 72, ideal: 88, max: 100)
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
-            .frame(minHeight: 180)
+            .scrollDisabled(true)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: tableHeight,
+                maxHeight: tableHeight,
+                alignment: .topLeading
+            )
         }
+    }
+
+    private var tableHeight: CGFloat {
+        Metrics.headerHeight + Metrics.rowHeight * CGFloat(jobs.count)
     }
 
     private func sourceDisplayName(_ raw: String) -> String {
