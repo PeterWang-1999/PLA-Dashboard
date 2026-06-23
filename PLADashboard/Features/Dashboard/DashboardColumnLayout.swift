@@ -36,9 +36,9 @@ enum DashboardColumn: String, CaseIterable, Identifiable {
     var widthSpec: WidthSpec {
         switch self {
         case .lsin:
-            .fixed(min: 96, ideal: 112)
+            .fixed(min: 110, ideal: 115)
         case .productImage:
-            .fixed(min: 48, ideal: 56)
+            .fixed(min: 40, ideal: 45)
         case .cost:
             .fixed(min: 56, ideal: 72)
         case .roi:
@@ -46,13 +46,13 @@ enum DashboardColumn: String, CaseIterable, Identifiable {
         case .warningLabel:
             .fixed(min: 72, ideal: 88)
         case .costTrend, .gsTrend:
-            .flexible(min: 56, ideal: 96)
+            .flexible(min: 50, ideal: 65)
         case .cpa, .arpu, .cpc, .aos:
-            .flexible(min: 44, ideal: 64)
+            .flexible(min: 40, ideal: 60)
         case .cvr:
-            .flexible(min: 52, ideal: 72)
+            .flexible(min: 50, ideal: 65)
         case .clicks, .conversions:
-            .fixed(min: 56, ideal: 72)
+            .fixed(min: 55, ideal: 70)
         }
     }
 }
