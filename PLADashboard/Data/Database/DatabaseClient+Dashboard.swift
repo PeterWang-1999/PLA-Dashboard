@@ -66,6 +66,7 @@ extension DatabaseClient {
         }
 
         let overallWeeks = try fetchOverallWeeklyMetrics(weekStarts: weekStarts)
+        let cohortBenchmarks = try fetchWeeklyCohortSpendBenchmarks(weekStarts: weekStarts)
         let overallBenchmark = overallWeeks.map(\.metrics).reduce(AggregatedMetrics()) { $0 + $1 }
         let totalCostCents = overallBenchmark.costCents
 
@@ -95,7 +96,9 @@ extension DatabaseClient {
 
             let warning = WeeklyMetricsRules.resolveWarningLabel(
                 productWeeks: productWeeks,
-                overallWeeks: overallWeeks
+                overallWeeks: overallWeeks,
+                cohortBenchmarks: cohortBenchmarks,
+                totalPortfolioCostCents: totalCostCents
             )
 
             if let required = alertFilterLabel(for: filters.alertFilter),

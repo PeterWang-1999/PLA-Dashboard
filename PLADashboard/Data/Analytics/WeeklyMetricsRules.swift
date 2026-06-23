@@ -55,6 +55,13 @@ struct WeeklyProductMetrics: Sendable, Hashable {
     let metrics: AggregatedMetrics
 }
 
+/// 当周有消费 SKU 的日均消费 cohort 基准（中位数用于低消、均值用于高消）。
+struct WeeklyCohortSpendBenchmark: Sendable, Hashable {
+    let weekStart: String
+    let medianDailyCents: Double
+    let meanDailyCents: Double
+}
+
 enum ProductWarningLabel: String, Sendable, CaseIterable {
     case lowSpend = "低消费"
     case highSpendHighEfficiency = "高消高效"
@@ -79,37 +86,68 @@ enum WeeklyMetricsRules {
         return product / overall - 1
     }
 
+    static func cohortBenchmark(fromActiveProductWeeklyCostCents costs: [Int]) -> (medianDaily: Double, meanDaily: Double) {
+        guard !costs.isEmpty else { return (0, 0) }
+        let dailyCosts = costs.map { Double($0) / 7.0 }
+        let sorted = dailyCosts.sorted()
+        let median: Double
+        if sorted.count.isMultiple(of: 2) {
+            median = (sorted[sorted.count / 2 - 1] + sorted[sorted.count / 2]) / 2.0
+        } else {
+            median = sorted[sorted.count / 2]
+        }
+        let mean = dailyCosts.reduce(0, +) / Double(dailyCosts.count)
+        return (median, mean)
+    }
+
+    static func lowSpendDailyThreshold(medianDailyCents: Double) -> Double {
+        max(
+            Double(AnalyticsConfiguration.lowSpendAbsoluteFloorDailyCents),
+            AnalyticsConfiguration.lowSpendRatio * medianDailyCents
+        )
+    }
+
     static func resolveWarningLabel(
         productWeeks: [WeeklyProductMetrics],
         overallWeeks: [WeeklyProductMetrics],
+        cohortBenchmarks: [WeeklyCohortSpendBenchmark],
+        totalPortfolioCostCents: Int,
         config: AnalyticsConfiguration.Type = AnalyticsConfiguration.self
     ) -> ProductWarningLabel? {
         _ = config
         let weights = AnalyticsConfiguration.roiWeekWeights
-        guard productWeeks.count == weights.count, overallWeeks.count == weights.count else {
+        guard productWeeks.count == weights.count,
+              overallWeeks.count == weights.count,
+              cohortBenchmarks.count == weights.count else {
             return nil
         }
 
         let productByWeek = Dictionary(uniqueKeysWithValues: productWeeks.map { ($0.weekStart, $0.metrics) })
         let overallByWeek = Dictionary(uniqueKeysWithValues: overallWeeks.map { ($0.weekStart, $0.metrics) })
+        let cohortByWeek = Dictionary(uniqueKeysWithValues: cohortBenchmarks.map { ($0.weekStart, $0) })
         let weekStarts = productWeeks.map(\.weekStart)
         let recentWeeks = Array(weekStarts.suffix(AnalyticsConfiguration.consumptionLookbackWeeks))
 
         let isLowSpend = recentWeeks.allSatisfy { week in
             let productDaily = Double(productByWeek[week]?.costCents ?? 0) / 7.0
-            let overallDaily = Double(overallByWeek[week]?.costCents ?? 0) / 7.0
-            return productDaily < overallDaily
+            let medianDaily = cohortByWeek[week]?.medianDailyCents ?? 0
+            return productDaily < lowSpendDailyThreshold(medianDailyCents: medianDaily)
         }
 
         if isLowSpend {
             return .lowSpend
         }
 
-        let isHighSpend = recentWeeks.allSatisfy { week in
+        let productSixWeekCost = productWeeks.map(\.metrics).reduce(0) { $0 + $1.costCents }
+        let meetsCostShare = totalPortfolioCostCents > 0
+            && Double(productSixWeekCost) / Double(totalPortfolioCostCents)
+                >= AnalyticsConfiguration.highSpendMinCostShare
+
+        let isHighSpend = meetsCostShare && recentWeeks.allSatisfy { week in
             let productDaily = Double(productByWeek[week]?.costCents ?? 0) / 7.0
-            let overallDaily = Double(overallByWeek[week]?.costCents ?? 0) / 7.0
-            guard overallDaily > 0 else { return false }
-            return productDaily > AnalyticsConfiguration.highSpendDailyMultiplier * overallDaily
+            let meanDaily = cohortByWeek[week]?.meanDailyCents ?? 0
+            guard meanDaily > 0 else { return false }
+            return productDaily > AnalyticsConfiguration.highSpendMeanRatio * meanDaily
         }
 
         let productMetrics = productWeeks.map(\.metrics)
@@ -117,18 +155,27 @@ enum WeeklyMetricsRules {
         let productWeightedROI = weightedROI(weeklyMetrics: productMetrics)
         let overallWeightedROI = weightedROI(weeklyMetrics: overallMetrics)
 
-        let isHighEfficiency = recentWeeks.allSatisfy { week in
-            let metrics = productByWeek[week] ?? AggregatedMetrics()
-            return metrics.roi != 0
-        } && productWeightedROI > AnalyticsConfiguration.highEfficiencyROIMultiplier * overallWeightedROI
-
         let totalClicks = productMetrics.reduce(0) { $0 + $1.clicks }
-        let isLowEfficiency = productWeightedROI < overallWeightedROI
+        let totalConversions = productMetrics.reduce(0.0) { $0 + $1.conversions }
+        let hasEfficiencySample = totalClicks >= AnalyticsConfiguration.efficiencyMinClicks
+            && totalConversions >= AnalyticsConfiguration.efficiencyMinConversions
+
+        let isHighEfficiency = hasEfficiencySample
             && recentWeeks.allSatisfy { week in
-                let productROI = productByWeek[week]?.roi ?? 0
-                let overallROI = overallByWeek[week]?.roi ?? 0
-                return productROI < overallROI
+                (productByWeek[week]?.conversions ?? 0) >= 1
             }
+            && productWeightedROI > AnalyticsConfiguration.highEfficiencyROIMultiplier * overallWeightedROI
+
+        let underperformWeekCount = recentWeeks.reduce(into: 0) { count, week in
+            let productROI = productByWeek[week]?.roi ?? 0
+            let overallROI = overallByWeek[week]?.roi ?? 0
+            if productROI < overallROI {
+                count += 1
+            }
+        }
+        let isLowEfficiency = hasEfficiencySample
+            && productWeightedROI < overallWeightedROI
+            && underperformWeekCount >= AnalyticsConfiguration.lowEfficiencyWeeklyUnderperformWeeks
             && totalClicks > AnalyticsConfiguration.lowEfficiencyMinClicks
 
         if isHighSpend && isHighEfficiency {

@@ -5,7 +5,15 @@ enum AnalyticsConfiguration: Sendable {
     static let reportingWeekCount = 6
     static let consumptionLookbackWeeks = 3
     static let lowEfficiencyMinClicks = 300
-    static let highSpendDailyMultiplier = 5.0
+    static let lowEfficiencyWeeklyUnderperformWeeks = 2
+    /// 低消费：日均消费 < max(此绝对门槛, lowSpendRatio × 当周 cohort 中位数日均)
+    static let lowSpendAbsoluteFloorDailyCents = 300
+    static let lowSpendRatio = 0.5
+    /// 高消费：近 3 周每周日均 > highSpendMeanRatio × cohort 均值日均，且 6 周消费占比 ≥ highSpendMinCostShare
+    static let highSpendMeanRatio = 2.5
+    static let highSpendMinCostShare = 0.005
+    static let efficiencyMinClicks = 100
+    static let efficiencyMinConversions = 3.0
     /// 高效判定：产品加权 ROI > multiplier × 整体加权 ROI
     static let highEfficiencyROIMultiplier = 1.6
     /// 由旧到新，共 6 周

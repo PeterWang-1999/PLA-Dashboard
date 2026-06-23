@@ -97,6 +97,41 @@ extension DatabaseClient {
         }
     }
 
+    func fetchWeeklyCohortSpendBenchmarks(weekStarts: [String]) throws -> [WeeklyCohortSpendBenchmark] {
+        guard !weekStarts.isEmpty else { return [] }
+        return try dbQueue.read { db in
+            let placeholders = Array(repeating: "?", count: weekStarts.count).joined(separator: ", ")
+            let sql = """
+                SELECT week_start, cost_cents
+                FROM product_weekly_metrics
+                WHERE week_start IN (\(placeholders))
+                  AND cost_cents > 0
+                ORDER BY week_start ASC, cost_cents ASC;
+                """
+            var arguments = StatementArguments()
+            for week in weekStarts { arguments += [week] }
+
+            let rows = try Row.fetchAll(db, sql: sql, arguments: arguments)
+            var costsByWeek: [String: [Int]] = [:]
+            for row in rows {
+                guard let weekStart: String = row["week_start"] else { continue }
+                let costCents: Int = row["cost_cents"] ?? 0
+                costsByWeek[weekStart, default: []].append(costCents)
+            }
+
+            return weekStarts.map { weekStart in
+                let benchmark = WeeklyMetricsRules.cohortBenchmark(
+                    fromActiveProductWeeklyCostCents: costsByWeek[weekStart] ?? []
+                )
+                return WeeklyCohortSpendBenchmark(
+                    weekStart: weekStart,
+                    medianDailyCents: benchmark.medianDaily,
+                    meanDailyCents: benchmark.meanDaily
+                )
+            }
+        }
+    }
+
     func fetchOverallWeeklyMetrics(weekStarts: [String]) throws -> [WeeklyProductMetrics] {
         guard !weekStarts.isEmpty else { return [] }
         return try dbQueue.read { db in
