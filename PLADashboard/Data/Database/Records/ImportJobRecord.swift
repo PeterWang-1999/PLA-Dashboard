@@ -92,4 +92,13 @@ struct ImportJobRecord: Codable, FetchableRecord, PersistableRecord, Identifiabl
     var statusValue: ImportJobStatus? {
         ImportJobStatus(rawValue: status)
     }
+
+    /// 每个数据源保留最近一次导入（要求 `jobs` 已按 `importedAt` 降序）。
+    static func latestPerSourceKind(from jobs: [ImportJobRecord]) -> [ImportJobRecord] {
+        var latestBySource: [String: ImportJobRecord] = [:]
+        for job in jobs where latestBySource[job.sourceKind] == nil {
+            latestBySource[job.sourceKind] = job
+        }
+        return ImportSourceKind.allCases.compactMap { latestBySource[$0.rawValue] }
+    }
 }

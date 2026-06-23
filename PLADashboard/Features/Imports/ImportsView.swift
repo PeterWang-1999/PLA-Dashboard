@@ -23,7 +23,7 @@ struct ImportsView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("导入历史")
                         .font(.headline)
-                    ImportHistoryView(jobs: viewModel.importJobs)
+                    ImportHistoryView(jobs: ImportJobRecord.latestPerSourceKind(from: viewModel.importJobs))
                 }
             }
             .padding()
