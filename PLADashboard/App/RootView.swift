@@ -54,6 +54,11 @@ struct RootView: View {
             configureViewModels(databaseClient: databaseClient)
             await bootstrapDashboardIfNeeded(databaseClient: databaseClient)
             await importViewModel.loadHistory()
+            if let capabilities = accountStore.activeCapabilities,
+               let selected = selectedNavigationItem,
+               !capabilities.sidebarNavigationItems.contains(selected) {
+                selectedNavigationItem = .dashboard
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .dashboardSettingsDidChange)) { _ in
             dashboardViewModel.handleSettingsDidChange()
@@ -65,12 +70,16 @@ struct RootView: View {
         }
     }
 
+    private var sidebarNavigationItems: [AppNavigationItem] {
+        accountStore.activeCapabilities?.sidebarNavigationItems ?? AppNavigationItem.defaultSidebarCases
+    }
+
     @ViewBuilder
     private var sidebar: some View {
         VStack(spacing: 0) {
             List(selection: $selectedNavigationItem) {
                 Section("导航") {
-                    ForEach(AppNavigationItem.sidebarCases) { item in
+                    ForEach(sidebarNavigationItems) { item in
                         Label(item.rawValue, systemImage: item.systemImage)
                             .tag(item)
                     }
@@ -126,15 +135,23 @@ struct RootView: View {
     }
 
     private func configureViewModels(databaseClient: DatabaseClient) {
+        let capabilities = accountStore.activeCapabilities
+            ?? WorkspaceCapabilities.forKind(.thirdParty)
+
         dashboardViewModel.configure(databaseClient: databaseClient) {
             await bootstrapDashboardIfNeeded(databaseClient: databaseClient)
         }
-        importViewModel.configure(databaseClient: databaseClient) { url in
-            try? dashboardViewModel.reloadFilterCatalogs(from: url)
-        } onImportCompleted: {
-            dashboardViewModel.dataSource = .database
-            await dashboardViewModel.refreshData()
-        }
+        importViewModel.configure(
+            databaseClient: databaseClient,
+            capabilities: capabilities,
+            onCatalogReload: { url in
+                try? dashboardViewModel.reloadFilterCatalogs(from: url)
+            },
+            onImportCompleted: {
+                dashboardViewModel.dataSource = .database
+                await dashboardViewModel.refreshData()
+            }
+        )
     }
 
     private func bootstrapDashboardIfNeeded(databaseClient: DatabaseClient) async {

@@ -56,7 +56,7 @@ struct ImportsView: View {
                     .font(.title2.weight(.semibold))
                 Spacer()
                 Picker("数据源", selection: $viewModel.selectedSourceKind) {
-                    ForEach(ImportSourceKind.importPickerCases) { kind in
+                    ForEach(viewModel.availableImportKinds) { kind in
                         Text(kind.displayName).tag(kind)
                     }
                 }
@@ -111,7 +111,7 @@ struct ImportsView: View {
         switch viewModel.selectedSourceKind {
         case .merchantCenter: "Merchant Center TSV"
         case .adsProduct: "Google Ads 产品数据"
-        case .salesReport: "自归因销售 CSV"
+        case .salesReport: "Product Sales CSV"
         }
     }
 
@@ -122,7 +122,7 @@ struct ImportsView: View {
         case .adsProduct:
             "选择 Google Ads 产品数据导出文件（跳过前两行标题）。将写入 ads_product_daily；消费与「销售趋势」均来自 Ads 转化价值等字段。"
         case .salesReport:
-            ""
+            "选择 Product Sales CSV 文件。将写入 sales_daily；看板「销售趋势」列仍来自 Google Ads 转化价值，不会自动切换为 Gross Sales。"
         }
     }
 

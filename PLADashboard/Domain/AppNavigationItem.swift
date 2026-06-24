@@ -8,8 +8,12 @@ enum AppNavigationItem: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     /// 侧边栏可见的导航项（设置通过系统 Settings 窗口打开）。
-    static var sidebarCases: [AppNavigationItem] {
+    static var defaultSidebarCases: [AppNavigationItem] {
         [.dashboard, .imports]
+    }
+
+    static func sidebarCases(for kind: WorkspaceAccountKind) -> [AppNavigationItem] {
+        WorkspaceCapabilities.forKind(kind).sidebarNavigationItems
     }
 
     var systemImage: String {

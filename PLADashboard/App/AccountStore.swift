@@ -27,6 +27,10 @@ final class AccountStore {
         return manifest.accounts.first { $0.id == manifest.activeAccountID }
     }
 
+    var activeCapabilities: WorkspaceCapabilities? {
+        activeAccount.map { WorkspaceCapabilities.forKind($0.kind) }
+    }
+
     func bootstrap() async {
         phase = .loading
         do {

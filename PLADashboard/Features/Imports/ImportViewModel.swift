@@ -13,6 +13,9 @@ final class ImportViewModel {
     var errorMessage: String?
     var isImporting = false
 
+    private(set) var availableImportKinds: [ImportSourceKind] = WorkspaceCapabilities
+        .forKind(.thirdParty).importSourceKinds
+
     private var databaseClient: DatabaseClient?
     private var importTask: Task<Void, Never>?
     private var onCatalogReload: ((URL) -> Void)?
@@ -20,14 +23,20 @@ final class ImportViewModel {
 
     func configure(
         databaseClient: DatabaseClient,
+        capabilities: WorkspaceCapabilities,
         onCatalogReload: @escaping (URL) -> Void,
         onImportCompleted: @escaping () async -> Void
     ) {
         self.databaseClient = databaseClient
         self.onCatalogReload = onCatalogReload
         self.onImportCompleted = onImportCompleted
-        if !ImportSourceKind.importPickerCases.contains(selectedSourceKind) {
-            selectedSourceKind = .merchantCenter
+        applyCapabilities(capabilities)
+    }
+
+    func applyCapabilities(_ capabilities: WorkspaceCapabilities) {
+        availableImportKinds = capabilities.importSourceKinds
+        if !availableImportKinds.contains(selectedSourceKind) {
+            selectedSourceKind = availableImportKinds.first ?? .merchantCenter
         }
     }
 
@@ -37,7 +46,6 @@ final class ImportViewModel {
         importJobs = []
         errorMessage = nil
         progress = nil
-        selectedSourceKind = .merchantCenter
     }
 
     func presentImportPicker() {

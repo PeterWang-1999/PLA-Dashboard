@@ -7,6 +7,7 @@ struct CreateAccountSheet: View {
     let isImportInProgress: Bool
 
     @State private var accountName = ""
+    @State private var selectedKind: WorkspaceAccountKind = .thirdParty
     @State private var creationError: String?
     @State private var isCreating = false
 
@@ -15,6 +16,15 @@ struct CreateAccountSheet: View {
             Section {
                 TextField("账户名称", text: $accountName)
                     .textFieldStyle(.roundedBorder)
+            }
+
+            Section {
+                Picker("账户类型", selection: $selectedKind) {
+                    ForEach(WorkspaceAccountKind.allCases, id: \.self) { kind in
+                        Text(kind.displayName).tag(kind)
+                    }
+                }
+                .pickerStyle(.radioGroup)
             } footer: {
                 if let creationError {
                     Text(creationError)
@@ -22,12 +32,12 @@ struct CreateAccountSheet: View {
                 } else if isImportInProgress {
                     Text("导入进行中时创建账户不会自动切换，可在导入完成后再切换。")
                 } else {
-                    Text("新账户默认为三方站类型，可在创建后开始导入数据。")
+                    Text(kindFooter)
                 }
             }
         }
         .formStyle(.grouped)
-        .frame(minWidth: 360, minHeight: 160)
+        .frame(minWidth: 360, minHeight: 220)
         .navigationTitle("新建账户")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
@@ -53,6 +63,15 @@ struct CreateAccountSheet: View {
         !trimmedName.isEmpty && trimmedName.count <= WorkspaceAccount.maxNameLength
     }
 
+    private var kindFooter: String {
+        switch selectedKind {
+        case .thirdParty:
+            "三方站支持 Merchant Center 与 Google Ads 导入。"
+        case .selfBuilt:
+            "自建站额外支持 Product Sales 导入；看板「销售趋势」仍来自 Google Ads 转化价值。"
+        }
+    }
+
     @MainActor
     private func createAccount() async {
         guard isNameValid else { return }
@@ -62,7 +81,7 @@ struct CreateAccountSheet: View {
         defer { isCreating = false }
 
         do {
-            let account = try accountStore.createAccount(name: trimmedName, kind: .thirdParty)
+            let account = try accountStore.createAccount(name: trimmedName, kind: selectedKind)
             if !isImportInProgress {
                 try await accountStore.switchAccount(to: account.id, isImportInProgress: false)
             }

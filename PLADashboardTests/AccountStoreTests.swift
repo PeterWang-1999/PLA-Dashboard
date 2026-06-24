@@ -174,4 +174,37 @@ Sample Dress\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/dres
         let productsB = try await clientB.fetchProducts(ids: ["10416614474003"])
         XCTAssertTrue(productsB.isEmpty)
     }
+
+    func testThirdPartyCapabilitiesExcludeSalesReport() async {
+        let store = AccountStore()
+        await store.bootstrap()
+
+        let capabilities = store.activeCapabilities
+        XCTAssertNotNil(capabilities)
+        XCTAssertFalse(capabilities?.importSourceKinds.contains(.salesReport) ?? true)
+    }
+
+    func testSelfBuiltAccountCanImportSampleSales() async throws {
+        let store = AccountStore()
+        await store.bootstrap()
+
+        let account = try store.createAccount(name: "自建店", kind: .selfBuilt)
+        try await store.switchAccount(to: account.id)
+
+        let capabilities = try XCTUnwrap(store.activeCapabilities)
+        XCTAssertTrue(capabilities.importSourceKinds.contains(.salesReport))
+
+        guard let sampleURL = Bundle.main.url(forResource: "SampleSales", withExtension: "csv") else {
+            XCTFail("未找到内置样例文件 SampleSales.csv")
+            return
+        }
+
+        let client = try XCTUnwrap(store.activeDatabaseClient)
+        let importer = SalesReportImporter(databaseClient: client)
+        let result = try await importer.importFile(sourceURL: sampleURL) { _ in }
+
+        let rowCount = try await client.countSalesDaily(importId: result.importId)
+        XCTAssertGreaterThan(rowCount, 0)
+        XCTAssertEqual(result.job.sourceKind, ImportSourceKind.salesReport.rawValue)
+    }
 }
