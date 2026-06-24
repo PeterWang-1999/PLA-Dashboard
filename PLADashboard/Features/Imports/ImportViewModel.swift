@@ -43,6 +43,14 @@ final class ImportViewModel {
         errorMessage = nil
     }
 
+    var importAlertTitle: String {
+        guard let errorMessage else { return "导入失败" }
+        if errorMessage.contains("已导入过") || errorMessage.contains("已取消") {
+            return "导入未继续"
+        }
+        return "导入失败"
+    }
+
     func loadHistory() async {
         guard let databaseClient else { return }
         do {
@@ -93,7 +101,6 @@ final class ImportViewModel {
             await MainActor.run {
                 isImporting = true
                 errorMessage = nil
-                latestResult = nil
                 latestErrors = []
                 progress = nil
             }

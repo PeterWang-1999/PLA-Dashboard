@@ -46,7 +46,6 @@ struct ImportHistoryView: View {
                 .width(min: 72, ideal: 88, max: 100)
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
-            .frame(minHeight: 120, maxHeight: 220)
         }
     }
 

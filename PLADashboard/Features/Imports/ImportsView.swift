@@ -4,51 +4,45 @@ struct ImportsView: View {
     @Bindable var viewModel: ImportViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            headerSection
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
+                headerSection
 
-            if let errorMessage = viewModel.errorMessage {
-                importErrorBanner(message: errorMessage)
+                if let result = viewModel.latestResult {
+                    ImportResultView(job: result.job, errors: viewModel.latestErrors)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+
+                historySection
             }
-
-            if let result = viewModel.latestResult {
-                ImportResultView(job: result.job, errors: viewModel.latestErrors)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            } else if viewModel.errorMessage == nil {
-                Spacer(minLength: 0)
-            }
-
-            historySection
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("数据导入")
+        .alert(viewModel.importAlertTitle, isPresented: importErrorAlertPresented) {
+            Button("好", role: .cancel) {
+                viewModel.clearError()
+            }
+        } message: {
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+            }
+        }
         .task {
             await viewModel.loadHistory()
         }
     }
 
-    private func importErrorBanner(message: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label {
-                Text(message)
-                    .font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
-            } icon: {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .symbolRenderingMode(.multicolor)
+    private var importErrorAlertPresented: Binding<Bool> {
+        Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    viewModel.clearError()
+                }
             }
-
-            Button("关闭") {
-                viewModel.clearError()
-            }
-            .buttonStyle(.link)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("导入失败：\(message)")
+        )
     }
 
     private var historySection: some View {
