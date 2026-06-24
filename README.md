@@ -46,6 +46,6 @@ PLA_RUN_FULL_BENCHMARK=1 xcodebuild -scheme PLADashboard \
 ## 工程结构
 
 - 方案文档：`../Vibe Coding/PLA_Dashboard_产品数据看板需求与技术栈方案_2026-06-22.md`
-- PRD / 开发进度：`../Vibe Coding/PLA_Dashboard_PRD.md`、`../Vibe Coding/PLA_Dashboard_开发进度.md`
+- PRD / 开发进度 / 阶段 7 方案：`../Vibe Coding/PLA_Dashboard_PRD.md`、`../Vibe Coding/PLA_Dashboard_开发进度.md`、`../Vibe Coding/PLA_Dashboard_阶段7_多账户工作区实施方案.md`
 - 类目预览数据：`PLADashboard/Resources/ProductCategoryCatalog.json`（由样例 TSV `google 商品类别` 列生成）
 - 自定义标签预览数据：`PLADashboard/Resources/ProductCustomLabelCatalog.json`（由样例 TSV `自定义标签 0`…`4` 列生成）

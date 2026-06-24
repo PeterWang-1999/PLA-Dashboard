@@ -10,30 +10,22 @@ struct ImportStagingResult: Sendable {
 }
 
 enum ImportStagingStore {
-    static let importsDirectoryName = "Imports"
+    static let importsDirectoryName = WorkspacePaths.importsDirectoryName
 
-    static func applicationSupportDirectory() throws -> URL {
-        let fileManager = FileManager.default
-        let appSupport = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        return appSupport
-            .appendingPathComponent(DatabaseClient.databaseDirectoryName, isDirectory: true)
-            .appendingPathComponent(importsDirectoryName, isDirectory: true)
+    static func importsRoot(accountID: String) throws -> URL {
+        try WorkspacePaths.importsRoot(accountID: accountID)
     }
 
     /// 将用户选择的文件复制到 App Container staging，并生成 checksum 与 security-scoped bookmark。
     static func stage(
         sourceURL: URL,
+        accountID: String,
         importId: String,
         fileName: String? = nil
     ) throws -> ImportStagingResult {
         let fileManager = FileManager.default
         let resolvedName = fileName ?? sourceURL.lastPathComponent
-        let importsRoot = try applicationSupportDirectory()
+        let importsRoot = try importsRoot(accountID: accountID)
         let destinationDirectory = importsRoot.appendingPathComponent(importId, isDirectory: true)
         try fileManager.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
 

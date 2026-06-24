@@ -29,6 +29,7 @@ actor MerchantCenterImporter {
 
         let staging = try ImportStagingStore.stage(
             sourceURL: sourceURL,
+            accountID: databaseClient.accountID,
             importId: importId,
             fileName: fileName
         )

@@ -46,7 +46,8 @@ struct PLADashboardApp: App {
     @MainActor
     private func initializeDatabase() async {
         do {
-            let client = try DatabaseClient.make()
+            let manifest = try WorkspaceAccountPersistence.loadOrCreateManifest()
+            let client = try DatabaseClient.make(accountID: manifest.activeAccountID)
             try await client.migrateIfNeeded()
             launchState = .ready(client)
         } catch {

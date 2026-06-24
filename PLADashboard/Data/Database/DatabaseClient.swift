@@ -2,28 +2,20 @@ import Foundation
 import GRDB
 
 actor DatabaseClient {
+    nonisolated let accountID: String
     let dbQueue: DatabaseQueue
     private var dashboardMetricsCache: DashboardMetricsCache?
 
-    static let databaseDirectoryName = "PLA Dashboard"
-    static let databaseFileName = "pla_dashboard.sqlite"
+    static let databaseDirectoryName = WorkspacePaths.applicationDirectoryName
+    static let databaseFileName = WorkspacePaths.databaseFileName
 
-    init(dbQueue: DatabaseQueue) {
+    init(accountID: String, dbQueue: DatabaseQueue) {
+        self.accountID = accountID
         self.dbQueue = dbQueue
     }
 
-    static func make() throws -> DatabaseClient {
-        let fileManager = FileManager.default
-        let appSupport = try fileManager.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let directory = appSupport.appendingPathComponent(databaseDirectoryName, isDirectory: true)
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-
-        let databaseURL = directory.appendingPathComponent(databaseFileName)
+    static func make(accountID: String) throws -> DatabaseClient {
+        let databaseURL = try WorkspacePaths.databaseURL(accountID: accountID)
         var config = Configuration()
         config.prepareDatabase { db in
             try db.execute(sql: "PRAGMA foreign_keys = ON;")
@@ -31,8 +23,13 @@ actor DatabaseClient {
         }
 
         let queue = try DatabaseQueue(path: databaseURL.path, configuration: config)
+        try AppDatabaseMigrator.migrate(queue)
+        return DatabaseClient(accountID: accountID, dbQueue: queue)
+    }
 
-        return DatabaseClient(dbQueue: queue)
+    static func make() throws -> DatabaseClient {
+        let manifest = try WorkspaceAccountPersistence.loadOrCreateManifest()
+        return try make(accountID: manifest.activeAccountID)
     }
 
     /// 内存数据库，供单元测试使用。
@@ -43,7 +40,7 @@ actor DatabaseClient {
         }
         let queue = try DatabaseQueue(configuration: config)
         try AppDatabaseMigrator.migrate(queue)
-        return DatabaseClient(dbQueue: queue)
+        return DatabaseClient(accountID: "in-memory-test", dbQueue: queue)
     }
 
     func migrateIfNeeded() throws {
