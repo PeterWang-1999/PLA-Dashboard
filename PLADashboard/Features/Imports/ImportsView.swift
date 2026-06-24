@@ -4,21 +4,20 @@ struct ImportsView: View {
     @Bindable var viewModel: ImportViewModel
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
-                headerSection
+        VStack(alignment: .leading, spacing: 20) {
+            headerSection
 
-                if let result = viewModel.latestResult {
-                    ImportResultView(job: result.job, errors: viewModel.latestErrors)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-
-                historySection
+            if let result = viewModel.latestResult {
+                ImportResultView(job: result.job, errors: viewModel.latestErrors)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else {
+                Spacer(minLength: 0)
             }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+
+            historySection
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .navigationTitle("数据导入")
         .alert(viewModel.importAlertTitle, isPresented: importErrorAlertPresented) {
             Button("好", role: .cancel) {
