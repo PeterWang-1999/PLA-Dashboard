@@ -102,6 +102,12 @@ final class DashboardFilterTests: XCTestCase {
         XCTAssertEqual(level2Result.totalCount, 2)
     }
 
+    func testFormatCurrencyFromCentsAlwaysUsesTwoDecimalPlaces() {
+        XCTAssertEqual(DashboardMetricFormatter.formatCurrencyFromCents(316_900), "3,169.00")
+        XCTAssertEqual(DashboardMetricFormatter.formatCurrencyFromCents(84_200), "842.00")
+        XCTAssertEqual(DashboardMetricFormatter.formatCurrencyFromCents(326_917), "3,269.17")
+    }
+
     func testColumnHeaderSortMapsToDashboardTableSort() {
         let costDescending = [KeyPathComparator(\ProductPerformanceRowModel.sortCostCents, order: .reverse)]
         XCTAssertEqual(DashboardTableSort.from(columnSortOrder: costDescending), .costDescending)

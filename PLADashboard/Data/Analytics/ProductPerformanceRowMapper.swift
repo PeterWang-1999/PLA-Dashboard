@@ -25,6 +25,14 @@ enum DashboardMetricFormatter {
         return formatter
     }()
 
+    private static let currencyFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter
+    }()
+
     private static let decimalFormatter: NumberFormatter = {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -48,7 +56,8 @@ enum DashboardMetricFormatter {
 
     static func formatCurrencyFromCents(_ cents: Int) -> String {
         let amount = Double(cents) / 100
-        return decimalFormatter.string(from: NSNumber(value: amount)) ?? String(format: "%.2f", amount)
+        return currencyFormatter.string(from: NSNumber(value: amount))
+            ?? String(format: "%.2f", amount)
     }
 
     static func formatDecimal(_ value: Double, fractionDigits: Int = 2) -> String {
