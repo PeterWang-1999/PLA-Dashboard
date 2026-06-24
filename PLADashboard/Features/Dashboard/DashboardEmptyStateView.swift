@@ -15,6 +15,25 @@ struct DashboardEmptyStateView: View {
     }
 }
 
+#Preview("Empty State") {
+    NavigationStack {
+        DashboardEmptyStateView()
+            .navigationTitle("产品数据")
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button("数据更新") {}
+                        .buttonStyle(.bordered)
+                    Button("快捷操作") {}
+                        .buttonStyle(.bordered)
+                }
+                .padding()
+                .background(.bar)
+            }
+    }
+    .frame(width: 783, height: 620)
+}
+
 #Preview {
     DashboardEmptyStateView()
         .frame(width: 480, height: 320)

@@ -79,23 +79,28 @@ struct DashboardView: View {
     @ViewBuilder
     private var dashboardContent: some View {
         if viewModel.showsErrorState, let message = viewModel.errorMessage {
-            ContentUnavailableView {
-                Label("无法加载看板数据", systemImage: "exclamationmark.triangle")
-            } description: {
-                Text(message)
-            } actions: {
-                Button("重试") {
-                    viewModel.retryAfterError()
+            dashboardPlaceholderLayout {
+                ContentUnavailableView {
+                    Label("无法加载看板数据", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("重试") {
+                        viewModel.retryAfterError()
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
         } else if viewModel.showsEmptyState {
-            DashboardEmptyStateView(onImport: onRequestDataUpdate)
+            dashboardPlaceholderLayout {
+                DashboardEmptyStateView(onImport: onRequestDataUpdate)
+            }
         } else if viewModel.isLoading, viewModel.rows.isEmpty {
-            ProgressView("正在加载…")
-                .controlSize(.regular)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .accessibilityAddTraits(.updatesFrequently)
+            dashboardPlaceholderLayout {
+                ProgressView("正在加载…")
+                    .controlSize(.regular)
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
         } else {
             ZStack(alignment: .top) {
                 ProductPerformanceTable(
@@ -116,7 +121,21 @@ struct DashboardView: View {
                         .allowsHitTesting(false)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    /// 在 `safeAreaInset` 底栏之上的可用区域内垂直居中占位内容。
+    @ViewBuilder
+    private func dashboardPlaceholderLayout<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack {
+            Spacer(minLength: 0)
+            content()
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var dashboardFooter: some View {
@@ -206,6 +225,16 @@ struct DashboardView: View {
             showExportError = true
         }
     }
+}
+
+#Preview("Empty State") {
+    NavigationStack {
+        DashboardView(
+            viewModel: DashboardViewModel(),
+            windowState: WindowState(isSidebarVisible: true)
+        )
+    }
+    .frame(width: 783, height: 620)
 }
 
 #Preview("Sidebar Expanded") {
