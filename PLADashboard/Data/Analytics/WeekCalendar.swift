@@ -1,6 +1,6 @@
 import Foundation
 
-/// 分析配置；`highEfficiencyROIMultiplier` 预留阶段 6 设置页可调。
+/// 分析配置；高效倍数与低效点击门槛可在设置页调整（`AnalyticsSettingsSnapshot`）。
 enum AnalyticsConfiguration: Sendable {
     static let reportingWeekCount = 6
     static let consumptionLookbackWeeks = 3

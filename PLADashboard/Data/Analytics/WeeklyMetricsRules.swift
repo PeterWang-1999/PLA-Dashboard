@@ -112,9 +112,8 @@ enum WeeklyMetricsRules {
         overallWeeks: [WeeklyProductMetrics],
         cohortBenchmarks: [WeeklyCohortSpendBenchmark],
         totalPortfolioCostCents: Int,
-        config: AnalyticsConfiguration.Type = AnalyticsConfiguration.self
+        settings: AnalyticsSettingsSnapshot = .current()
     ) -> ProductWarningLabel? {
-        _ = config
         let weights = AnalyticsConfiguration.roiWeekWeights
         guard productWeeks.count == weights.count,
               overallWeeks.count == weights.count,
@@ -164,7 +163,7 @@ enum WeeklyMetricsRules {
             && recentWeeks.allSatisfy { week in
                 (productByWeek[week]?.conversions ?? 0) >= 1
             }
-            && productWeightedROI > AnalyticsConfiguration.highEfficiencyROIMultiplier * overallWeightedROI
+            && productWeightedROI > settings.highEfficiencyROIMultiplier * overallWeightedROI
 
         let underperformWeekCount = recentWeeks.reduce(into: 0) { count, week in
             let productROI = productByWeek[week]?.roi ?? 0
@@ -176,7 +175,7 @@ enum WeeklyMetricsRules {
         let isLowEfficiency = hasEfficiencySample
             && productWeightedROI < overallWeightedROI
             && underperformWeekCount >= AnalyticsConfiguration.lowEfficiencyWeeklyUnderperformWeeks
-            && totalClicks > AnalyticsConfiguration.lowEfficiencyMinClicks
+            && totalClicks > settings.lowEfficiencyMinClicks
 
         if isHighSpend && isHighEfficiency {
             return .highSpendHighEfficiency

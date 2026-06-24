@@ -211,4 +211,66 @@ extension DatabaseClient {
             }
         }
     }
+
+    func countExpiredAdsDailyRows(retentionDays: Int) throws -> Int {
+        guard retentionDays > 0, let cutoff = retentionCutoffDay(retentionDays: retentionDays) else {
+            return 0
+        }
+        return try dbQueue.read { db in
+            try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM ads_product_daily WHERE date < ?;",
+                arguments: [cutoff]
+            ) ?? 0
+        }
+    }
+
+    @discardableResult
+    func purgeExpiredAdsDaily(retentionDays: Int) throws -> Int {
+        guard retentionDays > 0, let cutoff = retentionCutoffDay(retentionDays: retentionDays) else {
+            return 0
+        }
+        let deleted = try dbQueue.write { db in
+            try db.execute(
+                sql: "DELETE FROM ads_product_daily WHERE date < ?;",
+                arguments: [cutoff]
+            )
+            return db.changesCount
+        }
+        if deleted > 0 {
+            try rebuildProductWeeklyMetrics()
+        } else {
+            invalidateDashboardCache()
+        }
+        return deleted
+    }
+
+    func runScheduledRetentionPurgeIfNeeded() throws {
+        let retentionDays = AppSettings.dataRetentionDays
+        guard retentionDays > 0 else { return }
+
+        guard let latestDay = try fetchLatestMetricDay() else { return }
+        if AppSettings.lastRetentionPurgeDay == latestDay {
+            return
+        }
+
+        let deleted = try purgeExpiredAdsDaily(retentionDays: retentionDays)
+        if deleted >= 0 {
+            AppSettings.lastRetentionPurgeDay = latestDay
+        }
+    }
+
+    private func retentionCutoffDay(retentionDays: Int) -> String? {
+        guard retentionDays > 0 else { return nil }
+        guard let latestDay = try? fetchLatestMetricDay(),
+              let anchor = WeekCalendar.parseDay(latestDay) else {
+            return nil
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        guard let cutoffDate = calendar.date(byAdding: .day, value: -retentionDays, to: anchor) else {
+            return nil
+        }
+        return WeekCalendar.formatDay(cutoffDate)
+    }
 }

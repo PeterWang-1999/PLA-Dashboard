@@ -53,6 +53,9 @@ struct RootView: View {
             await bootstrapDashboardIfNeeded()
             didBootstrap = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .dashboardSettingsDidChange)) { _ in
+            dashboardViewModel.handleSettingsDidChange()
+        }
     }
 
     @ViewBuilder
@@ -123,6 +126,7 @@ struct RootView: View {
         dashboardViewModel.errorMessage = nil
         do {
             try await databaseClient.migrateIfNeeded()
+            try await databaseClient.runScheduledRetentionPurgeIfNeeded()
             var metricsCount = try await databaseClient.productWeeklyMetricsCount()
             if metricsCount == 0, try await databaseClient.hasFactTableData() {
                 try await databaseClient.rebuildProductWeeklyMetrics()

@@ -210,4 +210,46 @@ final class DashboardViewModel {
         selectedCategoryFilter = .all
         selectedCustomLabelFilter = .all
     }
+
+    var isExporting = false
+    var exportErrorMessage: String?
+
+    func makeCurrentFilters() -> DashboardQueryFilters {
+        DashboardQueryFilters(
+            searchText: searchText,
+            alertFilter: selectedAlertFilter,
+            customLabelFilter: selectedCustomLabelFilter,
+            categoryFilter: selectedCategoryFilter,
+            sort: tableSort
+        )
+    }
+
+    func prepareExport(includeClicksAndConversions: Bool) async throws -> DashboardExportCSVDocument {
+        guard dataSource == .database, let databaseClient else {
+            throw DashboardExportError.noData
+        }
+        isExporting = true
+        exportErrorMessage = nil
+        defer { isExporting = false }
+
+        let bundle = try await databaseClient.fetchDashboardAllRows(filters: makeCurrentFilters())
+        guard !bundle.rows.isEmpty else {
+            throw DashboardExportError.noData
+        }
+        return DashboardExportCSVDocument(
+            bundle: bundle,
+            filters: makeCurrentFilters(),
+            includeClicksAndConversions: includeClicksAndConversions
+        )
+    }
+
+    func handleSettingsDidChange() {
+        guard let databaseClient else { return }
+        Task {
+            await databaseClient.invalidateDashboardCache()
+            if dataSource == .database {
+                await refreshData()
+            }
+        }
+    }
 }

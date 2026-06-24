@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct DashboardView: View {
     @Bindable var viewModel: DashboardViewModel
@@ -6,6 +7,15 @@ struct DashboardView: View {
     var onRequestDataUpdate: () -> Void = {}
 
     @State private var columnSortOrder = DashboardTableSort.default.columnSortOrder
+    @State private var isPresentingExporter = false
+    @State private var exportDocument = DashboardExportCSVDocument(
+        bundle: DashboardExportBundle(rows: [], weekStarts: [], totalCount: 0),
+        filters: DashboardQueryFilters(),
+        includeClicksAndConversions: false
+    )
+    @State private var exportFilename = "pla-dashboard"
+    @State private var showExportError = false
+    @State private var exportErrorMessage = ""
 
     var body: some View {
         dashboardContent
@@ -52,6 +62,17 @@ struct DashboardView: View {
             .focusedSceneValue(\.dashboardGoToNextPage) {
                 guard viewModel.currentPage < viewModel.totalPages, !viewModel.isLoading else { return }
                 viewModel.goToNextPage()
+            }
+            .fileExporter(
+                isPresented: $isPresentingExporter,
+                document: exportDocument,
+                contentType: .commaSeparatedText,
+                defaultFilename: exportFilename
+            ) { _ in }
+            .alert("无法导出", isPresented: $showExportError) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text(exportErrorMessage)
             }
     }
 
@@ -100,10 +121,10 @@ struct DashboardView: View {
 
     private var dashboardFooter: some View {
         HStack(spacing: 12) {
-            if viewModel.isLoading {
+            if viewModel.isLoading || viewModel.isExporting {
                 ProgressView()
                     .controlSize(.small)
-                    .accessibilityLabel("正在加载")
+                    .accessibilityLabel(viewModel.isExporting ? "正在导出" : "正在加载")
             }
 
             Spacer()
@@ -113,8 +134,10 @@ struct DashboardView: View {
                 .controlSize(.large)
 
             Menu {
-                Button("导出当前视图（阶段 6 实现）") {}
-                    .disabled(true)
+                Button("导出当前视图…") {
+                    Task { await beginExport() }
+                }
+                .disabled(viewModel.isLoading || viewModel.isExporting || viewModel.showsEmptyState)
                 Divider()
                 Button("刷新聚合") {
                     Task { await viewModel.rebuildMetricsAndRefresh() }
@@ -124,7 +147,7 @@ struct DashboardView: View {
             }
             .menuStyle(.borderedButton)
             .controlSize(.large)
-            .help("刷新聚合；导出功能将在阶段 6 提供")
+            .help("导出当前筛选结果或刷新聚合")
 
             paginationControls
         }
@@ -163,6 +186,23 @@ struct DashboardView: View {
             .keyboardShortcut(.rightArrow, modifiers: .command)
         }
         .controlSize(.large)
+    }
+
+    @MainActor
+    private func beginExport() async {
+        do {
+            let document = try await viewModel.prepareExport(
+                includeClicksAndConversions: !windowState.isSidebarVisible
+            )
+            exportDocument = document
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd"
+            exportFilename = "pla-dashboard-\(formatter.string(from: Date()))"
+            isPresentingExporter = true
+        } catch {
+            exportErrorMessage = error.localizedDescription
+            showExportError = true
+        }
     }
 }
 

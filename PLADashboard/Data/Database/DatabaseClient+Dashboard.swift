@@ -73,15 +73,70 @@ extension DatabaseClient {
         let signpost = PerformanceSignposts.beginDashboardFetchPage()
         defer { PerformanceSignposts.endDashboardFetchPage(signpost) }
 
-        let latestDay = try fetchLatestMetricDay()
-        guard let latestDay, let endDate = WeekCalendar.parseDay(latestDay) else {
+        let contextBundle = try loadDashboardMetricsContext()
+        guard let contextBundle else {
             return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1)
         }
 
-        let weekStarts = WeekCalendar.reportingWeekStarts(endingAt: endDate)
-        guard !weekStarts.isEmpty else {
-            return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1)
+        let hasAlertFilter = alertFilterLabel(for: filters.alertFilter) != nil
+
+        if hasAlertFilter {
+            return try fetchDashboardPageWithAlertFilter(
+                filters: filters,
+                weekStarts: contextBundle.weekStarts,
+                metricsContext: contextBundle.metricsContext,
+                page: page,
+                pageSize: pageSize
+            )
         }
+
+        return try fetchDashboardPageSQLPaginated(
+            filters: filters,
+            weekStarts: contextBundle.weekStarts,
+            metricsContext: contextBundle.metricsContext,
+            page: page,
+            pageSize: pageSize
+        )
+    }
+
+    static let dashboardExportRowLimit = 50_000
+
+    func fetchDashboardAllRows(filters: DashboardQueryFilters) throws -> DashboardExportBundle {
+        let contextBundle = try loadDashboardMetricsContext()
+        guard let contextBundle else {
+            return DashboardExportBundle(rows: [], weekStarts: [], totalCount: 0)
+        }
+
+        let rows = try fetchAllMappedRows(
+            filters: filters,
+            weekStarts: contextBundle.weekStarts,
+            metricsContext: contextBundle.metricsContext
+        )
+
+        guard rows.count <= Self.dashboardExportRowLimit else {
+            throw DashboardExportError.tooManyRows(rows.count, limit: Self.dashboardExportRowLimit)
+        }
+
+        return DashboardExportBundle(
+            rows: rows,
+            weekStarts: contextBundle.weekStarts,
+            totalCount: rows.count
+        )
+    }
+
+    private struct DashboardMetricsContextBundle {
+        let weekStarts: [String]
+        let metricsContext: DashboardMetricsCache
+    }
+
+    private func loadDashboardMetricsContext() throws -> DashboardMetricsContextBundle? {
+        let latestDay = try fetchLatestMetricDay()
+        guard let latestDay, let endDate = WeekCalendar.parseDay(latestDay) else {
+            return nil
+        }
+
+        let weekStarts = WeekCalendar.reportingWeekStarts(endingAt: endDate)
+        guard !weekStarts.isEmpty else { return nil }
 
         let metricsContext: DashboardMetricsCache
         if let cached = cachedDashboardMetrics(for: weekStarts) {
@@ -101,24 +156,59 @@ extension DatabaseClient {
             storeDashboardMetricsCache(metricsContext)
         }
 
-        let hasAlertFilter = alertFilterLabel(for: filters.alertFilter) != nil
+        return DashboardMetricsContextBundle(weekStarts: weekStarts, metricsContext: metricsContext)
+    }
 
-        if hasAlertFilter {
-            return try fetchDashboardPageWithAlertFilter(
-                filters: filters,
-                weekStarts: weekStarts,
-                metricsContext: metricsContext,
-                page: page,
-                pageSize: pageSize
-            )
+    private func fetchAllMappedRows(
+        filters: DashboardQueryFilters,
+        weekStarts: [String],
+        metricsContext: DashboardMetricsCache
+    ) throws -> [ProductPerformanceRowModel] {
+        if alertFilterLabel(for: filters.alertFilter) != nil {
+            let batchSize = 200
+            var offset = 0
+            var mappedRows: [ProductPerformanceRowModel] = []
+
+            while true {
+                let ranked = try fetchRankedProducts(
+                    filters: filters,
+                    weekStarts: weekStarts,
+                    limit: batchSize,
+                    offset: offset,
+                    includeTotalCount: false
+                )
+                if ranked.products.isEmpty { break }
+
+                let batchRows = try mapProductsToPerformanceRows(
+                    products: ranked.products,
+                    weekStarts: weekStarts,
+                    metricsContext: metricsContext,
+                    alertFilter: filters.alertFilter
+                )
+                mappedRows.append(contentsOf: batchRows)
+
+                if ranked.products.count < batchSize { break }
+                offset += batchSize
+            }
+
+            mappedRows.sort { lhs, rhs in
+                filters.sort.sortsBefore(lhs, rhs)
+            }
+            return mappedRows
         }
 
-        return try fetchDashboardPageSQLPaginated(
+        let ranked = try fetchRankedProducts(
             filters: filters,
             weekStarts: weekStarts,
+            limit: nil,
+            offset: 0,
+            includeTotalCount: false
+        )
+        return try mapProductsToPerformanceRows(
+            products: ranked.products,
+            weekStarts: weekStarts,
             metricsContext: metricsContext,
-            page: page,
-            pageSize: pageSize
+            alertFilter: nil
         )
     }
 
@@ -362,7 +452,8 @@ extension DatabaseClient {
             productWeeks: productWeeks,
             overallWeeks: metricsContext.overallWeeks,
             cohortBenchmarks: metricsContext.cohortBenchmarks,
-            totalPortfolioCostCents: metricsContext.totalCostCents
+            totalPortfolioCostCents: metricsContext.totalCostCents,
+            settings: AnalyticsSettingsSnapshot.current()
         )
 
         if let required = alertFilterLabel(for: alertFilter ?? DashboardQueryFilters.alertFilterDefaultOption),

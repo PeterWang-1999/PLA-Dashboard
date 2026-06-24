@@ -172,4 +172,57 @@ final class WeeklyMetricsRulesTests: XCTestCase {
     func testHighEfficiencyUsesMultiplier16() {
         XCTAssertEqual(AnalyticsConfiguration.highEfficiencyROIMultiplier, 1.6)
     }
+
+    func testLowEfficiencyRespectsConfigurableMinClicks() {
+        let weekStarts = (0..<6).map { "2026-06-\(String(format: "%02d", $0 + 1))" }
+        let weeklyClicks = [50, 50, 50, 47, 47, 47]
+        let productMetrics = zip(weekStarts, weeklyClicks).map { week, clicks in
+            WeeklyProductMetrics(
+                productId: "p1",
+                weekStart: week,
+                metrics: AggregatedMetrics(
+                    costCents: 3_000,
+                    clicks: clicks,
+                    conversions: 2,
+                    conversionValueCents: 50
+                )
+            )
+        }
+        let overallMetrics = weekStarts.map {
+            WeeklyProductMetrics(
+                productId: "__overall__",
+                weekStart: $0,
+                metrics: AggregatedMetrics(
+                    costCents: 10_000,
+                    clicks: 1_000,
+                    conversions: 20,
+                    conversionValueCents: 30_000
+                )
+            )
+        }
+        let cohortBenchmarks = weekStarts.map { week in
+            WeeklyCohortSpendBenchmark(weekStart: week, medianDailyCents: 100, meanDailyCents: 100)
+        }
+
+        let strict = AnalyticsSettingsSnapshot(highEfficiencyROIMultiplier: 1.6, lowEfficiencyMinClicks: 300)
+        let relaxed = AnalyticsSettingsSnapshot(highEfficiencyROIMultiplier: 1.6, lowEfficiencyMinClicks: 250)
+
+        let strictLabel = WeeklyMetricsRules.resolveWarningLabel(
+            productWeeks: productMetrics,
+            overallWeeks: overallMetrics,
+            cohortBenchmarks: cohortBenchmarks,
+            totalPortfolioCostCents: 10_000_000,
+            settings: strict
+        )
+        let relaxedLabel = WeeklyMetricsRules.resolveWarningLabel(
+            productWeeks: productMetrics,
+            overallWeeks: overallMetrics,
+            cohortBenchmarks: cohortBenchmarks,
+            totalPortfolioCostCents: 10_000_000,
+            settings: relaxed
+        )
+
+        XCTAssertNil(strictLabel)
+        XCTAssertEqual(relaxedLabel, .lowEfficiency)
+    }
 }

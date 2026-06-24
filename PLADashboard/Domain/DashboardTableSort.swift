@@ -68,4 +68,13 @@ enum DashboardTableSort: String, Sendable, Hashable, CaseIterable {
             lhs.sortROI < rhs.sortROI
         }
     }
+
+    var exportLabel: String {
+        switch self {
+        case .costDescending: "消费降序"
+        case .costAscending: "消费升序"
+        case .roiDescending: "ROI降序"
+        case .roiAscending: "ROI升序"
+        }
+    }
 }
