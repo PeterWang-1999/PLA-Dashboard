@@ -58,4 +58,16 @@ final class AccountStore {
         try await client.migrateIfNeeded()
         activeDatabaseClient = client
     }
+
+    func createAccount(
+        name: String,
+        kind: WorkspaceAccountKind = .thirdParty
+    ) throws -> WorkspaceAccount {
+        guard phase == .ready else {
+            throw WorkspaceAccountError.invalidManifest("账户尚未就绪")
+        }
+        let account = try WorkspaceAccountPersistence.createAccount(name: name, kind: kind)
+        manifest = try WorkspaceAccountPersistence.load()
+        return account
+    }
 }

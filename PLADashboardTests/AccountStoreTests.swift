@@ -124,4 +124,54 @@ Sample Dress\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/dres
         let productsB = try await clientB.fetchProducts(ids: ["10416614474003"])
         XCTAssertTrue(productsB.isEmpty)
     }
+
+    func testCreateAccountAppendsToManifest() async throws {
+        let store = AccountStore()
+        await store.bootstrap()
+
+        let initialCount = store.accounts.count
+        let account = try store.createAccount(name: "新建店铺", kind: .thirdParty)
+
+        XCTAssertEqual(store.accounts.count, initialCount + 1)
+        XCTAssertEqual(account.name, "新建店铺")
+        XCTAssertEqual(account.kind, .thirdParty)
+        XCTAssertTrue(store.accounts.contains(where: { $0.id == account.id }))
+    }
+
+    func testCreateAccountRequiresReadyPhase() async throws {
+        let store = AccountStore()
+
+        XCTAssertThrowsError(try store.createAccount(name: "测试", kind: .thirdParty)) { error in
+            guard case WorkspaceAccountError.invalidManifest = error else {
+                XCTFail("Unexpected error: \(error)")
+                return
+            }
+        }
+    }
+
+    func testCreateThenSwitchShowsIsolatedData() async throws {
+        let store = AccountStore()
+        await store.bootstrap()
+
+        let clientA = try XCTUnwrap(store.activeDatabaseClient)
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("tsv")
+        try sampleTSV.write(to: tempURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let importer = MerchantCenterImporter(databaseClient: clientA)
+        _ = try await importer.importFile(sourceURL: tempURL) { _ in }
+
+        let productsA = try await clientA.fetchProducts(ids: ["10416614474003"])
+        XCTAssertEqual(productsA.count, 1)
+
+        let accountB = try store.createAccount(name: "隔离账户", kind: .thirdParty)
+        try await store.switchAccount(to: accountB.id)
+
+        let clientB = try XCTUnwrap(store.activeDatabaseClient)
+        let productsB = try await clientB.fetchProducts(ids: ["10416614474003"])
+        XCTAssertTrue(productsB.isEmpty)
+    }
 }

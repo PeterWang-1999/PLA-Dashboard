@@ -9,6 +9,7 @@ struct RootView: View {
     @State private var dashboardViewModel = DashboardViewModel()
     @State private var importViewModel = ImportViewModel()
     @State private var selectedNavigationItem: AppNavigationItem? = .dashboard
+    @State private var showImportBlockingAlert = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $windowState.columnVisibility) {
@@ -57,19 +58,35 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .dashboardSettingsDidChange)) { _ in
             dashboardViewModel.handleSettingsDidChange()
         }
+        .alert("无法切换账户", isPresented: $showImportBlockingAlert) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text("导入进行中，请先取消导入或等待完成。")
+        }
     }
 
     @ViewBuilder
     private var sidebar: some View {
-        List(selection: $selectedNavigationItem) {
-            Section("导航") {
-                ForEach(AppNavigationItem.sidebarCases) { item in
-                    Label(item.rawValue, systemImage: item.systemImage)
-                        .tag(item)
+        VStack(spacing: 0) {
+            List(selection: $selectedNavigationItem) {
+                Section("导航") {
+                    ForEach(AppNavigationItem.sidebarCases) { item in
+                        Label(item.rawValue, systemImage: item.systemImage)
+                            .tag(item)
+                    }
                 }
             }
+            .listStyle(.sidebar)
+
+            Divider()
+
+            AccountSwitcherView(
+                isImportInProgress: importViewModel.isImporting,
+                onSwitchBlocked: { showImportBlockingAlert = true }
+            )
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
-        .listStyle(.sidebar)
         .navigationTitle("PLA Dashboard")
         .toolbar(removing: .sidebarToggle)
         .toolbar {
