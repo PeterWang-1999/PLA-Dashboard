@@ -4,10 +4,10 @@ struct ImportHistoryView: View {
     let jobs: [ImportJobRecord]
 
     private enum Metrics {
-        /// macOS inset `Table` 表头近似高度。
-        static let headerHeight: CGFloat = 28
-        /// macOS inset `Table` 单行近似高度。
-        static let rowHeight: CGFloat = 28
+        /// macOS inset `Table` 表头近似高度（`.body` 字号）。
+        static let headerHeight: CGFloat = 26
+        /// macOS inset `Table` 单行近似高度（`.body` 字号）。
+        static let rowHeight: CGFloat = 24
     }
 
     var body: some View {
