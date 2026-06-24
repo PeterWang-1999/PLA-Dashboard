@@ -7,7 +7,7 @@ struct ImportHistoryView: View {
         /// macOS inset `Table` 表头近似高度（`.body` 字号）。
         static let headerHeight: CGFloat = 26
         /// macOS inset `Table` 单行近似高度（`.body` 字号）。
-        static let rowHeight: CGFloat = 24
+        static let rowHeight: CGFloat = 26
     }
 
     var body: some View {
