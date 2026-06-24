@@ -59,7 +59,7 @@ struct RootView: View {
     private var sidebar: some View {
         List(selection: $selectedNavigationItem) {
             Section("导航") {
-                ForEach(AppNavigationItem.allCases) { item in
+                ForEach(AppNavigationItem.sidebarCases) { item in
                     Label(item.rawValue, systemImage: item.systemImage)
                         .tag(item)
                 }
@@ -100,7 +100,7 @@ struct RootView: View {
                 ImportsView(viewModel: importViewModel)
             }
         case .settings:
-            ContentUnavailableView("设置", systemImage: "gearshape", description: Text("阶段 6 实现"))
+            EmptyView()
         }
     }
 

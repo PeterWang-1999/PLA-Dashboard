@@ -3,8 +3,6 @@ import SwiftUI
 struct ImportHistoryView: View {
     let jobs: [ImportJobRecord]
 
-    private static let tableHeight: CGFloat = 100
-
     var body: some View {
         if jobs.isEmpty {
             ContentUnavailableView(
@@ -35,11 +33,11 @@ struct ImportHistoryView: View {
                 .width(min: 120, ideal: 200, max: .infinity)
 
                 TableColumn("状态") { job in
-                    Text(statusLabel(job.status))
+                    Label(statusLabel(job.status), systemImage: statusSymbol(job.status))
                         .font(.body)
-                        .foregroundStyle(statusColor(job.status))
+                        .foregroundStyle(statusForegroundStyle(job.status))
                 }
-                .width(min: 56, ideal: 72, max: 88)
+                .width(min: 72, ideal: 96, max: 120)
 
                 TableColumn("有效/总计") { job in
                     Text("\(job.validRows) / \(job.totalRows)")
@@ -48,13 +46,7 @@ struct ImportHistoryView: View {
                 .width(min: 72, ideal: 88, max: 100)
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
-            .scrollDisabled(true)
-            .frame(
-                maxWidth: .infinity,
-                minHeight: Self.tableHeight,
-                maxHeight: Self.tableHeight,
-                alignment: .topLeading
-            )
+            .frame(minHeight: 120, maxHeight: 220)
         }
     }
 
@@ -78,13 +70,22 @@ struct ImportHistoryView: View {
         }
     }
 
-    private func statusColor(_ status: String) -> Color {
+    private func statusSymbol(_ status: String) -> String {
         switch ImportJobStatus(rawValue: status) {
-        case .succeeded: .green
-        case .failed: .red
-        case .cancelled: .orange
-        case .running: .blue
-        case .none: .secondary
+        case .running: "clock"
+        case .succeeded: "checkmark.circle.fill"
+        case .failed: "xmark.circle.fill"
+        case .cancelled: "minus.circle.fill"
+        case .none: "questionmark.circle"
+        }
+    }
+
+    private func statusForegroundStyle(_ status: String) -> AnyShapeStyle {
+        switch ImportJobStatus(rawValue: status) {
+        case .succeeded, .failed, .cancelled, .running:
+            AnyShapeStyle(.primary)
+        case .none:
+            AnyShapeStyle(.secondary)
         }
     }
 }

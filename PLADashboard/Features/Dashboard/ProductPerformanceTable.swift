@@ -14,6 +14,8 @@ struct ProductPerformanceTable: View {
             TableColumnForEach(visibleColumns) { column in
                 TableColumn(column.rawValue) { row in
                     cellContent(for: column, row: row)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(row.accessibilitySummary)
                 }
                 .width(
                     min: column.widthSpec.min,

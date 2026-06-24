@@ -12,10 +12,11 @@ final class DashboardViewModel {
     var categoryCatalog: GoogleProductCategoryCatalog = .loadBundled()
     var selectedCategoryFilter: CategoryFilterSelection = .all
     var currentPage = 1
-    let pageSize = 30
+    var pageSize: Int { AppSettings.defaultPageSize }
     var totalPages = 1
     var isLoading = false
     var errorMessage: String?
+    var tableSort = DashboardTableSort.default
 
     private var databaseClient: DatabaseClient?
     private var databaseRows: [ProductPerformanceRowModel] = []
@@ -104,6 +105,13 @@ final class DashboardViewModel {
         scheduleRefresh()
     }
 
+    func setTableSort(_ sort: DashboardTableSort) {
+        guard tableSort != sort else { return }
+        tableSort = sort
+        currentPage = 1
+        scheduleRefresh()
+    }
+
     func scheduleRefresh() {
         refreshTask?.cancel()
         refreshTask = Task { @MainActor in
@@ -121,7 +129,8 @@ final class DashboardViewModel {
                 searchText: searchText,
                 alertFilter: selectedAlertFilter,
                 customLabelFilter: selectedCustomLabelFilter,
-                categoryFilter: selectedCategoryFilter
+                categoryFilter: selectedCategoryFilter,
+                sort: tableSort
             )
             let result = try await databaseClient.fetchDashboardPage(
                 filters: filters,

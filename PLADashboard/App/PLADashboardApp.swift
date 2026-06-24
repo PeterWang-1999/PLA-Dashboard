@@ -36,6 +36,9 @@ struct PLADashboardApp: App {
         .commands {
             AppCommands()
         }
+        Settings {
+            SettingsView()
+        }
         .defaultSize(width: 1033, height: 620)
         .windowResizability(.contentMinSize)
     }

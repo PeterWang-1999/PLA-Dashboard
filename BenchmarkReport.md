@@ -41,14 +41,18 @@ python3 Scripts/generate_ads_benchmark.py --ads-rows 1000000 --merchant-rows 500
 ## 运行性能 Test Plan（Release）
 
 ```bash
-xcodebuild -scheme PLADashboard -testPlan PLADashboardPerformance \
+xcodebuild -scheme PLADashboard \
+  -testPlan PLADashboard.xcodeproj/xcshareddata/xctestplans/PLADashboardPerformance.xctestplan \
+  -configuration Release \
   -destination 'platform=macOS' test
 ```
 
 完整百万行：
 
 ```bash
-PLA_RUN_FULL_BENCHMARK=1 xcodebuild -scheme PLADashboard -testPlan PLADashboardPerformance \
+PLA_RUN_FULL_BENCHMARK=1 xcodebuild -scheme PLADashboard \
+  -testPlan PLADashboard.xcodeproj/xcshareddata/xctestplans/PLADashboardPerformance.xctestplan \
+  -configuration Release \
   -destination 'platform=macOS' test
 ```
 

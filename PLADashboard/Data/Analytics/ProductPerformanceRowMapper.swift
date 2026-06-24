@@ -7,6 +7,7 @@ struct DashboardQueryFilters: Sendable, Hashable {
     var alertFilter: String = Self.alertFilterDefaultOption
     var customLabelFilter: CustomLabelFilterSelection = .all
     var categoryFilter: CategoryFilterSelection = .all
+    var sort: DashboardTableSort = .default
 }
 
 struct DashboardPageResult: Sendable {
@@ -129,7 +130,11 @@ enum ProductPerformanceRowMapper {
             clicks: DashboardMetricFormatter.formatInteger(sixWeekTotals.clicks),
             conversions: DashboardMetricFormatter.formatDecimal(sixWeekTotals.conversions, fractionDigits: 0),
             costTrendWeeks: weeklyCostTrend,
-            gsTrendWeeks: weeklyGSTrend
+            gsTrendWeeks: weeklyGSTrend,
+            sortCostCents: sixWeekTotals.costCents,
+            sortROI: sixWeekTotals.roi,
+            sortClicks: sixWeekTotals.clicks,
+            sortLSIN: displayLSIN
         )
     }
 

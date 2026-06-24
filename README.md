@@ -25,15 +25,19 @@ xcodebuild -scheme PLADashboard -destination 'platform=macOS' build
 # 功能 + 性能回归（Debug，含 10k 行基准）
 xcodebuild -scheme PLADashboard -destination 'platform=macOS' test
 
-# Release 性能 Test Plan（仅性能用例）
-xcodebuild -scheme PLADashboard -testPlan PLADashboardPerformance \
+# Release 性能 Test Plan（仅性能用例，Release 配置）
+xcodebuild -scheme PLADashboard \
+  -testPlan PLADashboard.xcodeproj/xcshareddata/xctestplans/PLADashboardPerformance.xctestplan \
+  -configuration Release \
   -destination 'platform=macOS' test
 
 # 生成百万行 fixture（不入 Git）
 python3 Scripts/generate_ads_benchmark.py --ads-rows 1000000 --merchant-rows 50000
 
 # 完整百万行基准
-PLA_RUN_FULL_BENCHMARK=1 xcodebuild -scheme PLADashboard -testPlan PLADashboardPerformance \
+PLA_RUN_FULL_BENCHMARK=1 xcodebuild -scheme PLADashboard \
+  -testPlan PLADashboard.xcodeproj/xcshareddata/xctestplans/PLADashboardPerformance.xctestplan \
+  -configuration Release \
   -destination 'platform=macOS' test
 ```
 

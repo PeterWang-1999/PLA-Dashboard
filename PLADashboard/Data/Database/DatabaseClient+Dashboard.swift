@@ -159,38 +159,39 @@ extension DatabaseClient {
         page: Int,
         pageSize: Int
     ) throws -> DashboardPageResult {
-        let ranked = try fetchRankedProducts(
-            filters: filters,
-            weekStarts: weekStarts,
-            limit: nil,
-            offset: 0,
-            includeTotalCount: false
-        )
+        let batchSize = 200
+        var offset = 0
+        var mappedRows: [ProductPerformanceRowModel] = []
 
-        guard !ranked.products.isEmpty else {
+        while true {
+            let ranked = try fetchRankedProducts(
+                filters: filters,
+                weekStarts: weekStarts,
+                limit: batchSize,
+                offset: offset,
+                includeTotalCount: false
+            )
+
+            if ranked.products.isEmpty { break }
+
+            let batchRows = try mapProductsToPerformanceRows(
+                products: ranked.products,
+                weekStarts: weekStarts,
+                metricsContext: metricsContext,
+                alertFilter: filters.alertFilter
+            )
+            mappedRows.append(contentsOf: batchRows)
+
+            if ranked.products.count < batchSize { break }
+            offset += batchSize
+        }
+
+        guard !mappedRows.isEmpty else {
             return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1)
         }
 
-        let productIds = ranked.products.map(\.productId)
-        let weeklyRecords = try fetchWeeklyMetrics(productIds: productIds, weekStarts: weekStarts)
-        let weeklyByProduct = Dictionary(grouping: weeklyRecords, by: \.productId)
-
-        var mappedRows: [ProductPerformanceRowModel] = []
-        mappedRows.reserveCapacity(ranked.products.count)
-
-        for product in ranked.products {
-            guard let row = try makePerformanceRowIfMatchingAlert(
-                product: product,
-                weekStarts: weekStarts,
-                weeklyByProduct: weeklyByProduct,
-                metricsContext: metricsContext,
-                alertFilter: filters.alertFilter
-            ) else { continue }
-            mappedRows.append(row)
-        }
-
         mappedRows.sort { lhs, rhs in
-            parseCurrency(lhs.cost) > parseCurrency(rhs.cost)
+            compareRows(lhs, rhs, sort: filters.sort)
         }
 
         let totalCount = mappedRows.count
@@ -249,7 +250,7 @@ extension DatabaseClient {
                 \(filterClause.sql)
                 GROUP BY p.product_id
                 HAVING SUM(m.cost_cents) > 0 OR SUM(m.conversion_value_cents) > 0
-                ORDER BY SUM(m.cost_cents) DESC, p.product_id ASC
+                ORDER BY \(filters.sort.sqlOrderClause)
                 """
             var dataArgs = StatementArguments()
             for week in weekStarts { dataArgs += [week] }
@@ -395,5 +396,28 @@ extension DatabaseClient {
     private func parseCurrency(_ value: String) -> Double {
         let cleaned = value.replacingOccurrences(of: ",", with: "")
         return Double(cleaned) ?? 0
+    }
+
+    private func compareRows(
+        _ lhs: ProductPerformanceRowModel,
+        _ rhs: ProductPerformanceRowModel,
+        sort: DashboardTableSort
+    ) -> Bool {
+        switch sort {
+        case .costDescending:
+            lhs.sortCostCents > rhs.sortCostCents
+        case .costAscending:
+            lhs.sortCostCents < rhs.sortCostCents
+        case .roiDescending:
+            lhs.sortROI > rhs.sortROI
+        case .roiAscending:
+            lhs.sortROI < rhs.sortROI
+        case .clicksDescending:
+            lhs.sortClicks > rhs.sortClicks
+        case .clicksAscending:
+            lhs.sortClicks < rhs.sortClicks
+        case .lsinAscending:
+            lhs.sortLSIN.localizedStandardCompare(rhs.sortLSIN) == .orderedAscending
+        }
     }
 }

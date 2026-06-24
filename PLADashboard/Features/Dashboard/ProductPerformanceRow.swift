@@ -8,19 +8,40 @@ struct MetricDeltaCell: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value)
                 .font(.body)
-            Text(delta)
-                .font(.caption)
-                .foregroundStyle(deltaColor)
+            HStack(spacing: 2) {
+                if let symbol = deltaSymbol {
+                    Image(systemName: symbol)
+                        .font(.caption2)
+                        .accessibilityHidden(true)
+                }
+                Text(delta)
+                    .font(.caption)
+            }
+            .foregroundStyle(deltaForegroundStyle)
         }
         .frame(maxHeight: .infinity, alignment: .center)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(value)，相较整体 \(delta)")
+        .accessibilityLabel("\(value)，相较整体 \(deltaAccessibilityDescription)")
     }
 
-    private var deltaColor: Color {
-        if delta.hasPrefix("+") { return .green }
-        if delta.hasPrefix("-") { return .red }
-        return .secondary
+    private var deltaSymbol: String? {
+        if delta.hasPrefix("+") { return "arrowtriangle.up.fill" }
+        if delta.hasPrefix("-") { return "arrowtriangle.down.fill" }
+        return nil
+    }
+
+    private var deltaForegroundStyle: AnyShapeStyle {
+        if delta.hasPrefix("+") || delta.hasPrefix("-") {
+            AnyShapeStyle(.primary)
+        } else {
+            AnyShapeStyle(.secondary)
+        }
+    }
+
+    private var deltaAccessibilityDescription: String {
+        if delta.hasPrefix("+") { return "上升 \(delta)" }
+        if delta.hasPrefix("-") { return "下降 \(delta.dropFirst())" }
+        return delta
     }
 }
 
@@ -34,14 +55,36 @@ struct WarningLabelView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } else {
-            Text(text)
-                .font(.caption.weight(.medium))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(backgroundColor)
-                .foregroundStyle(foregroundColor)
-                .clipShape(Capsule())
-                .accessibilityLabel("预警标签，\(text)")
+            Label {
+                Text(text)
+                    .font(.caption.weight(.medium))
+            } icon: {
+                Image(systemName: warningSymbol)
+                    .font(.caption2)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(backgroundColor)
+            .foregroundStyle(foregroundColor)
+            .clipShape(Capsule())
+            .accessibilityLabel("预警标签，\(text)")
+        }
+    }
+
+    private var warningSymbol: String {
+        switch style {
+        case .none:
+            "minus.circle"
+        case .lowSpend:
+            "arrow.down.circle"
+        case .highSpendHighEfficiency:
+            "checkmark.circle"
+        case .highSpendLowEfficiency:
+            "exclamationmark.triangle"
+        case .highSpend:
+            "flame"
+        case .lowEfficiency:
+            "gauge.with.dots.needle.33percent"
         }
     }
 

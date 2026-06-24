@@ -1,8 +1,12 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ImportResultView: View {
     let job: ImportJobRecord
     let errors: [ImportRowErrorRecord]
+
+    @State private var isExportingErrors = false
+    @State private var exportDocument = ImportErrorsCSVDocument(errors: [])
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -16,13 +20,34 @@ struct ImportResultView: View {
 
                 HStack(spacing: 16) {
                     summaryItem(title: "总行数", value: "\(job.totalRows)")
-                    summaryItem(title: "有效", value: "\(job.validRows)")
-                    summaryItem(title: "错误", value: "\(job.invalidRows)", color: job.invalidRows > 0 ? .red : .secondary)
-                    summaryItem(title: "警告", value: "\(job.warningRows)", color: job.warningRows > 0 ? .orange : .secondary)
+                    summaryItem(
+                        title: "有效",
+                        value: "\(job.validRows)",
+                        symbol: "checkmark.circle"
+                    )
+                    summaryItem(
+                        title: "错误",
+                        value: "\(job.invalidRows)",
+                        symbol: job.invalidRows > 0 ? "xmark.circle" : nil
+                    )
+                    summaryItem(
+                        title: "警告",
+                        value: "\(job.warningRows)",
+                        symbol: job.warningRows > 0 ? "exclamationmark.triangle" : nil
+                    )
                 }
             }
 
             if !errors.isEmpty {
+                HStack {
+                    Spacer()
+                    Button("导出错误与警告…") {
+                        exportDocument = ImportErrorsCSVDocument(errors: errors)
+                        isExportingErrors = true
+                    }
+                    .buttonStyle(.bordered)
+                }
+
                 Table(errors) {
                     TableColumn("行号") { error in
                         Text("\(error.rowNumber)")
@@ -31,11 +56,15 @@ struct ImportResultView: View {
                     .width(min: 48, ideal: 56, max: 64)
 
                     TableColumn("级别") { error in
-                        Text(error.severity)
-                            .font(.body)
-                            .foregroundStyle(error.severity == ImportRowSeverity.error.rawValue ? .red : .orange)
+                        Label {
+                            Text(error.severity)
+                                .font(.body)
+                        } icon: {
+                            Image(systemName: severitySymbol(error.severity))
+                        }
+                        .foregroundStyle(.primary)
                     }
-                    .width(min: 48, ideal: 56, max: 72)
+                    .width(min: 56, ideal: 72, max: 88)
 
                     TableColumn("字段") { error in
                         Text(error.fieldName ?? "—")
@@ -55,16 +84,66 @@ struct ImportResultView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .fileExporter(
+            isPresented: $isExportingErrors,
+            document: exportDocument,
+            contentType: .commaSeparatedText,
+            defaultFilename: "import-errors-\(job.id)"
+        ) { _ in }
     }
 
-    private func summaryItem(title: String, value: String, color: Color = .primary) -> some View {
+    private func severitySymbol(_ severity: String) -> String {
+        severity == ImportRowSeverity.error.rawValue
+            ? "xmark.circle.fill"
+            : "exclamationmark.triangle.fill"
+    }
+
+    private func summaryItem(title: String, value: String, symbol: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Text(value)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(color)
+            if let symbol {
+                Label(value, systemImage: symbol)
+                    .font(.title3.weight(.semibold))
+            } else {
+                Text(value)
+                    .font(.title3.weight(.semibold))
+            }
         }
+    }
+}
+
+struct ImportErrorsCSVDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.commaSeparatedText] }
+
+    let text: String
+
+    init(errors: [ImportRowErrorRecord]) {
+        var lines = ["row_number,severity,field_name,message"]
+        lines.reserveCapacity(errors.count + 1)
+        for error in errors {
+            let field = error.fieldName ?? ""
+            lines.append(
+                "\(error.rowNumber),\(Self.escapeCSV(error.severity)),\(Self.escapeCSV(field)),\(Self.escapeCSV(error.message))"
+            )
+        }
+        text = lines.joined(separator: "\n")
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents,
+              let string = String(data: data, encoding: .utf8) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        text = string
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: Data(text.utf8))
+    }
+
+    private static func escapeCSV(_ value: String) -> String {
+        "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
     }
 }

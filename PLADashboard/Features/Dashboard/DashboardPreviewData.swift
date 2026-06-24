@@ -24,7 +24,11 @@ enum DashboardPreviewData {
             clicks: "15,806",
             conversions: "210",
             costTrendWeeks: [1200, 1500, 1800, 2100, 2400, 2700],
-            gsTrendWeeks: [800, 900, 1000, 1100, 1200, 1300]
+            gsTrendWeeks: [800, 900, 1000, 1100, 1200, 1300],
+            sortCostCents: 1_346_800,
+            sortROI: 0.92,
+            sortClicks: 15_806,
+            sortLSIN: "S9730219"
         ),
         ProductPerformanceRowModel(
             id: "S17053046",
@@ -48,7 +52,11 @@ enum DashboardPreviewData {
             clicks: "5,817",
             conversions: "155",
             costTrendWeeks: [400, 500, 600, 700, 800, 900],
-            gsTrendWeeks: [300, 320, 340, 360, 380, 400]
+            gsTrendWeeks: [300, 320, 340, 360, 380, 400],
+            sortCostCents: 467_600,
+            sortROI: 0.76,
+            sortClicks: 5_817,
+            sortLSIN: "S17053046"
         ),
         ProductPerformanceRowModel(
             id: "S19954192",
@@ -72,7 +80,11 @@ enum DashboardPreviewData {
             clicks: "5,817",
             conversions: "155",
             costTrendWeeks: [350, 420, 490, 560, 630, 700],
-            gsTrendWeeks: [250, 270, 290, 310, 330, 350]
+            gsTrendWeeks: [250, 270, 290, 310, 330, 350],
+            sortCostCents: 416_600,
+            sortROI: 1.14,
+            sortClicks: 5_817,
+            sortLSIN: "S19954192"
         ),
         ProductPerformanceRowModel(
             id: "S9628590",
@@ -96,7 +108,11 @@ enum DashboardPreviewData {
             clicks: "5,817",
             conversions: "155",
             costTrendWeeks: [200, 220, 240, 260, 280, 300],
-            gsTrendWeeks: [150, 160, 170, 180, 190, 200]
+            gsTrendWeeks: [150, 160, 170, 180, 190, 200],
+            sortCostCents: 231_700,
+            sortROI: 0.77,
+            sortClicks: 5_817,
+            sortLSIN: "S9628590"
         ),
         ProductPerformanceRowModel(
             id: "S11854438",
@@ -120,7 +136,11 @@ enum DashboardPreviewData {
             clicks: "4,102",
             conversions: "98",
             costTrendWeeks: [180, 190, 200, 210, 220, 230],
-            gsTrendWeeks: [120, 130, 140, 150, 160, 170]
+            gsTrendWeeks: [120, 130, 140, 150, 160, 170],
+            sortCostCents: 220_300,
+            sortROI: 1.16,
+            sortClicks: 4_102,
+            sortLSIN: "S11854438"
         ),
     ]
 }

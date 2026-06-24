@@ -16,13 +16,40 @@ private struct DashboardToolbarFilterLabel: View {
 
 private extension View {
     /// macOS Pull-down — 官方 `Menu` + `borderedButton`。
-    func dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: Bool) -> some View {
+    func dashboardToolbarPullDownMenuChrome() -> some View {
         menuStyle(.borderedButton)
-            .tint(usesPrimaryStyle ? .primary : .secondary)
     }
 }
 
 // MARK: - Pull-down filters (Menu + borderedButton)
+
+struct DashboardToolbarSortPicker: View {
+    @Bindable var viewModel: DashboardViewModel
+
+    var body: some View {
+        Menu {
+            ForEach(DashboardTableSort.toolbarOptions, id: \.self) { sort in
+                Button {
+                    viewModel.setTableSort(sort)
+                } label: {
+                    if viewModel.tableSort == sort {
+                        Label(sort.menuTitle, systemImage: "checkmark")
+                    } else {
+                        Text(sort.menuTitle)
+                    }
+                }
+            }
+        } label: {
+            DashboardToolbarFilterLabel(
+                title: viewModel.tableSort.menuTitle,
+                usesPrimaryStyle: viewModel.tableSort != .default
+            )
+        }
+        .dashboardToolbarPullDownMenuChrome()
+        .accessibilityLabel("排序")
+        .accessibilityValue(viewModel.tableSort.menuTitle)
+    }
+}
 
 struct DashboardToolbarAlertFilterPicker: View {
     @Bindable var viewModel: DashboardViewModel
@@ -46,7 +73,7 @@ struct DashboardToolbarAlertFilterPicker: View {
                 usesPrimaryStyle: viewModel.isAlertFilterActive
             )
         }
-        .dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: viewModel.isAlertFilterActive)
+        .dashboardToolbarPullDownMenuChrome()
         .accessibilityLabel("预警筛选")
         .accessibilityValue(viewModel.selectedAlertFilter)
     }
@@ -93,7 +120,7 @@ struct DashboardToolbarCustomLabelFilterPicker: View {
                 usesPrimaryStyle: viewModel.isCustomLabelFilterActive
             )
         }
-        .dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: viewModel.isCustomLabelFilterActive)
+        .dashboardToolbarPullDownMenuChrome()
         .accessibilityLabel("自定义标签筛选")
         .accessibilityValue(viewModel.selectedCustomLabelFilter.menuTitle)
     }
@@ -140,7 +167,7 @@ struct DashboardToolbarCategoryFilter: View {
                 usesPrimaryStyle: viewModel.isCategoryFilterActive
             )
         }
-        .dashboardToolbarPullDownMenuChrome(usesPrimaryStyle: viewModel.isCategoryFilterActive)
+        .dashboardToolbarPullDownMenuChrome()
         .accessibilityLabel("类目筛选")
         .accessibilityValue(viewModel.selectedCategoryFilter.menuTitle)
     }

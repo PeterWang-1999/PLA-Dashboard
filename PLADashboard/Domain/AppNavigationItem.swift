@@ -7,6 +7,11 @@ enum AppNavigationItem: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// 侧边栏可见的导航项（设置通过系统 Settings 窗口打开）。
+    static var sidebarCases: [AppNavigationItem] {
+        [.dashboard, .imports]
+    }
+
     var systemImage: String {
         switch self {
         case .dashboard: "chart.bar.doc.horizontal"

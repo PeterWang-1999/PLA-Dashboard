@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct ImportsView: View {
     @Bindable var viewModel: ImportViewModel
@@ -8,17 +7,15 @@ struct ImportsView: View {
         VStack(alignment: .leading, spacing: 20) {
             headerSection
 
+            if let errorMessage = viewModel.errorMessage {
+                importErrorBanner(message: errorMessage)
+            }
+
             if let result = viewModel.latestResult {
                 ImportResultView(job: result.job, errors: viewModel.latestErrors)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            } else {
+            } else if viewModel.errorMessage == nil {
                 Spacer(minLength: 0)
-            }
-
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
             }
 
             historySection
@@ -29,6 +26,29 @@ struct ImportsView: View {
         .task {
             await viewModel.loadHistory()
         }
+    }
+
+    private func importErrorBanner(message: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text(message)
+                    .font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .symbolRenderingMode(.multicolor)
+            }
+
+            Button("关闭") {
+                viewModel.clearError()
+            }
+            .buttonStyle(.link)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("导入失败：\(message)")
     }
 
     private var historySection: some View {
@@ -53,6 +73,8 @@ struct ImportsView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .disabled(viewModel.isImporting)
+                .accessibilityLabel("数据源")
+                .accessibilityValue(viewModel.selectedSourceKind.displayName)
             }
 
             HStack(alignment: .center) {
@@ -75,6 +97,13 @@ struct ImportsView: View {
                             Label("导入样例文件", systemImage: "doc.text")
                         }
                         .disabled(viewModel.isImporting)
+
+                        if viewModel.isImporting {
+                            Button("取消导入", role: .cancel) {
+                                viewModel.cancelImport()
+                            }
+                            .keyboardShortcut(.cancelAction)
+                        }
                     }
                     .controlSize(.large)
                 }

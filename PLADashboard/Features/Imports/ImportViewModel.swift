@@ -35,6 +35,14 @@ final class ImportViewModel {
         showFileImporter = true
     }
 
+    func cancelImport() {
+        importTask?.cancel()
+    }
+
+    func clearError() {
+        errorMessage = nil
+    }
+
     func loadHistory() async {
         guard let databaseClient else { return }
         do {
@@ -46,10 +54,7 @@ final class ImportViewModel {
 
     func handleImportedURLs(_ urls: [URL]) {
         guard let url = urls.first else { return }
-        importTask?.cancel()
-        importTask = Task { @MainActor in
-            await importFile(at: url)
-        }
+        startImport(at: url)
     }
 
     func importSampleFile() {
@@ -60,92 +65,102 @@ final class ImportViewModel {
             errorMessage = "未找到内置样例文件 \(selectedSourceKind.sampleResourceName).\(selectedSourceKind.sampleFileExtension)"
             return
         }
-        importTask?.cancel()
-        importTask = Task { @MainActor in
-            await importFile(
-                at: url,
-                fileName: "\(selectedSourceKind.sampleResourceName).\(selectedSourceKind.sampleFileExtension)"
-            )
-        }
+        startImport(
+            at: url,
+            fileName: "\(selectedSourceKind.sampleResourceName).\(selectedSourceKind.sampleFileExtension)"
+        )
     }
 
-    private func importFile(at url: URL, fileName: String? = nil) async {
+    private func startImport(at url: URL, fileName: String? = nil) {
         guard let databaseClient else {
             errorMessage = "数据库未就绪"
             return
         }
 
-        let accessed = url.startAccessingSecurityScopedResource()
-        defer {
-            if accessed {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
+        importTask?.cancel()
+        let sourceKind = selectedSourceKind
+        let catalogReload = onCatalogReload
+        let importCompleted = onImportCompleted
 
-        isImporting = true
-        errorMessage = nil
-        latestResult = nil
-        latestErrors = []
-        progress = nil
-
-        do {
-            let result: ImportResult
-            switch selectedSourceKind {
-            case .merchantCenter:
-                let importer = MerchantCenterImporter(databaseClient: databaseClient)
-                result = try await importer.importFile(sourceURL: url, fileName: fileName) { update in
-                    await MainActor.run { [weak self] in
-                        self?.progress = update
-                    }
-                }
-            case .salesReport:
-                let importer = SalesReportImporter(databaseClient: databaseClient)
-                result = try await importer.importFile(sourceURL: url, fileName: fileName) { update in
-                    await MainActor.run { [weak self] in
-                        self?.progress = update
-                    }
-                }
-            case .adsProduct:
-                let importer = AdsProductImporter(databaseClient: databaseClient)
-                result = try await importer.importFile(sourceURL: url, fileName: fileName) { update in
-                    await MainActor.run { [weak self] in
-                        self?.progress = update
-                    }
+        importTask = Task {
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessed {
+                    url.stopAccessingSecurityScopedResource()
                 }
             }
 
-            latestResult = result
-            latestErrors = result.errors
-
-            if selectedSourceKind == .merchantCenter {
-                onCatalogReload?(result.stagedFileURL)
+            await MainActor.run {
+                isImporting = true
+                errorMessage = nil
+                latestResult = nil
+                latestErrors = []
+                progress = nil
             }
 
-            progress = ImportProgress(
-                phase: .finalizing,
-                processedRows: result.job.totalRows,
-                totalRowsEstimate: result.job.totalRows,
-                validRows: result.job.validRows,
-                invalidRows: result.job.invalidRows,
-                warningRows: result.job.warningRows,
-                message: "正在重建周聚合…"
-            )
+            do {
+                let result = try await ImportPipelineRunner.importFile(
+                    sourceKind: sourceKind,
+                    sourceURL: url,
+                    fileName: fileName,
+                    databaseClient: databaseClient,
+                    onProgress: { update in
+                        await MainActor.run { [weak self] in
+                            self?.progress = update
+                        }
+                    }
+                )
 
-            try await databaseClient.rebuildProductWeeklyMetrics()
-            await onImportCompleted?()
+                try Task.checkCancellation()
 
-            isImporting = false
-            progress = nil
+                await MainActor.run {
+                    latestResult = result
+                    latestErrors = result.errors
+                    progress = ImportProgress(
+                        phase: .finalizing,
+                        processedRows: result.job.totalRows,
+                        totalRowsEstimate: result.job.totalRows,
+                        validRows: result.job.validRows,
+                        invalidRows: result.job.invalidRows,
+                        warningRows: result.job.warningRows,
+                        message: "正在重建周聚合…"
+                    )
+                }
 
-            await loadHistory()
-        } catch let pipelineError as ImportPipelineError {
-            errorMessage = pipelineError.localizedDescription
-            isImporting = false
-            await loadHistory()
-        } catch {
-            errorMessage = error.localizedDescription
-            isImporting = false
-            await loadHistory()
+                if sourceKind == .merchantCenter {
+                    catalogReload?(result.stagedFileURL)
+                }
+
+                try await ImportPipelineRunner.rebuildWeeklyMetrics(databaseClient: databaseClient)
+                await importCompleted?()
+
+                await MainActor.run {
+                    isImporting = false
+                    progress = nil
+                }
+                await loadHistory()
+            } catch is CancellationError {
+                await MainActor.run {
+                    isImporting = false
+                    progress = nil
+                    errorMessage = nil
+                }
+                await loadHistory()
+            } catch let pipelineError as ImportPipelineError {
+                await MainActor.run {
+                    errorMessage = pipelineError.localizedDescription
+                    isImporting = false
+                    progress = nil
+                }
+                await loadHistory()
+            } catch {
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    isImporting = false
+                    progress = nil
+                }
+                await loadHistory()
+            }
         }
     }
 }
