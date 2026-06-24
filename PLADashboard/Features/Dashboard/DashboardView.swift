@@ -5,6 +5,8 @@ struct DashboardView: View {
     @Bindable var windowState: WindowState
     var onRequestDataUpdate: () -> Void = {}
 
+    @State private var columnSortOrder = DashboardTableSort.default.columnSortOrder
+
     var body: some View {
         dashboardContent
             .navigationTitle("产品数据")
@@ -32,6 +34,16 @@ struct DashboardView: View {
             }
             .onChange(of: viewModel.selectedCategoryFilter) { _, _ in
                 viewModel.onFiltersChanged()
+            }
+            .onChange(of: columnSortOrder) { _, newOrder in
+                if DashboardTableSort.from(columnSortOrder: newOrder) != nil {
+                    viewModel.applyColumnSort(newOrder)
+                } else {
+                    columnSortOrder = viewModel.columnSortOrder
+                }
+            }
+            .onChange(of: viewModel.tableSort) { _, _ in
+                columnSortOrder = viewModel.columnSortOrder
             }
             .focusedSceneValue(\.dashboardGoToPreviousPage) {
                 guard viewModel.currentPage > 1, !viewModel.isLoading else { return }
@@ -67,8 +79,10 @@ struct DashboardView: View {
             ZStack(alignment: .top) {
                 ProductPerformanceTable(
                     rows: viewModel.rows,
-                    isSidebarVisible: windowState.isSidebarVisible
+                    isSidebarVisible: windowState.isSidebarVisible,
+                    sortOrder: $columnSortOrder
                 )
+                .disabled(viewModel.isLoading)
 
                 if viewModel.isLoading {
                     ProgressView()

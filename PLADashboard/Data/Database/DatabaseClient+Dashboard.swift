@@ -191,7 +191,7 @@ extension DatabaseClient {
         }
 
         mappedRows.sort { lhs, rhs in
-            compareRows(lhs, rhs, sort: filters.sort)
+            filters.sort.sortsBefore(lhs, rhs)
         }
 
         let totalCount = mappedRows.count
@@ -396,28 +396,5 @@ extension DatabaseClient {
     private func parseCurrency(_ value: String) -> Double {
         let cleaned = value.replacingOccurrences(of: ",", with: "")
         return Double(cleaned) ?? 0
-    }
-
-    private func compareRows(
-        _ lhs: ProductPerformanceRowModel,
-        _ rhs: ProductPerformanceRowModel,
-        sort: DashboardTableSort
-    ) -> Bool {
-        switch sort {
-        case .costDescending:
-            lhs.sortCostCents > rhs.sortCostCents
-        case .costAscending:
-            lhs.sortCostCents < rhs.sortCostCents
-        case .roiDescending:
-            lhs.sortROI > rhs.sortROI
-        case .roiAscending:
-            lhs.sortROI < rhs.sortROI
-        case .clicksDescending:
-            lhs.sortClicks > rhs.sortClicks
-        case .clicksAscending:
-            lhs.sortClicks < rhs.sortClicks
-        case .lsinAscending:
-            lhs.sortLSIN.localizedStandardCompare(rhs.sortLSIN) == .orderedAscending
-        }
     }
 }

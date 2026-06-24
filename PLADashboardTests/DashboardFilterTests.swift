@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import PLADashboard
 
@@ -99,6 +100,22 @@ final class DashboardFilterTests: XCTestCase {
             pageSize: 30
         )
         XCTAssertEqual(level2Result.totalCount, 2)
+    }
+
+    func testColumnHeaderSortMapsToDashboardTableSort() {
+        let costDescending = [KeyPathComparator(\ProductPerformanceRowModel.sortCostCents, order: .reverse)]
+        XCTAssertEqual(DashboardTableSort.from(columnSortOrder: costDescending), .costDescending)
+
+        let roiAscending = [KeyPathComparator(\ProductPerformanceRowModel.sortROI, order: .forward)]
+        XCTAssertEqual(DashboardTableSort.from(columnSortOrder: roiAscending), .roiAscending)
+
+        let unsupported = [KeyPathComparator(\ProductPerformanceRowModel.sortLSIN, order: .forward)]
+        XCTAssertNil(DashboardTableSort.from(columnSortOrder: unsupported))
+
+        XCTAssertEqual(
+            DashboardTableSort.costAscending.columnSortOrder,
+            [KeyPathComparator(\ProductPerformanceRowModel.sortCostCents, order: .forward)]
+        )
     }
 
     private func writeTemporaryFile(name: String, contents: String) throws -> URL {

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 @MainActor
 @Observable
@@ -46,11 +47,16 @@ final class DashboardViewModel {
 
     private var filteredPreviewRows: [ProductPerformanceRowModel] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return DashboardPreviewData.rows }
-        return DashboardPreviewData.rows.filter {
-            $0.lsin.localizedCaseInsensitiveContains(query)
-                || $0.warningLabel.localizedCaseInsensitiveContains(query)
+        let base: [ProductPerformanceRowModel]
+        if query.isEmpty {
+            base = DashboardPreviewData.rows
+        } else {
+            base = DashboardPreviewData.rows.filter {
+                $0.lsin.localizedCaseInsensitiveContains(query)
+                    || $0.warningLabel.localizedCaseInsensitiveContains(query)
+            }
         }
+        return base.sorted { tableSort.sortsBefore($0, $1) }
     }
 
     func configure(
@@ -109,7 +115,19 @@ final class DashboardViewModel {
         guard tableSort != sort else { return }
         tableSort = sort
         currentPage = 1
+        if dataSource == .preview {
+            return
+        }
         scheduleRefresh()
+    }
+
+    func applyColumnSort(_ order: [KeyPathComparator<ProductPerformanceRowModel>]) {
+        guard let sort = DashboardTableSort.from(columnSortOrder: order) else { return }
+        setTableSort(sort)
+    }
+
+    var columnSortOrder: [KeyPathComparator<ProductPerformanceRowModel>] {
+        tableSort.columnSortOrder
     }
 
     func scheduleRefresh() {

@@ -1,81 +1,177 @@
 import SwiftUI
 
-/// macOS 产品表现表 — 使用官方 `Table` + `TableColumnForEach` + `TableColumn.width(min:ideal:max:)`。
+/// macOS 产品表现表 — 官方 `Table` + 列头排序（消费、ROI）。
 struct ProductPerformanceTable: View {
     let rows: [ProductPerformanceRowModel]
     let isSidebarVisible: Bool
-
-    private var visibleColumns: [DashboardColumn] {
-        DashboardColumnLayout.visibleColumns(isSidebarVisible: isSidebarVisible)
-    }
+    @Binding var sortOrder: [KeyPathComparator<ProductPerformanceRowModel>]
 
     var body: some View {
-        Table(rows) {
-            TableColumnForEach(visibleColumns) { column in
-                TableColumn(column.rawValue) { row in
-                    cellContent(for: column, row: row)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel(row.accessibilitySummary)
-                }
-                .width(
-                    min: column.widthSpec.min,
-                    ideal: column.widthSpec.ideal,
-                    max: column.widthSpec.max
-                )
+        Group {
+            if isSidebarVisible {
+                expandedTable
+            } else {
+                collapsedTable
             }
         }
         .tableStyle(.inset(alternatesRowBackgrounds: true))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    @ViewBuilder
-    private func cellContent(for column: DashboardColumn, row: ProductPerformanceRowModel) -> some View {
-        switch column {
-        case .lsin:
-            Text(row.lsin)
-                .font(.body)
+    private var expandedTable: some View {
+        Table(rows, sortOrder: $sortOrder) {
+            Group {
+                lsinColumn
+                productImageColumn
+                costColumn
+                roiColumn
+                warningLabelColumn
+                costTrendColumn
+                gsTrendColumn
+                cpaColumn
+                arpuColumn
+                cpcColumn
+            }
+            Group {
+                cvrColumn
+                aosColumn
+            }
+        }
+    }
 
-        case .productImage:
+    private var collapsedTable: some View {
+        Table(rows, sortOrder: $sortOrder) {
+            Group {
+                lsinColumn
+                productImageColumn
+                costColumn
+                roiColumn
+                warningLabelColumn
+                costTrendColumn
+                gsTrendColumn
+                cpaColumn
+                arpuColumn
+                cpcColumn
+            }
+            Group {
+                cvrColumn
+                aosColumn
+                clicksColumn
+                conversionsColumn
+            }
+        }
+    }
+
+    private var lsinColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.lsin, value: \.sortLSIN) { row in
+            Text(row.lsin).font(.body)
+        }
+    }
+
+    private var productImageColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.productImage, value: \.sortLSIN) { row in
             ProductImageView(imageURL: row.imageURL)
+        }
+    }
 
-        case .cost:
+    private var costColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.cost, value: \.sortCostCents) { row in
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.cost).font(.body)
                 Text(row.costShare).font(.caption).foregroundStyle(.secondary)
             }
+        }
+    }
 
-        case .roi:
+    private var roiColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.roi, value: \.sortROI) { row in
             Text(row.roi).font(.body)
+        }
+    }
 
-        case .warningLabel:
+    private var warningLabelColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.warningLabel, value: \.sortLSIN) { row in
             WarningLabelView(text: row.warningLabel, style: row.warningStyle)
+        }
+    }
 
-        case .costTrend:
+    private var costTrendColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.costTrend, value: \.sortCostCents) { row in
             WeeklyTrendBarChart(values: row.costTrendWeeks)
+        }
+    }
 
-        case .gsTrend:
+    private var gsTrendColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.gsTrend, value: \.sortCostCents) { row in
             WeeklyTrendBarChart(values: row.gsTrendWeeks, style: .sales)
+        }
+    }
 
-        case .cpa:
-            MetricDeltaCell(value: row.cpa, delta: row.cpaDelta)
+    private var cpaColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.cpa, value: \.sortROI) { row in
+            MetricDeltaCell(value: row.cpa, delta: row.cpaDelta, polarity: .lowerIsBetter)
+        }
+    }
 
-        case .arpu:
-            MetricDeltaCell(value: row.arpu, delta: row.arpuDelta)
+    private var arpuColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.arpu, value: \.sortROI) { row in
+            MetricDeltaCell(value: row.arpu, delta: row.arpuDelta, polarity: .higherIsBetter)
+        }
+    }
 
-        case .cpc:
-            MetricDeltaCell(value: row.cpc, delta: row.cpcDelta)
+    private var cpcColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.cpc, value: \.sortROI) { row in
+            MetricDeltaCell(value: row.cpc, delta: row.cpcDelta, polarity: .lowerIsBetter)
+        }
+    }
 
-        case .cvr:
-            MetricDeltaCell(value: row.cvr, delta: row.cvrDelta)
+    private var cvrColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.cvr, value: \.sortROI) { row in
+            MetricDeltaCell(value: row.cvr, delta: row.cvrDelta, polarity: .higherIsBetter)
+        }
+    }
 
-        case .aos:
-            MetricDeltaCell(value: row.aos, delta: row.aosDelta)
+    private var aosColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.aos, value: \.sortROI) { row in
+            MetricDeltaCell(value: row.aos, delta: row.aosDelta, polarity: .higherIsBetter)
+        }
+    }
 
-        case .clicks:
+    private var clicksColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.clicks, value: \.sortClicks) { row in
             Text(row.clicks ?? "—").font(.body)
+        }
+    }
 
-        case .conversions:
+    private var conversionsColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        column(DashboardColumn.conversions, value: \.sortLSIN) { row in
             Text(row.conversions ?? "—").font(.body)
         }
+    }
+
+    private func column<Value: Comparable, Content: View>(
+        _ dashboardColumn: DashboardColumn,
+        value: KeyPath<ProductPerformanceRowModel, Value>,
+        @ViewBuilder content: @escaping (ProductPerformanceRowModel) -> Content
+    ) -> some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
+        TableColumn(dashboardColumn.rawValue, value: value) { row in
+            rowCell(row) {
+                content(row)
+            }
+        }
+        .width(
+            min: dashboardColumn.widthSpec.min,
+            ideal: dashboardColumn.widthSpec.ideal,
+            max: dashboardColumn.widthSpec.max
+        )
+    }
+
+    private func rowCell<Content: View>(
+        _ row: ProductPerformanceRowModel,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(row.accessibilitySummary)
     }
 }

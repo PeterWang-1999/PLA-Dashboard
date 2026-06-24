@@ -23,34 +23,6 @@ private extension View {
 
 // MARK: - Pull-down filters (Menu + borderedButton)
 
-struct DashboardToolbarSortPicker: View {
-    @Bindable var viewModel: DashboardViewModel
-
-    var body: some View {
-        Menu {
-            ForEach(DashboardTableSort.toolbarOptions, id: \.self) { sort in
-                Button {
-                    viewModel.setTableSort(sort)
-                } label: {
-                    if viewModel.tableSort == sort {
-                        Label(sort.menuTitle, systemImage: "checkmark")
-                    } else {
-                        Text(sort.menuTitle)
-                    }
-                }
-            }
-        } label: {
-            DashboardToolbarFilterLabel(
-                title: viewModel.tableSort.menuTitle,
-                usesPrimaryStyle: viewModel.tableSort != .default
-            )
-        }
-        .dashboardToolbarPullDownMenuChrome()
-        .accessibilityLabel("排序")
-        .accessibilityValue(viewModel.tableSort.menuTitle)
-    }
-}
-
 struct DashboardToolbarAlertFilterPicker: View {
     @Bindable var viewModel: DashboardViewModel
 

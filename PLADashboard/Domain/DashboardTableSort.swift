@@ -1,13 +1,11 @@
 import Foundation
+import SwiftUI
 
 enum DashboardTableSort: String, Sendable, Hashable, CaseIterable {
     case costDescending
     case costAscending
     case roiDescending
     case roiAscending
-    case clicksDescending
-    case clicksAscending
-    case lsinAscending
 
     static let `default` = DashboardTableSort.costDescending
 
@@ -29,34 +27,45 @@ enum DashboardTableSort: String, Sendable, Hashable, CaseIterable {
               THEN CAST(SUM(m.conversion_value_cents) AS REAL) / SUM(m.cost_cents)
               ELSE 0 END ASC, p.product_id ASC
             """
-        case .clicksDescending:
-            "SUM(m.clicks) DESC, p.product_id ASC"
-        case .clicksAscending:
-            "SUM(m.clicks) ASC, p.product_id ASC"
-        case .lsinAscending:
-            "COALESCE(p.lsin, p.product_id) ASC, p.product_id ASC"
         }
     }
 
-    var menuTitle: String {
+    var columnSortOrder: [KeyPathComparator<ProductPerformanceRowModel>] {
         switch self {
-        case .costDescending: "消费（高→低）"
-        case .costAscending: "消费（低→高）"
-        case .roiDescending: "ROI（高→低）"
-        case .roiAscending: "ROI（低→高）"
-        case .clicksDescending: "点击（高→低）"
-        case .clicksAscending: "点击（低→高）"
-        case .lsinAscending: "产品 ID（A→Z）"
+        case .costDescending:
+            [KeyPathComparator(\.sortCostCents, order: .reverse)]
+        case .costAscending:
+            [KeyPathComparator(\.sortCostCents, order: .forward)]
+        case .roiDescending:
+            [KeyPathComparator(\.sortROI, order: .reverse)]
+        case .roiAscending:
+            [KeyPathComparator(\.sortROI, order: .forward)]
         }
     }
 
-    static let toolbarOptions: [DashboardTableSort] = [
-        .costDescending,
-        .costAscending,
-        .roiDescending,
-        .roiAscending,
-        .clicksDescending,
-        .clicksAscending,
-        .lsinAscending,
-    ]
+    static func from(columnSortOrder: [KeyPathComparator<ProductPerformanceRowModel>]) -> DashboardTableSort? {
+        guard let comparator = columnSortOrder.first else { return nil }
+
+        switch comparator.keyPath {
+        case \ProductPerformanceRowModel.sortCostCents:
+            return comparator.order == .forward ? .costAscending : .costDescending
+        case \ProductPerformanceRowModel.sortROI:
+            return comparator.order == .forward ? .roiAscending : .roiDescending
+        default:
+            return nil
+        }
+    }
+
+    func sortsBefore(_ lhs: ProductPerformanceRowModel, _ rhs: ProductPerformanceRowModel) -> Bool {
+        switch self {
+        case .costDescending:
+            lhs.sortCostCents > rhs.sortCostCents
+        case .costAscending:
+            lhs.sortCostCents < rhs.sortCostCents
+        case .roiDescending:
+            lhs.sortROI > rhs.sortROI
+        case .roiAscending:
+            lhs.sortROI < rhs.sortROI
+        }
+    }
 }
