@@ -23,6 +23,8 @@ final class DashboardViewModel {
     private var databaseRows: [ProductPerformanceRowModel] = []
     private var searchTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
+    /// 每次账户切换递增，用于丢弃过期的异步加载结果。
+    private var loadGeneration: UInt = 0
 
     var rows: [ProductPerformanceRowModel] {
         switch dataSource {
@@ -68,6 +70,7 @@ final class DashboardViewModel {
     }
 
     func resetForAccountSwitch() {
+        loadGeneration &+= 1
         searchTask?.cancel()
         refreshTask?.cancel()
         searchText = ""
@@ -75,6 +78,7 @@ final class DashboardViewModel {
         selectedCustomLabelFilter = .all
         selectedCategoryFilter = .all
         currentPage = 1
+        totalPages = 1
         tableSort = .default
         databaseRows = []
         dataSource = .empty
@@ -86,7 +90,9 @@ final class DashboardViewModel {
 
     func retryAfterError() {
         refreshTask?.cancel()
+        let generation = loadGeneration
         refreshTask = Task { @MainActor in
+            guard generation == loadGeneration else { return }
             errorMessage = nil
             if dataSource == .empty, let bootstrapAction {
                 await bootstrapAction()
@@ -94,6 +100,54 @@ final class DashboardViewModel {
                 await refreshData()
             }
         }
+    }
+
+    func bootstrapDashboard() async {
+        let generation = loadGeneration
+        guard let databaseClient else { return }
+
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            try await databaseClient.migrateIfNeeded()
+            try Task.checkCancellation()
+            guard generation == loadGeneration else { return }
+
+            try await databaseClient.runScheduledRetentionPurgeIfNeeded()
+            try Task.checkCancellation()
+            guard generation == loadGeneration else { return }
+
+            var metricsCount = try await databaseClient.productWeeklyMetricsCount()
+            if metricsCount == 0, try await databaseClient.hasFactTableData() {
+                try await databaseClient.rebuildProductWeeklyMetrics()
+                metricsCount = try await databaseClient.productWeeklyMetricsCount()
+            }
+
+            try Task.checkCancellation()
+            guard generation == loadGeneration else { return }
+
+            bootstrapDataSource(hasMetrics: metricsCount > 0)
+            if metricsCount > 0 {
+                await refreshData()
+            } else {
+                guard generation == loadGeneration else { return }
+                isLoading = false
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            guard generation == loadGeneration else { return }
+            errorMessage = error.localizedDescription
+            isLoading = false
+        }
+    }
+
+    func handleImportCompleted() async {
+        let generation = loadGeneration
+        guard generation == loadGeneration else { return }
+        dataSource = .database
+        await refreshData()
     }
 
     func bootstrapDataSource(hasMetrics: Bool) {
@@ -116,9 +170,10 @@ final class DashboardViewModel {
     func onSearchTextChanged() {
         currentPage = 1
         searchTask?.cancel()
+        let generation = loadGeneration
         searchTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, generation == loadGeneration else { return }
             await refreshData()
         }
     }
@@ -149,12 +204,15 @@ final class DashboardViewModel {
 
     func scheduleRefresh() {
         refreshTask?.cancel()
+        let generation = loadGeneration
         refreshTask = Task { @MainActor in
+            guard generation == loadGeneration else { return }
             await refreshData()
         }
     }
 
     func refreshData() async {
+        let generation = loadGeneration
         guard dataSource == .database, let databaseClient else { return }
         isLoading = true
         errorMessage = nil
@@ -172,28 +230,35 @@ final class DashboardViewModel {
                 page: currentPage,
                 pageSize: pageSize
             )
+            guard generation == loadGeneration else { return }
             databaseRows = result.rows
             totalPages = result.totalPages
             if currentPage > totalPages {
                 currentPage = totalPages
             }
         } catch {
+            guard generation == loadGeneration else { return }
             errorMessage = error.localizedDescription
             databaseRows = []
+            totalPages = 1
         }
 
+        guard generation == loadGeneration else { return }
         isLoading = false
     }
 
     func rebuildMetricsAndRefresh() async {
+        let generation = loadGeneration
         guard let databaseClient else { return }
         isLoading = true
         errorMessage = nil
         do {
             try await databaseClient.rebuildProductWeeklyMetrics()
+            guard generation == loadGeneration else { return }
             dataSource = .database
             await refreshData()
         } catch {
+            guard generation == loadGeneration else { return }
             errorMessage = error.localizedDescription
             isLoading = false
         }
@@ -261,9 +326,12 @@ final class DashboardViewModel {
     }
 
     func handleSettingsDidChange() {
-        guard let databaseClient else { return }
-        Task {
+        guard databaseClient != nil else { return }
+        let generation = loadGeneration
+        Task { @MainActor in
+            guard generation == loadGeneration, let databaseClient else { return }
             await databaseClient.invalidateDashboardCache()
+            guard generation == loadGeneration else { return }
             if dataSource == .database {
                 await refreshData()
             }

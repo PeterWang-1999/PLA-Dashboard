@@ -12,6 +12,8 @@ struct RootView: View {
     @State private var showImportBlockingAlert = false
 
     var body: some View {
+        let workspaceRevision = accountStore.workspaceRevision
+
         NavigationSplitView(columnVisibility: $windowState.columnVisibility) {
             sidebar
         } detail: {
@@ -47,18 +49,8 @@ struct RootView: View {
             windowState.isSidebarVisible = visibility != .detailOnly
             sidebarVisibleStorage = windowState.isSidebarVisible
         }
-        .task(id: accountStore.activeAccountID) {
-            guard let databaseClient = accountStore.activeDatabaseClient else { return }
-            dashboardViewModel.resetForAccountSwitch()
-            importViewModel.resetForAccountSwitch()
-            configureViewModels(databaseClient: databaseClient)
-            await bootstrapDashboardIfNeeded(databaseClient: databaseClient)
-            await importViewModel.loadHistory()
-            if let capabilities = accountStore.activeCapabilities,
-               let selected = selectedNavigationItem,
-               !capabilities.sidebarNavigationItems.contains(selected) {
-                selectedNavigationItem = .dashboard
-            }
+        .task(id: workspaceRevision) {
+            await reloadWorkspaceContent()
         }
         .onReceive(NotificationCenter.default.publisher(for: .dashboardSettingsDidChange)) { _ in
             dashboardViewModel.handleSettingsDidChange()
@@ -134,12 +126,31 @@ struct RootView: View {
         }
     }
 
+    private func reloadWorkspaceContent() async {
+        guard let activeAccountID = accountStore.activeAccountID,
+              let databaseClient = accountStore.activeDatabaseClient,
+              databaseClient.accountID == activeAccountID else {
+            return
+        }
+
+        dashboardViewModel.resetForAccountSwitch()
+        importViewModel.resetForAccountSwitch()
+        configureViewModels(databaseClient: databaseClient)
+        await dashboardViewModel.bootstrapDashboard()
+        await importViewModel.loadHistory()
+        if let capabilities = accountStore.activeCapabilities,
+           let selected = selectedNavigationItem,
+           !capabilities.sidebarNavigationItems.contains(selected) {
+            selectedNavigationItem = .dashboard
+        }
+    }
+
     private func configureViewModels(databaseClient: DatabaseClient) {
         let capabilities = accountStore.activeCapabilities
             ?? WorkspaceCapabilities.forKind(.thirdParty)
 
         dashboardViewModel.configure(databaseClient: databaseClient) {
-            await bootstrapDashboardIfNeeded(databaseClient: databaseClient)
+            await dashboardViewModel.bootstrapDashboard()
         }
         importViewModel.configure(
             databaseClient: databaseClient,
@@ -148,32 +159,8 @@ struct RootView: View {
                 try? dashboardViewModel.reloadFilterCatalogs(from: url)
             },
             onImportCompleted: {
-                dashboardViewModel.dataSource = .database
-                await dashboardViewModel.refreshData()
+                await dashboardViewModel.handleImportCompleted()
             }
         )
-    }
-
-    private func bootstrapDashboardIfNeeded(databaseClient: DatabaseClient) async {
-        dashboardViewModel.isLoading = true
-        dashboardViewModel.errorMessage = nil
-        do {
-            try await databaseClient.migrateIfNeeded()
-            try await databaseClient.runScheduledRetentionPurgeIfNeeded()
-            var metricsCount = try await databaseClient.productWeeklyMetricsCount()
-            if metricsCount == 0, try await databaseClient.hasFactTableData() {
-                try await databaseClient.rebuildProductWeeklyMetrics()
-                metricsCount = try await databaseClient.productWeeklyMetricsCount()
-            }
-            dashboardViewModel.bootstrapDataSource(hasMetrics: metricsCount > 0)
-            if metricsCount > 0 {
-                await dashboardViewModel.refreshData()
-            } else {
-                dashboardViewModel.isLoading = false
-            }
-        } catch {
-            dashboardViewModel.errorMessage = error.localizedDescription
-            dashboardViewModel.isLoading = false
-        }
     }
 }

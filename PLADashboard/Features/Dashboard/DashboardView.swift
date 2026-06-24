@@ -149,7 +149,9 @@ struct DashboardView: View {
             .controlSize(.large)
             .help("导出当前筛选结果或刷新聚合")
 
-            paginationControls
+            if !viewModel.showsEmptyState {
+                paginationControls
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

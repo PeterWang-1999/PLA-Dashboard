@@ -13,6 +13,8 @@ final class AccountStore {
     private(set) var phase: Phase = .loading
     private(set) var manifest: WorkspaceAccountsManifest?
     private(set) var activeDatabaseClient: DatabaseClient?
+    /// 账户工作区就绪令牌；仅在 manifest 与 database client 同步后递增，供 SwiftUI `.task(id:)` 触发加载。
+    private(set) var workspaceRevision: UInt = 0
 
     var accounts: [WorkspaceAccount] {
         manifest?.accounts ?? []
@@ -39,6 +41,7 @@ final class AccountStore {
             try await client.migrateIfNeeded()
             manifest = loadedManifest
             activeDatabaseClient = client
+            workspaceRevision &+= 1
             phase = .ready
         } catch {
             manifest = nil
@@ -56,11 +59,12 @@ final class AccountStore {
         }
         guard activeAccountID != accountID else { return }
 
-        let updatedManifest = try WorkspaceAccountPersistence.updateActiveAccountID(accountID)
-        manifest = updatedManifest
         let client = try DatabaseClient.make(accountID: accountID)
         try await client.migrateIfNeeded()
+        let updatedManifest = try WorkspaceAccountPersistence.updateActiveAccountID(accountID)
+        manifest = updatedManifest
         activeDatabaseClient = client
+        workspaceRevision &+= 1
     }
 
     func createAccount(

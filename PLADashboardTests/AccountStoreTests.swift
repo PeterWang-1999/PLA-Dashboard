@@ -44,12 +44,15 @@ Sample Dress\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/dres
 
         let accountB = try WorkspaceAccountPersistence.createAccount(name: "账户 B", kind: .thirdParty)
         let clientBeforeID = store.activeDatabaseClient?.accountID
+        let revisionBefore = store.workspaceRevision
 
         try await store.switchAccount(to: accountB.id)
 
         XCTAssertEqual(store.activeAccountID, accountB.id)
         XCTAssertEqual(store.activeDatabaseClient?.accountID, accountB.id)
+        XCTAssertEqual(store.activeDatabaseClient?.accountID, store.activeAccountID)
         XCTAssertNotEqual(clientBeforeID, accountB.id)
+        XCTAssertGreaterThan(store.workspaceRevision, revisionBefore)
     }
 
     func testSwitchAccountPersistsActiveID() async throws {
@@ -73,10 +76,12 @@ Sample Dress\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/dres
 
         let activeID = try XCTUnwrap(store.activeAccountID)
         let clientBeforeID = store.activeDatabaseClient?.accountID
+        let revisionBefore = store.workspaceRevision
 
         try await store.switchAccount(to: activeID)
 
         XCTAssertEqual(store.activeDatabaseClient?.accountID, clientBeforeID)
+        XCTAssertEqual(store.workspaceRevision, revisionBefore)
     }
 
     func testSwitchAccountRejectsImportInProgress() async throws {
