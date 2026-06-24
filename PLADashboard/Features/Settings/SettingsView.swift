@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(AccountStore.self) private var accountStore
+
     @AppStorage(AppSettings.defaultPageSizeKey) private var defaultPageSize = 30
     @AppStorage(AppSettings.highEfficiencyROIMultiplierKey) private var highEfficiencyROIMultiplier = AnalyticsConfiguration.highEfficiencyROIMultiplier
     @AppStorage(AppSettings.lowEfficiencyMinClicksKey) private var lowEfficiencyMinClicks = AnalyticsConfiguration.lowEfficiencyMinClicks
@@ -108,11 +110,14 @@ struct SettingsView: View {
     @MainActor
     private func preparePurgeConfirmation() async {
         guard dataRetentionDays > 0 else { return }
+        guard let client = accountStore.activeDatabaseClient else {
+            purgeResultMessage = "数据库未就绪"
+            showPurgeResult = true
+            return
+        }
         isPurging = true
         defer { isPurging = false }
         do {
-            let client = try DatabaseClient.make()
-            try await client.migrateIfNeeded()
             pendingPurgeCount = try await client.countExpiredAdsDailyRows(retentionDays: dataRetentionDays)
             if pendingPurgeCount == 0 {
                 purgeResultMessage = "没有需要清理的过期数据。"
@@ -128,11 +133,14 @@ struct SettingsView: View {
 
     @MainActor
     private func performPurge() async {
+        guard let client = accountStore.activeDatabaseClient else {
+            purgeResultMessage = "数据库未就绪"
+            showPurgeResult = true
+            return
+        }
         isPurging = true
         defer { isPurging = false }
         do {
-            let client = try DatabaseClient.make()
-            try await client.migrateIfNeeded()
             let deleted = try await client.purgeExpiredAdsDaily(retentionDays: dataRetentionDays)
             if let latestDay = try await client.fetchLatestMetricDay() {
                 AppSettings.lastRetentionPurgeDay = latestDay

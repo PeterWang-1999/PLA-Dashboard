@@ -5,6 +5,8 @@ enum WorkspaceAccountError: Error, LocalizedError {
     case unsupportedManifestVersion(Int)
     case migrationFailed(String)
     case incompleteMigration(String)
+    case accountNotFound(String)
+    case importInProgress
 
     var errorDescription: String? {
         switch self {
@@ -16,6 +18,10 @@ enum WorkspaceAccountError: Error, LocalizedError {
             "数据库迁移失败：\(message)"
         case .incompleteMigration(let message):
             "数据库迁移未完成：\(message)"
+        case .accountNotFound(let id):
+            "账户不存在：\(id)"
+        case .importInProgress:
+            "导入进行中，无法切换账户"
         }
     }
 }

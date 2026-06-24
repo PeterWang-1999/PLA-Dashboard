@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct RootView: View {
+    @Environment(AccountStore.self) private var accountStore
     @Environment(\.databaseClient) private var databaseClient
     @SceneStorage("dashboard.sidebarVisible") private var sidebarVisibleStorage = true
 
@@ -9,7 +10,6 @@ struct RootView: View {
     @State private var dashboardViewModel = DashboardViewModel()
     @State private var importViewModel = ImportViewModel()
     @State private var selectedNavigationItem: AppNavigationItem? = .dashboard
-    @State private var didBootstrap = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $windowState.columnVisibility) {
@@ -47,11 +47,13 @@ struct RootView: View {
             windowState.isSidebarVisible = visibility != .detailOnly
             sidebarVisibleStorage = windowState.isSidebarVisible
         }
-        .task(id: databaseClient != nil) {
-            guard databaseClient != nil, !didBootstrap else { return }
-            configureViewModelsIfNeeded()
-            await bootstrapDashboardIfNeeded()
-            didBootstrap = true
+        .task(id: accountStore.activeAccountID) {
+            guard let databaseClient = accountStore.activeDatabaseClient else { return }
+            dashboardViewModel.resetForAccountSwitch()
+            importViewModel.resetForAccountSwitch()
+            configureViewModels(databaseClient: databaseClient)
+            await bootstrapDashboardIfNeeded(databaseClient: databaseClient)
+            await importViewModel.loadHistory()
         }
         .onReceive(NotificationCenter.default.publisher(for: .dashboardSettingsDidChange)) { _ in
             dashboardViewModel.handleSettingsDidChange()
@@ -107,10 +109,9 @@ struct RootView: View {
         }
     }
 
-    private func configureViewModelsIfNeeded() {
-        guard let databaseClient else { return }
+    private func configureViewModels(databaseClient: DatabaseClient) {
         dashboardViewModel.configure(databaseClient: databaseClient) {
-            await bootstrapDashboardIfNeeded()
+            await bootstrapDashboardIfNeeded(databaseClient: databaseClient)
         }
         importViewModel.configure(databaseClient: databaseClient) { url in
             try? dashboardViewModel.reloadFilterCatalogs(from: url)
@@ -120,8 +121,7 @@ struct RootView: View {
         }
     }
 
-    private func bootstrapDashboardIfNeeded() async {
-        guard let databaseClient else { return }
+    private func bootstrapDashboardIfNeeded(databaseClient: DatabaseClient) async {
         dashboardViewModel.isLoading = true
         dashboardViewModel.errorMessage = nil
         do {

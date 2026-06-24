@@ -2,20 +2,21 @@ import SwiftUI
 
 @main
 struct PLADashboardApp: App {
-    @State private var launchState = AppLaunchState.loading
+    @State private var accountStore = AccountStore()
 
     var body: some Scene {
         WindowGroup {
             Group {
-                switch launchState {
+                switch accountStore.phase {
                 case .loading:
                     ProgressView("正在初始化数据库…")
                         .task {
-                            await initializeDatabase()
+                            await accountStore.bootstrap()
                         }
-                case .ready(let client):
+                case .ready:
                     RootView()
-                        .environment(\.databaseClient, client)
+                        .environment(accountStore)
+                        .environment(\.databaseClient, accountStore.activeDatabaseClient)
                 case .failed(let message):
                     ContentUnavailableView {
                         Label("无法打开数据库", systemImage: "externaldrive.badge.exclamationmark")
@@ -23,9 +24,8 @@ struct PLADashboardApp: App {
                         Text(message)
                     } actions: {
                         Button("重试") {
-                            launchState = .loading
                             Task {
-                                await initializeDatabase()
+                                await accountStore.bootstrap()
                             }
                         }
                         .buttonStyle(.borderedProminent)
@@ -38,39 +38,10 @@ struct PLADashboardApp: App {
         }
         Settings {
             SettingsView()
+                .environment(accountStore)
+                .environment(\.databaseClient, accountStore.activeDatabaseClient)
         }
         .defaultSize(width: 1033, height: 620)
         .windowResizability(.contentMinSize)
-    }
-
-    @MainActor
-    private func initializeDatabase() async {
-        do {
-            let manifest = try WorkspaceAccountPersistence.loadOrCreateManifest()
-            let client = try DatabaseClient.make(accountID: manifest.activeAccountID)
-            try await client.migrateIfNeeded()
-            launchState = .ready(client)
-        } catch {
-            launchState = .failed(error.localizedDescription)
-        }
-    }
-}
-
-private enum AppLaunchState: Equatable {
-    case loading
-    case ready(DatabaseClient)
-    case failed(String)
-
-    static func == (lhs: AppLaunchState, rhs: AppLaunchState) -> Bool {
-        switch (lhs, rhs) {
-        case (.loading, .loading):
-            true
-        case (.ready(let l), .ready(let r)):
-            l === r
-        case (.failed(let l), .failed(let r)):
-            l == r
-        default:
-            false
-        }
     }
 }

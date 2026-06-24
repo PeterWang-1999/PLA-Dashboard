@@ -31,6 +31,15 @@ final class ImportViewModel {
         }
     }
 
+    func resetForAccountSwitch() {
+        latestResult = nil
+        latestErrors = []
+        importJobs = []
+        errorMessage = nil
+        progress = nil
+        selectedSourceKind = .merchantCenter
+    }
+
     func presentImportPicker() {
         showFileImporter = true
     }

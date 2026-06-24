@@ -75,6 +75,21 @@ enum WorkspaceAccountPersistence {
         return account
     }
 
+    static func updateActiveAccountID(
+        _ id: String,
+        fileManager: FileManager = .default
+    ) throws -> WorkspaceAccountsManifest {
+        guard var manifest = try load(fileManager: fileManager) else {
+            throw WorkspaceAccountError.invalidManifest("尚未初始化账户配置")
+        }
+        guard manifest.accounts.contains(where: { $0.id == id }) else {
+            throw WorkspaceAccountError.accountNotFound(id)
+        }
+        manifest.activeAccountID = id
+        try save(manifest, fileManager: fileManager)
+        return manifest
+    }
+
     private static func detectIncompleteMigration(fileManager: FileManager) throws {
         let manifestExists = try fileManager.fileExists(atPath: WorkspacePaths.manifestURL().path)
         let accountsRoot = try WorkspacePaths.accountsRoot()

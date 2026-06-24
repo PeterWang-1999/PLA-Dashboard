@@ -67,6 +67,23 @@ final class DashboardViewModel {
         self.bootstrapAction = bootstrap
     }
 
+    func resetForAccountSwitch() {
+        searchTask?.cancel()
+        refreshTask?.cancel()
+        searchText = ""
+        selectedAlertFilter = Self.alertFilterDefaultOption
+        selectedCustomLabelFilter = .all
+        selectedCategoryFilter = .all
+        currentPage = 1
+        tableSort = .default
+        databaseRows = []
+        dataSource = .empty
+        errorMessage = nil
+        isLoading = false
+        isExporting = false
+        exportErrorMessage = nil
+    }
+
     func retryAfterError() {
         refreshTask?.cancel()
         refreshTask = Task { @MainActor in
