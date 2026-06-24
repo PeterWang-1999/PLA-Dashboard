@@ -28,9 +28,6 @@ struct ImportsView: View {
                 Text(errorMessage)
             }
         }
-        .task {
-            await viewModel.loadHistory()
-        }
     }
 
     private var importErrorAlertPresented: Binding<Bool> {

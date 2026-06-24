@@ -3,7 +3,6 @@ import UniformTypeIdentifiers
 
 struct RootView: View {
     @Environment(AccountStore.self) private var accountStore
-    @Environment(\.databaseClient) private var databaseClient
     @SceneStorage("dashboard.sidebarVisible") private var sidebarVisibleStorage = true
 
     @State private var windowState = WindowState()
