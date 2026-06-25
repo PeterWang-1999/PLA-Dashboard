@@ -70,6 +70,10 @@ Invalid Row\t\thttps://example.com/missing\thttps://example.com/missing.jpg\t\t\
         let products = try await databaseClient.fetchProducts(ids: productIds)
         let dress = try XCTUnwrap(products.first { $0.productId == "10416614474003" })
         XCTAssertEqual(dress.googleProductCategory, "Apparel & Accessories > Clothing > Dresses")
+
+        let snapshot = try await databaseClient.buildFilterCatalogSnapshot()
+        XCTAssertTrue(snapshot.categoryCatalog.groups.contains { $0.level2 == "Clothing" })
+        XCTAssertTrue(snapshot.customLabelCatalog.groups.contains { $0.columnName == "自定义标签 0" })
     }
 
     private func writeTemporaryTSV(_ contents: String) throws -> URL {

@@ -27,6 +27,17 @@ struct CustomLabelCatalog: Hashable, Codable {
         return catalog
     }
 
+    /// 从 `products` 表中的自定义标签列构建筛选项。
+    static func build(valuesByColumn: [String: [String]]) -> CustomLabelCatalog {
+        let groups = columnNames.map { columnName in
+            Group(
+                columnName: columnName,
+                values: valuesByColumn[columnName, default: []].sorted()
+            )
+        }
+        return CustomLabelCatalog(groups: groups)
+    }
+
     static func parse(from tsvURL: URL) throws -> CustomLabelCatalog {
         let content = try String(contentsOf: tsvURL, encoding: .utf8)
         return try parse(tsvContent: content)

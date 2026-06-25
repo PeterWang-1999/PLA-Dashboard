@@ -26,6 +26,7 @@ final class ImportViewModelAccountResetTests: XCTestCase {
         viewModel.resetForAccountSwitch()
 
         XCTAssertFalse(viewModel.isImporting)
+        XCTAssertFalse(viewModel.isLoadingImportErrors)
         XCTAssertFalse(viewModel.showFileImporter)
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertTrue(viewModel.importJobs.isEmpty)

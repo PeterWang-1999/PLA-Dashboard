@@ -156,8 +156,8 @@ struct RootView: View {
             databaseClient: databaseClient,
             capabilities: capabilities,
             accountKind: accountStore.activeAccount?.kind ?? .thirdParty,
-            onCatalogReload: { url in
-                try? dashboardViewModel.reloadFilterCatalogs(from: url)
+            onReloadFilterCatalogs: {
+                await dashboardViewModel.reloadFilterCatalogsFromDatabase()
             },
             onImportCompleted: {
                 await dashboardViewModel.handleImportCompleted()

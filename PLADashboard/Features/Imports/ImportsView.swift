@@ -8,7 +8,11 @@ struct ImportsView: View {
             headerSection
 
             if let result = viewModel.latestResult {
-                ImportResultView(job: result.job, errors: viewModel.latestErrors)
+                ImportResultView(
+                    job: result.job,
+                    errors: viewModel.latestErrors,
+                    isLoadingErrors: viewModel.isLoadingImportErrors
+                )
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {
                 Spacer(minLength: 0)

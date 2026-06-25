@@ -291,6 +291,66 @@ extension DatabaseClient {
         }
     }
 
+    // MARK: - Filter catalogs
+
+    struct FilterCatalogSnapshot: Sendable {
+        let categoryCatalog: GoogleProductCategoryCatalog
+        let customLabelCatalog: CustomLabelCatalog
+    }
+
+    func buildFilterCatalogSnapshot() throws -> FilterCatalogSnapshot {
+        let categoryPaths = try fetchDistinctGoogleProductCategories()
+        let customLabelValues = try fetchDistinctCustomLabelValues()
+        return FilterCatalogSnapshot(
+            categoryCatalog: GoogleProductCategoryCatalog.build(fromCategoryPaths: categoryPaths),
+            customLabelCatalog: CustomLabelCatalog.build(valuesByColumn: customLabelValues)
+        )
+    }
+
+    private func fetchDistinctGoogleProductCategories() throws -> [String] {
+        try dbQueue.read { db in
+            try String.fetchAll(
+                db,
+                sql: """
+                SELECT DISTINCT google_product_category
+                FROM products
+                WHERE google_product_category IS NOT NULL
+                  AND TRIM(google_product_category) != '';
+                """
+            )
+        }
+    }
+
+    private func fetchDistinctCustomLabelValues() throws -> [String: [String]] {
+        let columnNames = CustomLabelCatalog.columnNames
+        let sqlColumns = [
+            "custom_label_0",
+            "custom_label_1",
+            "custom_label_2",
+            "custom_label_3",
+            "custom_label_4",
+        ]
+
+        return try dbQueue.read { db in
+            var valuesByColumn: [String: [String]] = [:]
+            valuesByColumn.reserveCapacity(columnNames.count)
+
+            for (columnName, sqlColumn) in zip(columnNames, sqlColumns) {
+                let values = try String.fetchAll(
+                    db,
+                    sql: """
+                    SELECT DISTINCT \(sqlColumn)
+                    FROM products
+                    WHERE \(sqlColumn) IS NOT NULL
+                      AND TRIM(\(sqlColumn)) != '';
+                    """
+                )
+                valuesByColumn[columnName] = values
+            }
+            return valuesByColumn
+        }
+    }
+
     // MARK: - FTS
 
     func replaceProductSearchEntries(_ products: [ProductRecord]) throws {

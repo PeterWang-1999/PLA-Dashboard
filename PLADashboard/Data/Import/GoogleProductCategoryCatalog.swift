@@ -25,6 +25,35 @@ struct GoogleProductCategoryCatalog: Hashable, Codable {
         return catalog
     }
 
+    /// 从 `products` 表中的类目路径构建筛选项（避免重复解析大型 TSV）。
+    static func build(fromCategoryPaths paths: [String]) -> GoogleProductCategoryCatalog {
+        var tree: [String: Set<String>] = [:]
+        for raw in paths {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, !trimmed.allSatisfy({ $0.isNumber }), trimmed.contains(">") else {
+                continue
+            }
+
+            let parts = trimmed
+                .split(separator: ">", omittingEmptySubsequences: true)
+                .map { $0.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            guard parts.count >= 2 else { continue }
+
+            let level2 = parts[1]
+            if parts.count >= 3 {
+                tree[level2, default: []].insert(parts[2])
+            } else {
+                _ = tree[level2, default: []]
+            }
+        }
+
+        let groups = tree.keys.sorted().map { level2 in
+            Group(level2: level2, level3: Array(tree[level2, default: []]).sorted())
+        }
+        return GoogleProductCategoryCatalog(groups: groups)
+    }
+
     /// 解析用户上传的 Merchant Center TSV。`google 商品类别` 使用 `>` 分隔层级。
     static func parse(from tsvURL: URL) throws -> GoogleProductCategoryCatalog {
         let content = try String(contentsOf: tsvURL, encoding: .utf8)
@@ -43,31 +72,16 @@ struct GoogleProductCategoryCatalog: Hashable, Codable {
             throw GoogleProductCategoryCatalogError.missingCategoryColumn
         }
 
-        var tree: [String: Set<String>] = [:]
+        var paths: [String] = []
+        paths.reserveCapacity(lines.count)
         for line in lines {
             let fields = parseTSVFields(String(line))
             guard columnIndex < fields.count else { continue }
             let raw = fields[columnIndex].trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            guard !raw.isEmpty, !raw.allSatisfy({ $0.isNumber }), raw.contains(">") else { continue }
-
-            let parts = raw
-                .split(separator: ">", omittingEmptySubsequences: true)
-                .map { $0.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            guard parts.count >= 2 else { continue }
-
-            let level2 = parts[1]
-            if parts.count >= 3 {
-                tree[level2, default: []].insert(parts[2])
-            } else {
-                _ = tree[level2, default: []]
-            }
+            guard !raw.isEmpty else { continue }
+            paths.append(raw)
         }
-
-        let groups = tree.keys.sorted().map { level2 in
-            Group(level2: level2, level3: Array(tree[level2, default: []]).sorted())
-        }
-        return GoogleProductCategoryCatalog(groups: groups)
+        return build(fromCategoryPaths: paths)
     }
 
     private static func parseTSVFields(_ line: String) -> [String] {

@@ -228,16 +228,6 @@ actor SalesReportImporter {
             job.status = ImportJobStatus.succeeded.rawValue
             try await databaseClient.updateImportJob(job)
 
-            await onProgress(ImportProgress(
-                phase: .completed,
-                processedRows: processedRows,
-                totalRowsEstimate: processedRows,
-                validRows: validRows,
-                invalidRows: invalidRows,
-                warningRows: warningRows,
-                message: "导入完成"
-            ))
-
             let errors = try await databaseClient.fetchImportErrors(importId: importId)
             return ImportResult(importId: importId, stagedFileURL: staging.stagedFileURL, job: job, errors: errors)
         } catch is CancellationError {

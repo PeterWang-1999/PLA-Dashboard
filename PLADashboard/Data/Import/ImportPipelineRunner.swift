@@ -40,8 +40,54 @@ enum ImportPipelineRunner: Sendable {
         }
     }
 
-    nonisolated static func rebuildWeeklyMetrics(databaseClient: DatabaseClient) async throws {
+    nonisolated static func finishImport(
+        sourceKind: ImportSourceKind,
+        result: ImportResult,
+        databaseClient: DatabaseClient,
+        onProgress: @Sendable @escaping (ImportProgress) async -> Void,
+        reloadFilterCatalogs: @Sendable @escaping () async -> Void,
+        refreshDashboard: @Sendable @escaping () async -> Void
+    ) async throws {
         try Task.checkCancellation()
-        try await databaseClient.rebuildProductWeeklyMetrics()
+        let job = result.job
+
+        if sourceKind == .merchantCenter {
+            await onProgress(ImportProgress.fromJob(
+                phase: .rebuildingCatalogs,
+                job: job,
+                message: "正在更新筛选目录…"
+            ))
+            await reloadFilterCatalogs()
+        }
+
+        try Task.checkCancellation()
+
+        var shouldRebuildMetrics = sourceKind == .adsProduct
+        if !shouldRebuildMetrics {
+            shouldRebuildMetrics = try await databaseClient.hasFactTableData()
+        }
+        if shouldRebuildMetrics {
+            await onProgress(ImportProgress.fromJob(
+                phase: .rebuildingMetrics,
+                job: job,
+                message: "正在重建周聚合…"
+            ))
+            try await databaseClient.rebuildProductWeeklyMetrics()
+        }
+
+        try Task.checkCancellation()
+
+        await onProgress(ImportProgress.fromJob(
+            phase: .refreshingDashboard,
+            job: job,
+            message: "正在刷新看板…"
+        ))
+        await refreshDashboard()
+
+        await onProgress(ImportProgress.fromJob(
+            phase: .completed,
+            job: job,
+            message: "导入完成"
+        ))
     }
 }

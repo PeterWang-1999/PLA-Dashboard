@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct ImportResultView: View {
     let job: ImportJobRecord
     let errors: [ImportRowErrorRecord]
+    var isLoadingErrors: Bool = false
 
     @State private var isExportingErrors = false
     @State private var exportDocument = ImportErrorsCSVDocument(errors: [])
@@ -11,7 +12,7 @@ struct ImportResultView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 16) {
-                if !errors.isEmpty {
+                if job.invalidRows > 0 || job.warningRows > 0 || !errors.isEmpty {
                     Text("错误与警告（最多显示 200 条）")
                         .font(.headline)
                 }
@@ -38,7 +39,17 @@ struct ImportResultView: View {
                 }
             }
 
-            if !errors.isEmpty {
+            if isLoadingErrors {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("正在加载错误与警告…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("正在加载错误与警告")
+            } else if !errors.isEmpty {
                 HStack {
                     Spacer()
                     Button("导出错误与警告…") {

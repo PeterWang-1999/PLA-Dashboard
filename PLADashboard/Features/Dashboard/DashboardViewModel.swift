@@ -286,9 +286,19 @@ final class DashboardViewModel {
         selectedCategoryFilter.isFiltered
     }
 
-    func reloadFilterCatalogs(from tsvURL: URL) throws {
-        categoryCatalog = try GoogleProductCategoryCatalog.parse(from: tsvURL)
-        customLabelCatalog = try CustomLabelCatalog.parse(from: tsvURL)
+    func reloadFilterCatalogsFromDatabase() async {
+        guard let databaseClient else { return }
+        do {
+            let snapshot = try await databaseClient.buildFilterCatalogSnapshot()
+            applyFilterCatalogSnapshot(snapshot)
+        } catch {
+            // 筛选目录失败不阻断导入；保留现有 catalog。
+        }
+    }
+
+    func applyFilterCatalogSnapshot(_ snapshot: DatabaseClient.FilterCatalogSnapshot) {
+        categoryCatalog = snapshot.categoryCatalog
+        customLabelCatalog = snapshot.customLabelCatalog
         selectedCategoryFilter = .all
         selectedCustomLabelFilter = .all
     }

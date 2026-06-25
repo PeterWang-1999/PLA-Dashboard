@@ -10,6 +10,7 @@ final class ImportViewModel {
     var progress: ImportProgress?
     var latestResult: ImportResult?
     var latestErrors: [ImportRowErrorRecord] = []
+    var isLoadingImportErrors = false
     var errorMessage: String?
     var isImporting = false
 
@@ -19,19 +20,19 @@ final class ImportViewModel {
     private var databaseClient: DatabaseClient?
     private var accountKind: WorkspaceAccountKind = .thirdParty
     private var importTask: Task<Void, Never>?
-    private var onCatalogReload: ((URL) -> Void)?
-    private var onImportCompleted: (() async -> Void)?
+    private var onReloadFilterCatalogs: (@Sendable () async -> Void)?
+    private var onImportCompleted: (@Sendable () async -> Void)?
 
     func configure(
         databaseClient: DatabaseClient,
         capabilities: WorkspaceCapabilities,
         accountKind: WorkspaceAccountKind,
-        onCatalogReload: @escaping (URL) -> Void,
-        onImportCompleted: @escaping () async -> Void
+        onReloadFilterCatalogs: @escaping @Sendable () async -> Void,
+        onImportCompleted: @escaping @Sendable () async -> Void
     ) {
         self.databaseClient = databaseClient
         self.accountKind = accountKind
-        self.onCatalogReload = onCatalogReload
+        self.onReloadFilterCatalogs = onReloadFilterCatalogs
         self.onImportCompleted = onImportCompleted
         applyCapabilities(capabilities)
     }
@@ -48,6 +49,7 @@ final class ImportViewModel {
         importTask = nil
         latestResult = nil
         latestErrors = []
+        isLoadingImportErrors = false
         importJobs = []
         errorMessage = nil
         progress = nil
@@ -113,10 +115,10 @@ final class ImportViewModel {
         importTask?.cancel()
         let sourceKind = selectedSourceKind
         let accountKind = accountKind
-        let catalogReload = onCatalogReload
+        let reloadFilterCatalogs = onReloadFilterCatalogs
         let importCompleted = onImportCompleted
 
-        importTask = Task {
+        importTask = Task.detached(priority: .userInitiated) { [weak self] in
             let accessed = url.startAccessingSecurityScopedResource()
             defer {
                 if accessed {
@@ -125,10 +127,13 @@ final class ImportViewModel {
             }
 
             await MainActor.run {
-                isImporting = true
-                errorMessage = nil
-                latestErrors = []
-                progress = nil
+                guard let self else { return }
+                self.isImporting = true
+                self.errorMessage = nil
+                self.latestResult = nil
+                self.latestErrors = []
+                self.isLoadingImportErrors = false
+                self.progress = nil
             }
 
             do {
@@ -147,53 +152,77 @@ final class ImportViewModel {
 
                 try Task.checkCancellation()
 
-                await MainActor.run {
-                    latestResult = result
-                    latestErrors = result.errors
-                    progress = ImportProgress(
-                        phase: .finalizing,
-                        processedRows: result.job.totalRows,
-                        totalRowsEstimate: result.job.totalRows,
-                        validRows: result.job.validRows,
-                        invalidRows: result.job.invalidRows,
-                        warningRows: result.job.warningRows,
-                        message: "正在重建周聚合…"
+                let shouldLoadErrors = result.job.invalidRows > 0 || result.job.warningRows > 0
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.latestResult = ImportResult(
+                        importId: result.importId,
+                        stagedFileURL: result.stagedFileURL,
+                        job: result.job,
+                        errors: []
                     )
+                    self.latestErrors = []
+                    self.isLoadingImportErrors = shouldLoadErrors
                 }
 
-                if sourceKind == .merchantCenter {
-                    catalogReload?(result.stagedFileURL)
-                }
+                try await ImportPipelineRunner.finishImport(
+                    sourceKind: sourceKind,
+                    result: result,
+                    databaseClient: databaseClient,
+                    onProgress: { update in
+                        await MainActor.run { [weak self] in
+                            self?.progress = update
+                        }
+                    },
+                    reloadFilterCatalogs: {
+                        if let reloadFilterCatalogs {
+                            await reloadFilterCatalogs()
+                        }
+                    },
+                    refreshDashboard: {
+                        if let importCompleted {
+                            await importCompleted()
+                        }
+                    }
+                )
 
-                try await ImportPipelineRunner.rebuildWeeklyMetrics(databaseClient: databaseClient)
-                await importCompleted?()
+                try Task.checkCancellation()
 
-                await MainActor.run {
-                    isImporting = false
-                    progress = nil
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.latestErrors = result.errors
+                    self.isLoadingImportErrors = false
+                    self.isImporting = false
+                    self.progress = nil
                 }
-                await loadHistory()
+                await self?.loadHistory()
             } catch is CancellationError {
-                await MainActor.run {
-                    isImporting = false
-                    progress = nil
-                    errorMessage = nil
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.isImporting = false
+                    self.isLoadingImportErrors = false
+                    self.progress = nil
+                    self.errorMessage = nil
                 }
-                await loadHistory()
+                await self?.loadHistory()
             } catch let pipelineError as ImportPipelineError {
-                await MainActor.run {
-                    errorMessage = pipelineError.localizedDescription
-                    isImporting = false
-                    progress = nil
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.errorMessage = pipelineError.localizedDescription
+                    self.isImporting = false
+                    self.isLoadingImportErrors = false
+                    self.progress = nil
                 }
-                await loadHistory()
+                await self?.loadHistory()
             } catch {
-                await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    isImporting = false
-                    progress = nil
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.errorMessage = error.localizedDescription
+                    self.isImporting = false
+                    self.isLoadingImportErrors = false
+                    self.progress = nil
                 }
-                await loadHistory()
+                await self?.loadHistory()
             }
         }
     }
