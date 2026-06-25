@@ -55,6 +55,21 @@ actor SalesReportImporter {
         try await databaseClient.createImportJob(job)
 
         let separator = try DelimitedFileSniffer.detectSeparator(fileURL: staging.stagedFileURL)
+
+        await onProgress(ImportProgress(
+            phase: .parsing,
+            processedRows: 0,
+            totalRowsEstimate: nil,
+            validRows: 0,
+            invalidRows: 0,
+            warningRows: 0,
+            message: "正在统计行数…"
+        ))
+
+        let estimatedTotalRows = try DelimitedFileLineCounter.estimateDataRowCount(
+            fileURL: staging.stagedFileURL
+        )
+
         let parser = StreamingDelimitedParser(fileURL: staging.stagedFileURL, delimiter: separator)
 
         var columnMap: SalesColumnMap?
@@ -76,7 +91,7 @@ actor SalesReportImporter {
                     await onProgress(ImportProgress(
                         phase: .parsing,
                         processedRows: 0,
-                        totalRowsEstimate: nil,
+                        totalRowsEstimate: estimatedTotalRows > 0 ? estimatedTotalRows : nil,
                         validRows: 0,
                         invalidRows: 0,
                         warningRows: 0,
@@ -199,11 +214,11 @@ actor SalesReportImporter {
                         await onProgress(ImportProgress(
                             phase: .writing,
                             processedRows: processedRows,
-                            totalRowsEstimate: nil,
+                            totalRowsEstimate: estimatedTotalRows > 0 ? estimatedTotalRows : nil,
                             validRows: validRows,
                             invalidRows: invalidRows,
                             warningRows: warningRows,
-                            message: "已处理 \(processedRows) 行"
+                            message: nil
                         ))
                     }
                 }

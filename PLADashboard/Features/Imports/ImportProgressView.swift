@@ -9,8 +9,7 @@ struct ImportProgressView: View {
                 ProgressView(value: fraction) {
                     progressLabel
                 } currentValueLabel: {
-                    Text("\(progress.processedRows)")
-                        .monospacedDigit()
+                    rowCountLabel
                 }
             } else {
                 ProgressView {
@@ -18,21 +17,45 @@ struct ImportProgressView: View {
                 }
             }
         }
-        .frame(minWidth: 200, idealWidth: 240, maxWidth: 280)
+        .frame(minWidth: 200, idealWidth: 260, maxWidth: 300)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilitySummary)
     }
 
+    @ViewBuilder
     private var progressLabel: some View {
-        Text(progress.message ?? phaseTitle)
-            .font(.subheadline)
+        if progress.showsDeterminateRowProgress {
+            Text(phaseTitle)
+                .font(.subheadline)
+        } else {
+            Text(progress.message ?? phaseTitle)
+                .font(.subheadline)
+        }
+    }
+
+    @ViewBuilder
+    private var rowCountLabel: some View {
+        if progress.showsDeterminateRowProgress, let total = progress.totalRowsEstimate {
+            Text("\(formattedCount(progress.processedRows)) / \(formattedCount(total))")
+                .monospacedDigit()
+        } else if progress.processedRows > 0 {
+            Text(formattedCount(progress.processedRows))
+                .monospacedDigit()
+        }
     }
 
     private var accessibilitySummary: String {
+        if progress.showsDeterminateRowProgress, let total = progress.totalRowsEstimate {
+            return "\(phaseTitle)，已处理 \(progress.processedRows) 行，共 \(total) 行"
+        }
         if let message = progress.message {
             return message
         }
         return phaseTitle
+    }
+
+    private func formattedCount(_ value: Int) -> String {
+        value.formatted(.number.grouping(.automatic))
     }
 
     private var phaseTitle: String {

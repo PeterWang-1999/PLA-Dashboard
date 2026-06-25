@@ -53,6 +53,16 @@ struct ImportProgress: Sendable {
             message: message
         )
     }
+
+    var showsDeterminateRowProgress: Bool {
+        guard let totalRowsEstimate, totalRowsEstimate > 0 else { return false }
+        switch phase {
+        case .parsing, .writing:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 struct ImportResult: Sendable {

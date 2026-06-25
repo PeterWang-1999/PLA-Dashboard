@@ -59,6 +59,22 @@ actor AdsProductImporter {
             fileURL: staging.stagedFileURL,
             linesToSkip: Self.linesToSkip
         )
+
+        await onProgress(ImportProgress(
+            phase: .parsing,
+            processedRows: 0,
+            totalRowsEstimate: nil,
+            validRows: 0,
+            invalidRows: 0,
+            warningRows: 0,
+            message: "正在统计行数…"
+        ))
+
+        let estimatedTotalRows = try DelimitedFileLineCounter.estimateDataRowCount(
+            fileURL: staging.stagedFileURL,
+            linesToSkip: Self.linesToSkip
+        )
+
         let parser = StreamingDelimitedParser(
             fileURL: staging.stagedFileURL,
             delimiter: separator,
@@ -83,7 +99,7 @@ actor AdsProductImporter {
                     await onProgress(ImportProgress(
                         phase: .parsing,
                         processedRows: 0,
-                        totalRowsEstimate: nil,
+                        totalRowsEstimate: estimatedTotalRows > 0 ? estimatedTotalRows : nil,
                         validRows: 0,
                         invalidRows: 0,
                         warningRows: 0,
@@ -281,11 +297,11 @@ actor AdsProductImporter {
                         await onProgress(ImportProgress(
                             phase: .writing,
                             processedRows: processedRows,
-                            totalRowsEstimate: nil,
+                            totalRowsEstimate: estimatedTotalRows > 0 ? estimatedTotalRows : nil,
                             validRows: validRows,
                             invalidRows: invalidRows,
                             warningRows: warningRows,
-                            message: "已处理 \(processedRows) 行"
+                            message: nil
                         ))
                     }
                 }
