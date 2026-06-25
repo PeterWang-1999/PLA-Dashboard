@@ -78,17 +78,3 @@ actor DatabaseClient {
         dashboardMetricsCache = cache
     }
 }
-
-private struct DatabaseClientKey: EnvironmentKey {
-    static let defaultValue: DatabaseClient? = nil
-}
-
-import SwiftUI
-
-extension EnvironmentValues {
-    @MainActor
-    var databaseClient: DatabaseClient? {
-        get { self[DatabaseClientKey.self] }
-        set { self[DatabaseClientKey.self] = newValue }
-    }
-}

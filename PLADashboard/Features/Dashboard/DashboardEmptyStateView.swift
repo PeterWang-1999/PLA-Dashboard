@@ -22,8 +22,6 @@ struct DashboardEmptyStateView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 HStack {
                     Spacer()
-                    Button("数据更新") {}
-                        .buttonStyle(.bordered)
                     Button("快捷操作") {}
                         .buttonStyle(.bordered)
                 }

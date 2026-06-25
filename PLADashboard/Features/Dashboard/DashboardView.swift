@@ -148,9 +148,11 @@ struct DashboardView: View {
 
             Spacer()
 
-            Button("数据更新", action: onRequestDataUpdate)
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+            if !viewModel.showsEmptyState {
+                Button("数据更新", action: onRequestDataUpdate)
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+            }
 
             Menu {
                 Button("导出当前视图…") {

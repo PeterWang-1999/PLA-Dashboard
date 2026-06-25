@@ -41,11 +41,15 @@ final class ImportViewModel {
     }
 
     func resetForAccountSwitch() {
+        importTask?.cancel()
+        importTask = nil
         latestResult = nil
         latestErrors = []
         importJobs = []
         errorMessage = nil
         progress = nil
+        isImporting = false
+        showFileImporter = false
     }
 
     func presentImportPicker() {

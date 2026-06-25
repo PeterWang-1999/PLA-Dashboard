@@ -17,8 +17,3 @@ struct AnalyticsSettingsSnapshot: Sendable, Hashable {
         )
     }
 }
-
-extension Notification.Name {
-    /// 设置页变更（分页、预警阈值、数据保留）后发送，看板应刷新并失效指标缓存。
-    static let dashboardSettingsDidChange = Notification.Name("dashboardSettingsDidChange")
-}

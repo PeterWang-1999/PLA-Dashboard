@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct RootView: View {
     @Environment(AccountStore.self) private var accountStore
+    @Environment(DashboardSettingsNotifier.self) private var dashboardSettingsNotifier
     @SceneStorage("dashboard.sidebarVisible") private var sidebarVisibleStorage = true
 
     @State private var windowState = WindowState()
@@ -13,6 +14,7 @@ struct RootView: View {
 
     var body: some View {
         let workspaceRevision = accountStore.workspaceRevision
+        let settingsRevision = dashboardSettingsNotifier.revision
 
         NavigationSplitView(columnVisibility: $windowState.columnVisibility) {
             sidebar
@@ -52,7 +54,7 @@ struct RootView: View {
         .task(id: workspaceRevision) {
             await reloadWorkspaceContent()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .dashboardSettingsDidChange)) { _ in
+        .onChange(of: settingsRevision) { _, _ in
             dashboardViewModel.handleSettingsDidChange()
         }
         .alert("无法切换账户", isPresented: $showImportBlockingAlert) {
@@ -121,8 +123,6 @@ struct RootView: View {
             NavigationStack {
                 ImportsView(viewModel: importViewModel)
             }
-        case .settings:
-            EmptyView()
         }
     }
 

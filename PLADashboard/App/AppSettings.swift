@@ -52,8 +52,4 @@ enum AppSettings {
             }
         }
     }
-
-    static func notifyDashboardSettingsDidChange() {
-        NotificationCenter.default.post(name: .dashboardSettingsDidChange, object: nil)
-    }
 }

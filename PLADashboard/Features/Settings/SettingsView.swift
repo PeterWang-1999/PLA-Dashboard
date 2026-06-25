@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AccountStore.self) private var accountStore
+    @Environment(DashboardSettingsNotifier.self) private var dashboardSettingsNotifier
 
     @AppStorage(AppSettings.defaultPageSizeKey) private var defaultPageSize = 30
     @AppStorage(AppSettings.highEfficiencyROIMultiplierKey) private var highEfficiencyROIMultiplier = AnalyticsConfiguration.highEfficiencyROIMultiplier
@@ -25,7 +26,7 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.radioGroup)
                 .onChange(of: defaultPageSize) { _, _ in
-                    AppSettings.notifyDashboardSettingsDidChange()
+                    dashboardSettingsNotifier.notifyChange()
                 }
             } header: {
                 Text("看板")
@@ -43,7 +44,7 @@ struct SettingsView: View {
                     }
                 }
                 .onChange(of: highEfficiencyROIMultiplier) { _, _ in
-                    AppSettings.notifyDashboardSettingsDidChange()
+                    dashboardSettingsNotifier.notifyChange()
                 }
 
                 Picker("低效最低点击", selection: $lowEfficiencyMinClicks) {
@@ -54,7 +55,7 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.radioGroup)
                 .onChange(of: lowEfficiencyMinClicks) { _, _ in
-                    AppSettings.notifyDashboardSettingsDidChange()
+                    dashboardSettingsNotifier.notifyChange()
                 }
             } header: {
                 Text("预警分析")
@@ -72,7 +73,7 @@ struct SettingsView: View {
                 .pickerStyle(.radioGroup)
                 .onChange(of: dataRetentionDays) { _, _ in
                     AppSettings.lastRetentionPurgeDay = nil
-                    AppSettings.notifyDashboardSettingsDidChange()
+                    dashboardSettingsNotifier.notifyChange()
                 }
 
                 Button("立即清理过期数据…") {
@@ -147,7 +148,7 @@ struct SettingsView: View {
             }
             purgeResultMessage = "已删除 \(deleted) 行过期 Ads 日表数据，并已重建周聚合。"
             showPurgeResult = true
-            AppSettings.notifyDashboardSettingsDidChange()
+            dashboardSettingsNotifier.notifyChange()
         } catch {
             purgeResultMessage = error.localizedDescription
             showPurgeResult = true
@@ -157,4 +158,6 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView()
+        .environment(AccountStore())
+        .environment(DashboardSettingsNotifier())
 }

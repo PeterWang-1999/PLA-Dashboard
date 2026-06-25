@@ -93,6 +93,20 @@ struct CreateAccountSheet: View {
 }
 
 #Preview {
-    CreateAccountSheet(isImportInProgress: false)
-        .environment(AccountStore())
+    CreateAccountSheetPreview()
+}
+
+@MainActor
+private struct CreateAccountSheetPreview: View {
+    @State private var accountStore = AccountStore()
+
+    var body: some View {
+        NavigationStack {
+            CreateAccountSheet(isImportInProgress: false)
+        }
+        .environment(accountStore)
+        .task {
+            await accountStore.bootstrap()
+        }
+    }
 }

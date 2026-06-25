@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct PLADashboardApp: App {
     @State private var accountStore = AccountStore()
+    @State private var dashboardSettingsNotifier = DashboardSettingsNotifier()
 
     var body: some Scene {
         WindowGroup {
@@ -16,7 +17,7 @@ struct PLADashboardApp: App {
                 case .ready:
                     RootView()
                         .environment(accountStore)
-                        .environment(\.databaseClient, accountStore.activeDatabaseClient)
+                        .environment(dashboardSettingsNotifier)
                 case .failed(let message):
                     ContentUnavailableView {
                         Label("无法打开数据库", systemImage: "externaldrive.badge.exclamationmark")
@@ -39,7 +40,7 @@ struct PLADashboardApp: App {
         Settings {
             SettingsView()
                 .environment(accountStore)
-                .environment(\.databaseClient, accountStore.activeDatabaseClient)
+                .environment(dashboardSettingsNotifier)
         }
         .defaultSize(width: 1033, height: 620)
         .windowResizability(.contentMinSize)
