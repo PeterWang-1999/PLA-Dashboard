@@ -10,10 +10,10 @@ struct AnalyticsSettingsSnapshot: Sendable, Hashable {
         lowEfficiencyMinClicks: AnalyticsConfiguration.lowEfficiencyMinClicks
     )
 
-    static func current() -> AnalyticsSettingsSnapshot {
+    static func current(accountID: String) -> AnalyticsSettingsSnapshot {
         AnalyticsSettingsSnapshot(
-            highEfficiencyROIMultiplier: AppSettings.highEfficiencyROIMultiplier,
-            lowEfficiencyMinClicks: AppSettings.lowEfficiencyMinClicks
+            highEfficiencyROIMultiplier: AppSettings.highEfficiencyROIMultiplier(accountID: accountID),
+            lowEfficiencyMinClicks: AppSettings.lowEfficiencyMinClicks(accountID: accountID)
         )
     }
 }

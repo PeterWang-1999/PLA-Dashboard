@@ -246,17 +246,17 @@ extension DatabaseClient {
     }
 
     func runScheduledRetentionPurgeIfNeeded() throws {
-        let retentionDays = AppSettings.dataRetentionDays
+        let retentionDays = AppSettings.dataRetentionDays(accountID: accountID)
         guard retentionDays > 0 else { return }
 
         guard let latestDay = try fetchLatestMetricDay() else { return }
-        if AppSettings.lastRetentionPurgeDay == latestDay {
+        if AppSettings.lastRetentionPurgeDay(accountID: accountID) == latestDay {
             return
         }
 
         let deleted = try purgeExpiredAdsDaily(retentionDays: retentionDays)
         if deleted >= 0 {
-            AppSettings.lastRetentionPurgeDay = latestDay
+            AppSettings.setLastRetentionPurgeDay(latestDay, accountID: accountID)
         }
     }
 

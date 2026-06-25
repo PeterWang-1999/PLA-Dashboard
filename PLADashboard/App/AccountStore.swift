@@ -37,6 +37,7 @@ final class AccountStore {
         phase = .loading
         do {
             let loadedManifest = try WorkspaceAccountPersistence.loadOrCreateManifest()
+            AccountSettingsMigration.migrateLegacyGlobalSettingsIfNeeded(for: loadedManifest.activeAccountID)
             let client = try DatabaseClient.make(accountID: loadedManifest.activeAccountID)
             try await client.migrateIfNeeded()
             manifest = loadedManifest

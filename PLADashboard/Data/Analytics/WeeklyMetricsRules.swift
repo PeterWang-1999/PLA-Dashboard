@@ -112,7 +112,7 @@ enum WeeklyMetricsRules {
         overallWeeks: [WeeklyProductMetrics],
         cohortBenchmarks: [WeeklyCohortSpendBenchmark],
         totalPortfolioCostCents: Int,
-        settings: AnalyticsSettingsSnapshot = .current()
+        settings: AnalyticsSettingsSnapshot = .defaults
     ) -> ProductWarningLabel? {
         let weights = AnalyticsConfiguration.roiWeekWeights
         guard productWeeks.count == weights.count,

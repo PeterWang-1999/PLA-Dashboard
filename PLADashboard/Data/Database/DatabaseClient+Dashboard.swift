@@ -453,7 +453,7 @@ extension DatabaseClient {
             overallWeeks: metricsContext.overallWeeks,
             cohortBenchmarks: metricsContext.cohortBenchmarks,
             totalPortfolioCostCents: metricsContext.totalCostCents,
-            settings: AnalyticsSettingsSnapshot.current()
+            settings: AnalyticsSettingsSnapshot.current(accountID: accountID)
         )
 
         if let required = alertFilterLabel(for: alertFilter ?? DashboardQueryFilters.alertFilterDefaultOption),

@@ -5,9 +5,6 @@ struct SettingsView: View {
     @Environment(DashboardSettingsNotifier.self) private var dashboardSettingsNotifier
 
     @AppStorage(AppSettings.defaultPageSizeKey) private var defaultPageSize = 30
-    @AppStorage(AppSettings.highEfficiencyROIMultiplierKey) private var highEfficiencyROIMultiplier = AnalyticsConfiguration.highEfficiencyROIMultiplier
-    @AppStorage(AppSettings.lowEfficiencyMinClicksKey) private var lowEfficiencyMinClicks = AnalyticsConfiguration.lowEfficiencyMinClicks
-    @AppStorage(AppSettings.dataRetentionDaysKey) private var dataRetentionDays = 0
 
     @State private var showPurgeConfirmation = false
     @State private var pendingPurgeCount = 0
@@ -16,7 +13,36 @@ struct SettingsView: View {
     @State private var showPurgeResult = false
 
     var body: some View {
+        let workspaceRevision = accountStore.workspaceRevision
+
+        Group {
+            if let accountID = accountStore.activeAccountID {
+                accountScopedForm(accountID: accountID)
+                    .id("\(accountID)-\(workspaceRevision)")
+            } else {
+                ContentUnavailableView {
+                    Label("未选择账户", systemImage: "person.crop.circle.badge.questionmark")
+                } description: {
+                    Text("请先在主窗口选择或创建一个工作区账户。")
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .frame(minWidth: 460, minHeight: 420)
+        .navigationTitle("设置")
+    }
+
+    @ViewBuilder
+    private func accountScopedForm(accountID: String) -> some View {
+        let accountName = accountStore.activeAccount?.name ?? accountID
+
         Form {
+            Section {
+                LabeledContent("当前账户", value: accountName)
+            } footer: {
+                Text("以下预警与数据保留设置仅对当前账户生效。")
+            }
+
             Section {
                 Picker("每页行数", selection: $defaultPageSize) {
                     Text("20").tag(20)
@@ -31,32 +57,36 @@ struct SettingsView: View {
             } header: {
                 Text("看板")
             } footer: {
-                Text("更改后将在下次刷新看板时生效。")
+                Text("每页行数为全局设置，更改后将在下次刷新看板时生效。")
             }
 
             Section {
                 LabeledContent("高消高效 ROI 倍数") {
                     HStack(spacing: 8) {
-                        Slider(value: $highEfficiencyROIMultiplier, in: 1.0...3.0, step: 0.1)
-                        Text(String(format: "%.1f×", highEfficiencyROIMultiplier))
-                            .monospacedDigit()
-                            .frame(width: 44, alignment: .trailing)
+                        Slider(
+                            value: highEfficiencyROIMultiplierBinding(accountID: accountID),
+                            in: 1.0...3.0,
+                            step: 0.1
+                        )
+                        Text(String(
+                            format: "%.1f×",
+                            AppSettings.highEfficiencyROIMultiplier(accountID: accountID)
+                        ))
+                        .monospacedDigit()
+                        .frame(width: 44, alignment: .trailing)
                     }
                 }
-                .onChange(of: highEfficiencyROIMultiplier) { _, _ in
-                    dashboardSettingsNotifier.notifyChange()
-                }
 
-                Picker("低效最低点击", selection: $lowEfficiencyMinClicks) {
+                Picker(
+                    "低效最低点击",
+                    selection: lowEfficiencyMinClicksBinding(accountID: accountID)
+                ) {
                     Text("200").tag(200)
                     Text("250").tag(250)
                     Text("300").tag(300)
                     Text("400").tag(400)
                 }
                 .pickerStyle(.radioGroup)
-                .onChange(of: lowEfficiencyMinClicks) { _, _ in
-                    dashboardSettingsNotifier.notifyChange()
-                }
             } header: {
                 Text("预警分析")
             } footer: {
@@ -64,42 +94,40 @@ struct SettingsView: View {
             }
 
             Section {
-                Picker("Ads 日表保留", selection: $dataRetentionDays) {
+                Picker(
+                    "Ads 日表保留",
+                    selection: dataRetentionDaysBinding(accountID: accountID)
+                ) {
                     Text("不限制").tag(0)
                     Text("60 天").tag(60)
                     Text("90 天").tag(90)
                     Text("180 天").tag(180)
                 }
                 .pickerStyle(.radioGroup)
-                .onChange(of: dataRetentionDays) { _, _ in
-                    AppSettings.lastRetentionPurgeDay = nil
-                    dashboardSettingsNotifier.notifyChange()
-                }
 
                 Button("立即清理过期数据…") {
-                    Task { await preparePurgeConfirmation() }
+                    Task { await preparePurgeConfirmation(accountID: accountID) }
                 }
-                .disabled(dataRetentionDays == 0 || isPurging)
+                .disabled(AppSettings.dataRetentionDays(accountID: accountID) == 0 || isPurging)
             } header: {
                 Text("数据")
             } footer: {
-                Text("仅删除 Google Ads 日表中早于保留期的行；产品主表与导入记录保留。清理后将自动重建周聚合。")
+                Text("仅删除当前账户 Google Ads 日表中早于保留期的行；产品主表与导入记录保留。清理后将自动重建周聚合。")
             }
         }
-        .formStyle(.grouped)
-        .frame(minWidth: 460, minHeight: 420)
-        .navigationTitle("设置")
         .confirmationDialog(
             "确认清理过期数据？",
             isPresented: $showPurgeConfirmation,
             titleVisibility: .visible
         ) {
             Button("清理 \(pendingPurgeCount) 行", role: .destructive) {
-                Task { await performPurge() }
+                Task { await performPurge(accountID: accountID) }
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("将删除 \(pendingPurgeCount) 行 ads_product_daily 记录（早于保留 \(dataRetentionDays) 天）。")
+            Text(
+                "将删除 \(pendingPurgeCount) 行 ads_product_daily 记录（早于保留 \(AppSettings.dataRetentionDays(accountID: accountID)) 天）。"
+            )
         }
         .alert("数据清理", isPresented: $showPurgeResult) {
             Button("好", role: .cancel) {}
@@ -108,10 +136,43 @@ struct SettingsView: View {
         }
     }
 
+    private func highEfficiencyROIMultiplierBinding(accountID: String) -> Binding<Double> {
+        Binding(
+            get: { AppSettings.highEfficiencyROIMultiplier(accountID: accountID) },
+            set: { newValue in
+                AppSettings.setHighEfficiencyROIMultiplier(newValue, accountID: accountID)
+                dashboardSettingsNotifier.notifyChange()
+            }
+        )
+    }
+
+    private func lowEfficiencyMinClicksBinding(accountID: String) -> Binding<Int> {
+        Binding(
+            get: { AppSettings.lowEfficiencyMinClicks(accountID: accountID) },
+            set: { newValue in
+                AppSettings.setLowEfficiencyMinClicks(newValue, accountID: accountID)
+                dashboardSettingsNotifier.notifyChange()
+            }
+        )
+    }
+
+    private func dataRetentionDaysBinding(accountID: String) -> Binding<Int> {
+        Binding(
+            get: { AppSettings.dataRetentionDays(accountID: accountID) },
+            set: { newValue in
+                AppSettings.setDataRetentionDays(newValue, accountID: accountID)
+                AppSettings.setLastRetentionPurgeDay(nil, accountID: accountID)
+                dashboardSettingsNotifier.notifyChange()
+            }
+        )
+    }
+
     @MainActor
-    private func preparePurgeConfirmation() async {
-        guard dataRetentionDays > 0 else { return }
-        guard let client = accountStore.activeDatabaseClient else {
+    private func preparePurgeConfirmation(accountID: String) async {
+        let retentionDays = AppSettings.dataRetentionDays(accountID: accountID)
+        guard retentionDays > 0 else { return }
+        guard let client = accountStore.activeDatabaseClient,
+              client.accountID == accountID else {
             purgeResultMessage = "数据库未就绪"
             showPurgeResult = true
             return
@@ -119,7 +180,7 @@ struct SettingsView: View {
         isPurging = true
         defer { isPurging = false }
         do {
-            pendingPurgeCount = try await client.countExpiredAdsDailyRows(retentionDays: dataRetentionDays)
+            pendingPurgeCount = try await client.countExpiredAdsDailyRows(retentionDays: retentionDays)
             if pendingPurgeCount == 0 {
                 purgeResultMessage = "没有需要清理的过期数据。"
                 showPurgeResult = true
@@ -133,8 +194,10 @@ struct SettingsView: View {
     }
 
     @MainActor
-    private func performPurge() async {
-        guard let client = accountStore.activeDatabaseClient else {
+    private func performPurge(accountID: String) async {
+        let retentionDays = AppSettings.dataRetentionDays(accountID: accountID)
+        guard let client = accountStore.activeDatabaseClient,
+              client.accountID == accountID else {
             purgeResultMessage = "数据库未就绪"
             showPurgeResult = true
             return
@@ -142,9 +205,9 @@ struct SettingsView: View {
         isPurging = true
         defer { isPurging = false }
         do {
-            let deleted = try await client.purgeExpiredAdsDaily(retentionDays: dataRetentionDays)
+            let deleted = try await client.purgeExpiredAdsDaily(retentionDays: retentionDays)
             if let latestDay = try await client.fetchLatestMetricDay() {
-                AppSettings.lastRetentionPurgeDay = latestDay
+                AppSettings.setLastRetentionPurgeDay(latestDay, accountID: accountID)
             }
             purgeResultMessage = "已删除 \(deleted) 行过期 Ads 日表数据，并已重建周聚合。"
             showPurgeResult = true
