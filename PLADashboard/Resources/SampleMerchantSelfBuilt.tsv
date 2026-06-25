@@ -1,0 +1,6 @@
+标题	序号	链接	图片链接	自定义标签 0	自定义标签 1	自定义标签 2	自定义标签 3	自定义标签 4	google 商品类别
+Sample Dress	shopify_ZZ_10416614474003_54238242767123	https://example.com/products/dress	https://example.com/images/dress.jpg	EN	elite-企划部				Apparel & Accessories > Clothing > Dresses
+Sample Shirt	15091206_00002_US_en	https://example.com/products/shirt	https://example.com/images/shirt.jpg	Shopify产品					Apparel & Accessories > Clothing > Shirts & Tops
+Sample Shoes	S9730219	https://example.com/products/shoes	https://example.com/images/shoes.jpg	shopify产品					Apparel & Accessories > Shoes
+Invalid Row		https://example.com/missing-id	https://example.com/images/invalid.jpg							Apparel & Accessories
+Sample Bag	shopify_US_99887766554433_11223344556677	https://example.com/products/bag	https://example.com/images/bag.jpg	EN						Apparel & Accessories > Handbags

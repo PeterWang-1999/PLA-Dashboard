@@ -17,6 +17,7 @@ final class ImportViewModel {
         .forKind(.thirdParty).importSourceKinds
 
     private var databaseClient: DatabaseClient?
+    private var accountKind: WorkspaceAccountKind = .thirdParty
     private var importTask: Task<Void, Never>?
     private var onCatalogReload: ((URL) -> Void)?
     private var onImportCompleted: (() async -> Void)?
@@ -24,10 +25,12 @@ final class ImportViewModel {
     func configure(
         databaseClient: DatabaseClient,
         capabilities: WorkspaceCapabilities,
+        accountKind: WorkspaceAccountKind,
         onCatalogReload: @escaping (URL) -> Void,
         onImportCompleted: @escaping () async -> Void
     ) {
         self.databaseClient = databaseClient
+        self.accountKind = accountKind
         self.onCatalogReload = onCatalogReload
         self.onImportCompleted = onImportCompleted
         applyCapabilities(capabilities)
@@ -87,16 +90,17 @@ final class ImportViewModel {
     }
 
     func importSampleFile() {
+        let resourceName = selectedSourceKind.sampleResourceName(accountKind: accountKind)
         guard let url = Bundle.main.url(
-            forResource: selectedSourceKind.sampleResourceName,
+            forResource: resourceName,
             withExtension: selectedSourceKind.sampleFileExtension
         ) else {
-            errorMessage = "未找到内置样例文件 \(selectedSourceKind.sampleResourceName).\(selectedSourceKind.sampleFileExtension)"
+            errorMessage = "未找到内置样例文件 \(resourceName).\(selectedSourceKind.sampleFileExtension)"
             return
         }
         startImport(
             at: url,
-            fileName: "\(selectedSourceKind.sampleResourceName).\(selectedSourceKind.sampleFileExtension)"
+            fileName: "\(resourceName).\(selectedSourceKind.sampleFileExtension)"
         )
     }
 
@@ -108,6 +112,7 @@ final class ImportViewModel {
 
         importTask?.cancel()
         let sourceKind = selectedSourceKind
+        let accountKind = accountKind
         let catalogReload = onCatalogReload
         let importCompleted = onImportCompleted
 
@@ -132,6 +137,7 @@ final class ImportViewModel {
                     sourceURL: url,
                     fileName: fileName,
                     databaseClient: databaseClient,
+                    accountKind: accountKind,
                     onProgress: { update in
                         await MainActor.run { [weak self] in
                             self?.progress = update

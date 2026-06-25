@@ -21,8 +21,13 @@ enum ImportSourceKind: String, Codable, Sendable, CaseIterable, Identifiable {
     }
 
     var sampleResourceName: String {
+        sampleResourceName(accountKind: .thirdParty)
+    }
+
+    func sampleResourceName(accountKind: WorkspaceAccountKind) -> String {
         switch self {
-        case .merchantCenter: "SampleMerchant"
+        case .merchantCenter:
+            MerchantCenterExportFormat.sampleResourceName(for: accountKind)
         case .salesReport: "SampleSales"
         case .adsProduct: "SampleAds"
         }

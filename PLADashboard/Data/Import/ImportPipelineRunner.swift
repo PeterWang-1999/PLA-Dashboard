@@ -7,13 +7,17 @@ enum ImportPipelineRunner: Sendable {
         sourceURL: URL,
         fileName: String?,
         databaseClient: DatabaseClient,
+        accountKind: WorkspaceAccountKind,
         onProgress: @Sendable @escaping (ImportProgress) async -> Void
     ) async throws -> ImportResult {
         try Task.checkCancellation()
 
         switch sourceKind {
         case .merchantCenter:
-            let importer = MerchantCenterImporter(databaseClient: databaseClient)
+            let importer = MerchantCenterImporter(
+                databaseClient: databaseClient,
+                accountKind: accountKind
+            )
             return try await importer.importFile(
                 sourceURL: sourceURL,
                 fileName: fileName,

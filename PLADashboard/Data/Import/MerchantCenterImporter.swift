@@ -4,9 +4,11 @@ actor MerchantCenterImporter {
     private var batchSize: Int { BenchmarkConfiguration.importBatchSize }
 
     private let databaseClient: DatabaseClient
+    private let accountKind: WorkspaceAccountKind
 
-    init(databaseClient: DatabaseClient) {
+    init(databaseClient: DatabaseClient, accountKind: WorkspaceAccountKind = .thirdParty) {
         self.databaseClient = databaseClient
+        self.accountKind = accountKind
     }
 
     func importFile(
@@ -71,7 +73,7 @@ actor MerchantCenterImporter {
 
                 switch event {
                 case .header(let headers):
-                    columnMap = try MerchantCenterColumnMap(headers: headers)
+                    columnMap = try MerchantCenterColumnMap(headers: headers, accountKind: accountKind)
                     await onProgress(ImportProgress(
                         phase: .parsing,
                         processedRows: 0,
