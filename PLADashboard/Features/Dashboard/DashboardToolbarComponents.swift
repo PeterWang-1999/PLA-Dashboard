@@ -95,6 +95,7 @@ struct DashboardToolbarCustomLabelFilterPicker: View {
         .dashboardToolbarPullDownMenuChrome()
         .accessibilityLabel("自定义标签筛选")
         .accessibilityValue(viewModel.selectedCustomLabelFilter.menuTitle)
+        .modifier(DashboardToolbarFilterEmptyHelp(message: viewModel.customLabelFilterEmptyHelp))
     }
 }
 
@@ -142,5 +143,18 @@ struct DashboardToolbarCategoryFilter: View {
         .dashboardToolbarPullDownMenuChrome()
         .accessibilityLabel("类目筛选")
         .accessibilityValue(viewModel.selectedCategoryFilter.menuTitle)
+        .modifier(DashboardToolbarFilterEmptyHelp(message: viewModel.categoryFilterEmptyHelp))
+    }
+}
+
+private struct DashboardToolbarFilterEmptyHelp: ViewModifier {
+    let message: String?
+
+    func body(content: Content) -> some View {
+        if let message {
+            content.help(message)
+        } else {
+            content
+        }
     }
 }

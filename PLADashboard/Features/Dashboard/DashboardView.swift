@@ -245,6 +245,8 @@ struct DashboardView: View {
             viewModel: {
                 let model = DashboardViewModel()
                 model.dataSource = .preview
+                model.customLabelCatalog = .loadBundled()
+                model.categoryCatalog = .loadBundled()
                 return model
             }(),
             windowState: WindowState(isSidebarVisible: true)
@@ -259,6 +261,8 @@ struct DashboardView: View {
             viewModel: {
                 let model = DashboardViewModel()
                 model.dataSource = .preview
+                model.customLabelCatalog = .loadBundled()
+                model.categoryCatalog = .loadBundled()
                 return model
             }(),
             windowState: WindowState(isSidebarVisible: false)

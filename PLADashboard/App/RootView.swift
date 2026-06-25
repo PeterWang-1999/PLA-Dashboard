@@ -136,6 +136,7 @@ struct RootView: View {
         dashboardViewModel.resetForAccountSwitch()
         importViewModel.resetForAccountSwitch()
         configureViewModels(databaseClient: databaseClient)
+        await dashboardViewModel.reloadFilterCatalogsFromDatabase()
         await dashboardViewModel.bootstrapDashboard()
         await importViewModel.loadHistory()
         if let capabilities = accountStore.activeCapabilities,

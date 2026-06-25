@@ -8,9 +8,9 @@ final class DashboardViewModel {
     var dataSource: DashboardDataSource = .empty
     var searchText = ""
     var selectedAlertFilter = DashboardViewModel.alertFilterDefaultOption
-    var customLabelCatalog: CustomLabelCatalog = .loadBundled()
+    var customLabelCatalog: CustomLabelCatalog = .empty
     var selectedCustomLabelFilter: CustomLabelFilterSelection = .all
-    var categoryCatalog: GoogleProductCategoryCatalog = .loadBundled()
+    var categoryCatalog: GoogleProductCategoryCatalog = .empty
     var selectedCategoryFilter: CategoryFilterSelection = .all
     var currentPage = 1
     var pageSize: Int { AppSettings.defaultPageSize }
@@ -86,6 +86,8 @@ final class DashboardViewModel {
         isLoading = false
         isExporting = false
         exportErrorMessage = nil
+        categoryCatalog = .empty
+        customLabelCatalog = .empty
     }
 
     func retryAfterError() {
@@ -287,13 +289,37 @@ final class DashboardViewModel {
     }
 
     func reloadFilterCatalogsFromDatabase() async {
+        let generation = loadGeneration
         guard let databaseClient else { return }
         do {
             let snapshot = try await databaseClient.buildFilterCatalogSnapshot()
+            guard generation == loadGeneration else { return }
             applyFilterCatalogSnapshot(snapshot)
         } catch {
-            // 筛选目录失败不阻断导入；保留现有 catalog。
+            guard generation == loadGeneration else { return }
+            clearFilterCatalogs()
         }
+    }
+
+    private func clearFilterCatalogs() {
+        categoryCatalog = .empty
+        customLabelCatalog = .empty
+        selectedCategoryFilter = .all
+        selectedCustomLabelFilter = .all
+    }
+
+    /// 当前账户尚无 Merchant 产品数据时，用于 Toolbar 空态提示（HIG empty state）。
+    var customLabelFilterEmptyHelp: String? {
+        guard dataSource != .preview else { return nil }
+        let hasValues = customLabelCatalog.groups.contains(where: \.hasValueChildren)
+        return hasValues ? nil : "请先在当前账户导入 Merchant Center 数据以显示标签选项"
+    }
+
+    var categoryFilterEmptyHelp: String? {
+        guard dataSource != .preview else { return nil }
+        return categoryCatalog.groups.isEmpty
+            ? "请先在当前账户导入 Merchant Center 数据以显示类目选项"
+            : nil
     }
 
     func applyFilterCatalogSnapshot(_ snapshot: DatabaseClient.FilterCatalogSnapshot) {
