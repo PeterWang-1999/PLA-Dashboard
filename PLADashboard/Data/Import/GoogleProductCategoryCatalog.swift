@@ -1,6 +1,6 @@
 import Foundation
 
-/// 从 Merchant Center TSV 的 `google 商品类别` 列解析出的二级 / 三级类目树。
+/// 从 Merchant Center TSV 类目列解析出的二级 / 三级类目树（三方站 `google 商品类别`；自建站 `类型` 导入后已规范为 ` > ` 路径）。
 struct GoogleProductCategoryCatalog: Hashable, Codable {
     struct Group: Hashable, Codable, Identifiable {
         let level2: String
@@ -29,7 +29,7 @@ struct GoogleProductCategoryCatalog: Hashable, Codable {
     static func build(fromCategoryPaths paths: [String]) -> GoogleProductCategoryCatalog {
         var tree: [String: Set<String>] = [:]
         for raw in paths {
-            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmed = ProductCategoryPath.normalizedForCatalog(fromStored: raw)
             guard !trimmed.isEmpty, !trimmed.allSatisfy({ $0.isNumber }), trimmed.contains(">") else {
                 continue
             }
@@ -54,13 +54,13 @@ struct GoogleProductCategoryCatalog: Hashable, Codable {
         return GoogleProductCategoryCatalog(groups: groups)
     }
 
-    /// 解析用户上传的 Merchant Center TSV。`google 商品类别` 使用 `>` 分隔层级。
-    static func parse(from tsvURL: URL) throws -> GoogleProductCategoryCatalog {
+    /// 解析用户上传的 Merchant Center TSV（列名与分隔符因账户类型而异）。
+    static func parse(from tsvURL: URL, accountKind: WorkspaceAccountKind) throws -> GoogleProductCategoryCatalog {
         let content = try String(contentsOf: tsvURL, encoding: .utf8)
-        return try parse(tsvContent: content)
+        return try parse(tsvContent: content, accountKind: accountKind)
     }
 
-    static func parse(tsvContent: String) throws -> GoogleProductCategoryCatalog {
+    static func parse(tsvContent: String, accountKind: WorkspaceAccountKind) throws -> GoogleProductCategoryCatalog {
         var lines = tsvContent.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
         guard let headerLine = lines.first else {
             return .empty
@@ -68,8 +68,9 @@ struct GoogleProductCategoryCatalog: Hashable, Codable {
         lines.removeFirst()
 
         let headers = parseTSVFields(String(headerLine))
-        guard let columnIndex = headers.firstIndex(of: "google 商品类别") else {
-            throw GoogleProductCategoryCatalogError.missingCategoryColumn
+        let columnName = ProductCategoryPath.categoryColumnName(for: accountKind)
+        guard let columnIndex = headers.firstIndex(of: columnName) else {
+            throw GoogleProductCategoryCatalogError.missingCategoryColumn(columnName)
         }
 
         var paths: [String] = []
@@ -79,7 +80,9 @@ struct GoogleProductCategoryCatalog: Hashable, Codable {
             guard columnIndex < fields.count else { continue }
             let raw = fields[columnIndex].trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             guard !raw.isEmpty else { continue }
-            paths.append(raw)
+            if let stored = ProductCategoryPath.storedValue(from: raw, accountKind: accountKind) {
+                paths.append(stored)
+            }
         }
         return build(fromCategoryPaths: paths)
     }
@@ -96,12 +99,12 @@ struct GoogleProductCategoryCatalog: Hashable, Codable {
 }
 
 enum GoogleProductCategoryCatalogError: Error, LocalizedError {
-    case missingCategoryColumn
+    case missingCategoryColumn(String)
 
     var errorDescription: String? {
         switch self {
-        case .missingCategoryColumn:
-            "TSV 中未找到 google 商品类别 列"
+        case .missingCategoryColumn(let name):
+            "TSV 中未找到 \(name) 列"
         }
     }
 }

@@ -206,6 +206,19 @@ final class ImportViewModel {
                 }
                 await self?.loadHistory()
             } catch let pipelineError as ImportPipelineError {
+                if case .duplicateFile = pipelineError, sourceKind == .merchantCenter {
+                    let importer = MerchantCenterImporter(
+                        databaseClient: databaseClient,
+                        accountKind: accountKind
+                    )
+                    _ = try? await importer.refreshProductCategories(sourceURL: url)
+                    if let reloadFilterCatalogs {
+                        await reloadFilterCatalogs()
+                    }
+                    if let importCompleted {
+                        await importCompleted()
+                    }
+                }
                 await MainActor.run { [weak self] in
                     guard let self else { return }
                     self.errorMessage = pipelineError.localizedDescription

@@ -145,7 +145,10 @@ actor MerchantCenterImporter {
                         ))
                     }
 
-                    let category = columnMap.value(at: columnMap.categoryIndex, in: fields)
+                    let categoryRaw = columnMap.value(at: columnMap.categoryIndex, in: fields)
+                    let category = categoryRaw.flatMap {
+                        ProductCategoryPath.storedValue(from: $0, accountKind: accountKind)
+                    }
 
                     let merchantItem = MerchantItemRecord(
                         importId: importId,
@@ -268,6 +271,49 @@ actor MerchantCenterImporter {
             ))
             throw error
         }
+    }
+
+    /// 重复导入同一 checksum 时，仍根据 TSV 刷新已有产品的类目字段（不重建整批导入）。
+    func refreshProductCategories(
+        sourceURL: URL,
+        onProgress: @Sendable @escaping (ImportProgress) async -> Void = { _ in }
+    ) async throws -> Int {
+        var columnMap: MerchantCenterColumnMap?
+        var updates: [(productId: String, category: String)] = []
+        updates.reserveCapacity(1024)
+
+        let parser = StreamingDelimitedParser(fileURL: sourceURL)
+        try await parser.forEachEvent { event in
+            switch event {
+            case .header(let headers):
+                columnMap = try MerchantCenterColumnMap(headers: headers, accountKind: accountKind)
+            case .row(_, let fields):
+                guard let columnMap else { return }
+                guard let itemId = columnMap.value(at: columnMap.itemIdIndex, in: fields) else { return }
+                let normalized = ProductIDNormalizer.normalize(itemId)
+                guard !normalized.productID.isEmpty else { return }
+                guard let categoryRaw = columnMap.value(at: columnMap.categoryIndex, in: fields),
+                      let stored = ProductCategoryPath.storedValue(from: categoryRaw, accountKind: accountKind)
+                else { return }
+                updates.append((productId: normalized.productID, category: stored))
+            }
+        }
+
+        guard columnMap != nil else {
+            throw StreamingDelimitedParserError.missingHeader
+        }
+
+        await onProgress(ImportProgress(
+            phase: .rebuildingCatalogs,
+            processedRows: updates.count,
+            totalRowsEstimate: updates.count,
+            validRows: updates.count,
+            invalidRows: 0,
+            warningRows: 0,
+            message: "正在刷新产品类目…"
+        ))
+
+        return try await databaseClient.updateProductCategoriesBatch(updates)
     }
 
     private func flushBatches(

@@ -121,12 +121,18 @@ extension DatabaseClient {
                     existing.customLabel4 = pickBetterString(existing.customLabel4, candidate.customLabel4)
                     existing.googleProductCategory = pickBetterString(
                         existing.googleProductCategory,
-                        candidate.googleProductCategory
+                        normalizedCategory(from: candidate)
                     )
                     existing.lastSeenAt = importedAt
                     existing.updatedFromImportId = importId
                 } else {
                     existing.lastSeenAt = importedAt
+                }
+                if let incomingCategory = normalizedCategory(from: candidate) {
+                    existing.googleProductCategory = pickBetterString(
+                        existing.googleProductCategory,
+                        incomingCategory
+                    )
                 }
                 toUpdate.append(existing)
             } else {
@@ -164,6 +170,17 @@ extension DatabaseClient {
         if existingTrimmed.isEmpty { return incomingTrimmed.isEmpty ? existing : incoming }
         if incomingTrimmed.isEmpty { return existing }
         return incomingTrimmed.count >= existingTrimmed.count ? incoming : existing
+    }
+
+    private func normalizedCategory(from candidate: ProductRecord) -> String? {
+        guard let raw = candidate.googleProductCategory?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else {
+            return nil
+        }
+        if raw.range(of: #" c\d+_"#, options: .regularExpression) != nil {
+            return ProductCategoryPath.normalizedForStorage(raw, accountKind: .selfBuilt) ?? raw
+        }
+        return raw
     }
 
     // MARK: - Sales daily
@@ -305,6 +322,40 @@ extension DatabaseClient {
             categoryCatalog: GoogleProductCategoryCatalog.build(fromCategoryPaths: categoryPaths),
             customLabelCatalog: CustomLabelCatalog.build(valuesByColumn: customLabelValues)
         )
+    }
+
+    func countProductsWithCategory() throws -> Int {
+        try dbQueue.read { db in
+            try Int.fetchOne(
+                db,
+                sql: """
+                SELECT COUNT(*)
+                FROM products
+                WHERE google_product_category IS NOT NULL
+                  AND TRIM(google_product_category) != '';
+                """
+            ) ?? 0
+        }
+    }
+
+    func updateProductCategoriesBatch(_ updates: [(productId: String, category: String)]) throws -> Int {
+        guard !updates.isEmpty else { return 0 }
+        var applied = 0
+        try dbQueue.write { db in
+            for (productId, category) in updates {
+                try db.execute(
+                    sql: """
+                    UPDATE products
+                    SET google_product_category = ?
+                    WHERE product_id = ?;
+                    """,
+                    arguments: [category, productId]
+                )
+                applied += db.changesCount
+            }
+        }
+        invalidateDashboardCache()
+        return applied
     }
 
     private func fetchDistinctGoogleProductCategories() throws -> [String] {

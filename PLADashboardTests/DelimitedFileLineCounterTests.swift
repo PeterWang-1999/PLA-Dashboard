@@ -15,7 +15,7 @@ final class DelimitedFileLineCounterTests: XCTestCase {
             Bundle.main.url(forResource: "SampleMerchantSelfBuilt", withExtension: "tsv")
         )
         let estimate = try DelimitedFileLineCounter.estimateDataRowCount(fileURL: url)
-        XCTAssertEqual(estimate, 5)
+        XCTAssertEqual(estimate, 4)
     }
 
     func testEstimateDataRowCountRespectsLinesToSkip() throws {

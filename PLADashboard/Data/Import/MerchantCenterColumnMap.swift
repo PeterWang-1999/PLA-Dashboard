@@ -27,7 +27,10 @@ struct MerchantCenterExportFormat: Sendable {
     }
 
     static let customLabelColumnNames = (0...4).map { "自定义标签 \($0)" }
-    static let categoryColumnName = "google 商品类别"
+
+    var categoryColumnName: String {
+        ProductCategoryPath.categoryColumnName(for: accountKind)
+    }
 
     static func sampleResourceName(for accountKind: WorkspaceAccountKind) -> String {
         switch accountKind {
@@ -70,7 +73,7 @@ struct MerchantCenterColumnMap: Sendable {
             }
         }
         customLabelIndexByPosition = labels
-        categoryIndex = headers.firstIndex(of: MerchantCenterExportFormat.categoryColumnName)
+        categoryIndex = headers.firstIndex(of: format.categoryColumnName)
     }
 
     func value(at index: Int?, in fields: [String]) -> String? {

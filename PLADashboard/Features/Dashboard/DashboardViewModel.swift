@@ -258,6 +258,8 @@ final class DashboardViewModel {
             try await databaseClient.rebuildProductWeeklyMetrics()
             guard generation == loadGeneration else { return }
             dataSource = .database
+            await reloadFilterCatalogsFromDatabase()
+            guard generation == loadGeneration else { return }
             await refreshData()
         } catch {
             guard generation == loadGeneration else { return }
