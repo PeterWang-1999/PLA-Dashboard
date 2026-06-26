@@ -34,14 +34,14 @@ struct RootView: View {
         .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 280)
         .fileImporter(
             isPresented: $importViewModel.showFileImporter,
-            allowedContentTypes: [.commaSeparatedText, .tabSeparatedText],
+            allowedContentTypes: [.commaSeparatedText, .tabSeparatedText, .plainText, .text, .data],
             allowsMultipleSelection: false
         ) { result in
             switch result {
             case .success(let urls):
                 importViewModel.handleImportedURLs(urls)
             case .failure(let error):
-                importViewModel.errorMessage = error.localizedDescription
+                importViewModel.errorMessage = ImportUserFacingError.message(for: error)
             }
         }
         .onAppear {

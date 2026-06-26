@@ -24,6 +24,13 @@ final class ProductIDNormalizerTests: XCTestCase {
         XCTAssertEqual(result.confidence, .high)
     }
 
+    func testNormalizeMerchantSPrefixItemID() {
+        let result = ProductIDNormalizer.normalize("S9730219")
+        XCTAssertEqual(result.productID, "9730219")
+        XCTAssertEqual(result.sourceFormat, .lsinPrefix)
+        XCTAssertEqual(result.confidence, .high)
+    }
+
     func testEmptyValue() {
         let result = ProductIDNormalizer.normalize("   ")
         XCTAssertEqual(result.productID, "")

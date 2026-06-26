@@ -117,11 +117,11 @@ final class ImportViewModel {
         let accountKind = accountKind
         let reloadFilterCatalogs = onReloadFilterCatalogs
         let importCompleted = onImportCompleted
+        let securityScopedAccess = url.startAccessingSecurityScopedResource()
 
         importTask = Task.detached(priority: .userInitiated) { [weak self] in
-            let accessed = url.startAccessingSecurityScopedResource()
             defer {
-                if accessed {
+                if securityScopedAccess {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
@@ -221,7 +221,7 @@ final class ImportViewModel {
                 }
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-                    self.errorMessage = pipelineError.localizedDescription
+                    self.errorMessage = ImportUserFacingError.message(for: pipelineError)
                     self.isImporting = false
                     self.isLoadingImportErrors = false
                     self.progress = nil
@@ -230,7 +230,7 @@ final class ImportViewModel {
             } catch {
                 await MainActor.run { [weak self] in
                     guard let self else { return }
-                    self.errorMessage = error.localizedDescription
+                    self.errorMessage = ImportUserFacingError.message(for: error)
                     self.isImporting = false
                     self.isLoadingImportErrors = false
                     self.progress = nil

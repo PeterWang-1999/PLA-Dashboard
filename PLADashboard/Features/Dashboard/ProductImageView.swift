@@ -3,26 +3,25 @@ import SwiftUI
 struct ProductImageView: View {
     let imageURL: URL?
 
+    @State private var loadedImage: NSImage?
+    @State private var isLoading = false
+    @State private var loadFailed = false
     @State private var reloadToken = 0
 
     var body: some View {
         Group {
-            if let imageURL {
-                AsyncImage(url: imageURLWithReloadToken(imageURL)) { phase in
-                    switch phase {
-                    case .empty:
-                        ProgressView()
-                            .controlSize(.small)
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    case .failure:
-                        failurePlaceholder
-                    @unknown default:
-                        placeholder
-                    }
-                }
+            if let loadedImage {
+                Image(nsImage: loadedImage)
+                    .resizable()
+                    .scaledToFill()
+            } else if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            } else if loadFailed {
+                failurePlaceholder
+            } else if imageURL != nil {
+                ProgressView()
+                    .controlSize(.small)
             } else {
                 placeholder
             }
@@ -34,7 +33,25 @@ struct ProductImageView: View {
                 .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 0.5)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(imageURL == nil ? "无产品图片" : "产品图片")
+        .accessibilityLabel(accessibilityLabelText)
+        .task(id: loadTaskID) {
+            await loadImageIfNeeded()
+        }
+    }
+
+    private var loadTaskID: String {
+        guard let imageURL else { return "nil" }
+        return "\(imageURL.absoluteString)|\(reloadToken)"
+    }
+
+    private var accessibilityLabelText: String {
+        if loadFailed {
+            return "产品图片加载失败"
+        }
+        if loadedImage != nil {
+            return "产品图片"
+        }
+        return imageURL == nil ? "无产品图片" : "产品图片"
     }
 
     private var failurePlaceholder: some View {
@@ -43,6 +60,8 @@ struct ProductImageView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Button("重试") {
+                loadedImage = nil
+                loadFailed = false
                 reloadToken += 1
             }
             .buttonStyle(.plain)
@@ -64,13 +83,41 @@ struct ProductImageView: View {
             .background(Color(.quaternarySystemFill))
     }
 
-    private func imageURLWithReloadToken(_ baseURL: URL) -> URL {
-        guard reloadToken > 0 else { return baseURL }
-        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
-        var queryItems = components?.queryItems ?? []
-        queryItems.append(URLQueryItem(name: "reload", value: "\(reloadToken)"))
-        components?.queryItems = queryItems
-        return components?.url ?? baseURL
+    @MainActor
+    private func loadImageIfNeeded() async {
+        guard let imageURL else {
+            loadedImage = nil
+            loadFailed = false
+            isLoading = false
+            return
+        }
+
+        isLoading = true
+        loadFailed = false
+        let token = reloadToken
+
+        do {
+            let data = try await ProductImageLoader.shared.loadImageData(
+                from: imageURL,
+                reloadToken: token
+            )
+            guard !Task.isCancelled, token == reloadToken else { return }
+            if let image = NSImage(data: data) {
+                loadedImage = image
+                loadFailed = false
+            } else {
+                loadedImage = nil
+                loadFailed = true
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled, token == reloadToken else { return }
+            loadedImage = nil
+            loadFailed = true
+        }
+
+        isLoading = false
     }
 }
 

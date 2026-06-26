@@ -102,7 +102,7 @@ enum ProductPerformanceRowMapper {
         return ProductPerformanceRowModel(
             id: product.productId,
             lsin: displayLSIN,
-            imageURL: product.imageUrl.flatMap(URL.init(string:)),
+            imageURL: ProductImageURLResolver.resolve(product.imageUrl),
             cost: DashboardMetricFormatter.formatCurrencyFromCents(sixWeekTotals.costCents),
             costShare: DashboardMetricFormatter.formatSharePercent(
                 costCents: sixWeekTotals.costCents,

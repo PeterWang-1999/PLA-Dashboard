@@ -111,15 +111,15 @@ extension DatabaseClient {
         for candidate in candidates {
             if var existing = existingByID[candidate.productId] {
                 if shouldReplaceProduct(existing: existing, incoming: candidate, importId: importId) {
-                    existing.title = pickBetterString(existing.title, candidate.title)
-                    existing.canonicalLink = pickBetterString(existing.canonicalLink, candidate.canonicalLink)
-                    existing.imageUrl = pickBetterString(existing.imageUrl, candidate.imageUrl)
-                    existing.customLabel0 = pickBetterString(existing.customLabel0, candidate.customLabel0)
-                    existing.customLabel1 = pickBetterString(existing.customLabel1, candidate.customLabel1)
-                    existing.customLabel2 = pickBetterString(existing.customLabel2, candidate.customLabel2)
-                    existing.customLabel3 = pickBetterString(existing.customLabel3, candidate.customLabel3)
-                    existing.customLabel4 = pickBetterString(existing.customLabel4, candidate.customLabel4)
-                    existing.googleProductCategory = pickBetterString(
+                    existing.title = ProductCatalogMerge.pickBetterString(existing.title, candidate.title)
+                    existing.canonicalLink = ProductCatalogMerge.pickBetterString(existing.canonicalLink, candidate.canonicalLink)
+                    existing.imageUrl = ProductCatalogMerge.pickBetterString(existing.imageUrl, candidate.imageUrl)
+                    existing.customLabel0 = ProductCatalogMerge.pickBetterString(existing.customLabel0, candidate.customLabel0)
+                    existing.customLabel1 = ProductCatalogMerge.pickBetterString(existing.customLabel1, candidate.customLabel1)
+                    existing.customLabel2 = ProductCatalogMerge.pickBetterString(existing.customLabel2, candidate.customLabel2)
+                    existing.customLabel3 = ProductCatalogMerge.pickBetterString(existing.customLabel3, candidate.customLabel3)
+                    existing.customLabel4 = ProductCatalogMerge.pickBetterString(existing.customLabel4, candidate.customLabel4)
+                    existing.googleProductCategory = ProductCatalogMerge.pickBetterString(
                         existing.googleProductCategory,
                         normalizedCategory(from: candidate)
                     )
@@ -129,7 +129,7 @@ extension DatabaseClient {
                     existing.lastSeenAt = importedAt
                 }
                 if let incomingCategory = normalizedCategory(from: candidate) {
-                    existing.googleProductCategory = pickBetterString(
+                    existing.googleProductCategory = ProductCatalogMerge.pickBetterString(
                         existing.googleProductCategory,
                         incomingCategory
                     )
@@ -162,14 +162,6 @@ extension DatabaseClient {
             return true
         }
         return false
-    }
-
-    private func pickBetterString(_ existing: String?, _ incoming: String?) -> String? {
-        let existingTrimmed = existing?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let incomingTrimmed = incoming?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if existingTrimmed.isEmpty { return incomingTrimmed.isEmpty ? existing : incoming }
-        if incomingTrimmed.isEmpty { return existing }
-        return incomingTrimmed.count >= existingTrimmed.count ? incoming : existing
     }
 
     private func normalizedCategory(from candidate: ProductRecord) -> String? {

@@ -72,4 +72,16 @@ final class ImportTextEncodingTests: XCTestCase {
         let after = try Data(contentsOf: tempURL)
         XCTAssertEqual(before, after)
     }
+
+    func testLargeUTF8FileDoesNotLoadEntireFileIntoMemory() throws {
+        let line = String(repeating: "x", count: 1_024) + "\n"
+        let repeatedLine = String(repeating: line, count: 8_192)
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("tsv")
+        try Data(repeatedLine.utf8).write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        XCTAssertFalse(try ImportTextEncoding.normalizeToUTF8IfNeeded(at: tempURL))
+    }
 }

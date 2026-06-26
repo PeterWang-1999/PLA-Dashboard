@@ -114,6 +114,8 @@ struct SettingsView: View {
             } footer: {
                 Text("仅删除当前账户 Google Ads 日表中早于保留期的行；产品主表与导入记录保留。清理后将自动重建周聚合。")
             }
+
+            ProductImageDiagnosticsSection(accountID: accountID, accountName: accountName)
         }
         .confirmationDialog(
             "确认清理过期数据？",

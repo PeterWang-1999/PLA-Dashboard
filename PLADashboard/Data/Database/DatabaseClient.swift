@@ -77,4 +77,12 @@ actor DatabaseClient {
     func storeDashboardMetricsCache(_ cache: DashboardMetricsCache) {
         dashboardMetricsCache = cache
     }
+
+    /// 合并自建站 `S` 前缀 product_id 与数字 ID（幂等，可由诊断或迁移触发）。
+    func reconcileLsinPrefixedProductIDs() throws {
+        try dbQueue.write { db in
+            try Migration_v5_LsinProductIDReconciliation.migrate(db)
+        }
+        invalidateDashboardCache()
+    }
 }

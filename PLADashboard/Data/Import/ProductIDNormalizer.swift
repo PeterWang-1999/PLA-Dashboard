@@ -77,6 +77,18 @@ enum ProductIDNormalizer {
             )
         }
 
+        if let match = lsinPattern.firstMatch(in: trimmed, range: range),
+           match.numberOfRanges >= 2,
+           let digitsRange = Range(match.range(at: 1), in: trimmed) {
+            return NormalizedProductIdentifier(
+                rawValue: trimmed,
+                productID: String(trimmed[digitsRange]),
+                variantID: nil,
+                sourceFormat: .lsinPrefix,
+                confidence: .high
+            )
+        }
+
         if let underscoreIndex = trimmed.firstIndex(of: "_") {
             let prefix = String(trimmed[..<underscoreIndex])
             guard !prefix.isEmpty else {

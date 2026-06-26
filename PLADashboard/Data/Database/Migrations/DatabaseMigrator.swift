@@ -32,6 +32,10 @@ struct AppDatabaseMigrator {
             try Migration_v4_PerformanceIndexes.migrate(db)
         }
 
+        migrator.registerMigration("v5_lsin_product_id_reconciliation") { db in
+            try Migration_v5_LsinProductIDReconciliation.migrate(db)
+        }
+
         try migrator.migrate(dbQueue)
     }
 }

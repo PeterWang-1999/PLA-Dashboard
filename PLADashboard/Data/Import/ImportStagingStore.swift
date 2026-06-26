@@ -16,7 +16,7 @@ enum ImportStagingStore {
         try WorkspacePaths.importsRoot(accountID: accountID)
     }
 
-    /// 将用户选择的文件复制到 App Container staging，并生成 checksum 与 security-scoped bookmark。
+    /// 将用户选择的文件复制到 App Container staging，并生成 checksum 与 bookmark。
     static func stage(
         sourceURL: URL,
         accountID: String,
@@ -33,15 +33,33 @@ enum ImportStagingStore {
         if fileManager.fileExists(atPath: destinationURL.path) {
             try fileManager.removeItem(at: destinationURL)
         }
-        try fileManager.copyItem(at: sourceURL, to: destinationURL)
-        _ = try ImportTextEncoding.normalizeToUTF8IfNeeded(at: destinationURL)
 
-        let checksum = try sha256(of: destinationURL)
-        let bookmarkData = try destinationURL.bookmarkData(
-            options: .withSecurityScope,
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        )
+        do {
+            try fileManager.copyItem(at: sourceURL, to: destinationURL)
+        } catch {
+            throw ImportStagingError.copyFailed(path: sourceURL.path, underlying: error)
+        }
+
+        do {
+            _ = try ImportTextEncoding.normalizeToUTF8IfNeeded(at: destinationURL)
+        } catch {
+            try? fileManager.removeItem(at: destinationURL)
+            throw ImportStagingError.encodingFailed(path: destinationURL.path, underlying: error)
+        }
+
+        let checksum: String
+        do {
+            checksum = try sha256(of: destinationURL)
+        } catch {
+            throw ImportStagingError.checksumFailed(path: destinationURL.path, underlying: error)
+        }
+
+        let bookmarkData: Data
+        do {
+            bookmarkData = try makeBookmark(for: destinationURL)
+        } catch {
+            throw ImportStagingError.bookmarkFailed(path: destinationURL.path, underlying: error)
+        }
 
         return ImportStagingResult(
             importId: importId,
@@ -54,13 +72,30 @@ enum ImportStagingStore {
 
     static func resolveBookmark(_ bookmarkData: Data) throws -> URL {
         var isStale = false
-        let url = try URL(
-            resolvingBookmarkData: bookmarkData,
-            options: .withSecurityScope,
-            relativeTo: nil,
-            bookmarkDataIsStale: &isStale
+        do {
+            return try URL(
+                resolvingBookmarkData: bookmarkData,
+                options: [.withoutImplicitStartAccessing],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+        } catch {
+            return try URL(
+                resolvingBookmarkData: bookmarkData,
+                options: [.withSecurityScope],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+        }
+    }
+
+    /// App 容器内文件使用 minimal bookmark；无需 security scope（Apple File System Programming Guide）。
+    private static func makeBookmark(for fileURL: URL) throws -> Data {
+        try fileURL.bookmarkData(
+            options: [.minimalBookmark],
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
         )
-        return url
     }
 
     private static func sha256(of fileURL: URL) throws -> String {
@@ -77,12 +112,24 @@ enum ImportStagingStore {
 }
 
 enum ImportStagingError: Error, LocalizedError {
-    case copyFailed(String)
+    case copyFailed(path: String, underlying: Error)
+    case encodingFailed(path: String, underlying: Error)
+    case checksumFailed(path: String, underlying: Error)
+    case bookmarkFailed(path: String, underlying: Error)
 
     var errorDescription: String? {
         switch self {
-        case .copyFailed(let message):
-            "无法复制文件到 staging：\(message)"
+        case .copyFailed(_, let underlying):
+            return ImportUserFacingError.message(for: underlying, phase: .stagingCopy)
+        case .encodingFailed(_, let underlying):
+            if let normalization = underlying as? ImportTextNormalizationError {
+                return normalization.errorDescription
+            }
+            return ImportUserFacingError.message(for: underlying, phase: .stagingEncoding)
+        case .checksumFailed(_, let underlying):
+            return ImportUserFacingError.message(for: underlying, phase: .stagingChecksum)
+        case .bookmarkFailed(_, let underlying):
+            return ImportUserFacingError.message(for: underlying, phase: .stagingBookmark)
         }
     }
 }
