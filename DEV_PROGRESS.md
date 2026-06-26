@@ -4,11 +4,70 @@
 
 ## 当前阶段
 
-SHO 产品图加载诊断与优化 — **已完成**（2026-06-26）
+SHO 产品图加载率优化（重试修复 + 并发限流）— **已完成**（2026-06-26）
 
-- 目标：修复自建站账户产品图长期转圈；修复大文件 Merchant 导入 staging 失败
+- 根因：重试时追加 `?reload=` 触发 CDN 403；每页 30 张图并发请求触发限流；Accept 协商可能返回 NSImage 无法解码的格式
+- 实现：重试不改 URL、litbimg 去掉全部 query、3 路并发限流 + 403/502 退避重试、合并时优先无 query 图片链接
 
 ## 变更记录
+
+### 2026-06-26 — 修复产品图重试无效与大部分加载失败
+
+**内容**
+
+- **重试 bug**：`ProductImageLoader` 重试时在 URL 追加 `?reload=N`，litbimg CDN 对任意 query 返回 403，导致点击「重试」必失败；改为仅用 `cachePolicy` 绕过缓存，URL 保持不变
+- **并发限流**：新增 `ImageFetchLimiter`（最多 3 路并发），降低每页 30 张图同时请求触发的 CDN 限流
+- **退避重试**：对 403/502/503 等状态码自动重试最多 3 次（250ms 递增延迟）
+- **Accept 头**：改为只请求 `image/jpeg,image/png`，避免 CDN 返回 webp/avif 导致 `NSImage` 解码失败
+- **Cookie**：启用 `HTTPCookieStorage.shared`，与浏览器行为一致
+- **URL 规范化**：litbimg 域名去掉全部 query（不仅 `f=0`）
+- **导入合并**：`pickBetterImageURL` 优先无 query、HTTPS 的图片链接
+
+**涉及文件**
+
+- `PLADashboard/Features/Dashboard/ProductImageLoader.swift`
+- `PLADashboard/Features/Dashboard/ProductImageURLResolver.swift`
+- `PLADashboard/Data/Database/ProductCatalogMerge.swift`
+- `PLADashboard/Data/Database/DatabaseClient+Import.swift`
+- `PLADashboardTests/ProductImageURLResolverTests.swift`
+- `PLADashboardTests/ProductCatalogMergeTests.swift`
+
+**验证结果**
+
+```bash
+xcodebuild -scheme PLADashboard -destination 'platform=macOS' test \
+  -only-testing:PLADashboardTests/ProductImageURLResolverTests \
+  -only-testing:PLADashboardTests/ProductCatalogMergeTests
+# TEST SUCCEEDED
+```
+
+**下一步**
+
+- 用户重新打开看板验证图片加载率；若仍大量失败，考虑导入时本地化缓存图片（方案 C）
+
+### 2026-06-26 — litbimg CDN 图片 403 修复（方案 A+B）
+
+**内容**
+
+- `ProductImageURLResolver` 对 rightinthebox 域名去掉 `?f=0` 查询参数
+- `ProductImageLoader` 为 rightinthebox 图片附加 Referer 与 Safari User-Agent
+- `Info.plist` 为 litbimg / litb-cgis 配置 ATS HTTP 例外
+
+**涉及文件**
+
+- `PLADashboard/Features/Dashboard/ProductImageURLResolver.swift`
+- `PLADashboard/Features/Dashboard/ProductImageLoader.swift`
+- `PLADashboard/Info.plist`
+- `PLADashboard.xcodeproj/project.pbxproj`
+- `PLADashboardTests/ProductImageURLResolverTests.swift`
+
+**验证结果**
+
+```bash
+xcodebuild -scheme PLADashboard -destination 'platform=macOS' test \
+  -only-testing:PLADashboardTests/ProductImageURLResolverTests
+# TEST SUCCEEDED
+```
 
 ### 2026-06-26 — 修复大文件导入 staging 失败与中文报错
 

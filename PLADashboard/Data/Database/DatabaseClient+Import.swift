@@ -113,7 +113,7 @@ extension DatabaseClient {
                 if shouldReplaceProduct(existing: existing, incoming: candidate, importId: importId) {
                     existing.title = ProductCatalogMerge.pickBetterString(existing.title, candidate.title)
                     existing.canonicalLink = ProductCatalogMerge.pickBetterString(existing.canonicalLink, candidate.canonicalLink)
-                    existing.imageUrl = ProductCatalogMerge.pickBetterString(existing.imageUrl, candidate.imageUrl)
+                    existing.imageUrl = ProductCatalogMerge.pickBetterImageURL(existing.imageUrl, candidate.imageUrl)
                     existing.customLabel0 = ProductCatalogMerge.pickBetterString(existing.customLabel0, candidate.customLabel0)
                     existing.customLabel1 = ProductCatalogMerge.pickBetterString(existing.customLabel1, candidate.customLabel1)
                     existing.customLabel2 = ProductCatalogMerge.pickBetterString(existing.customLabel2, candidate.customLabel2)

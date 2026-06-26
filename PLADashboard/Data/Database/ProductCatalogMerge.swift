@@ -9,10 +9,42 @@ enum ProductCatalogMerge {
         return incomingTrimmed.count >= existingTrimmed.count ? incoming : existing
     }
 
+    /// 多 variant 合并时优先无 query、HTTPS 的图片链接，避免 litbimg `?f=0` 等参数导致 CDN 403。
+    static func pickBetterImageURL(_ existing: String?, _ incoming: String?) -> String? {
+        let existingTrimmed = existing?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let incomingTrimmed = incoming?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if existingTrimmed.isEmpty { return incomingTrimmed.isEmpty ? existing : incoming }
+        if incomingTrimmed.isEmpty { return existing }
+
+        let existingScore = imageURLPreferenceScore(existingTrimmed)
+        let incomingScore = imageURLPreferenceScore(incomingTrimmed)
+        if incomingScore != existingScore {
+            return incomingScore > existingScore ? incoming : existing
+        }
+        return incomingTrimmed.count >= existingTrimmed.count ? incoming : existing
+    }
+
+    private static func imageURLPreferenceScore(_ raw: String) -> Int {
+        var score = 0
+        let lowercased = raw.lowercased()
+        if lowercased.hasPrefix("https://") {
+            score += 2
+        } else if lowercased.hasPrefix("http://") {
+            score += 1
+        }
+        if !raw.contains("?") {
+            score += 4
+        }
+        if lowercased.contains("f=0") {
+            score -= 2
+        }
+        return score
+    }
+
     static func merge(into target: inout ProductRecord, from source: ProductRecord) {
         target.title = pickBetterString(target.title, source.title)
         target.canonicalLink = pickBetterString(target.canonicalLink, source.canonicalLink)
-        target.imageUrl = pickBetterString(target.imageUrl, source.imageUrl)
+        target.imageUrl = pickBetterImageURL(target.imageUrl, source.imageUrl)
         target.customLabel0 = pickBetterString(target.customLabel0, source.customLabel0)
         target.customLabel1 = pickBetterString(target.customLabel1, source.customLabel1)
         target.customLabel2 = pickBetterString(target.customLabel2, source.customLabel2)
