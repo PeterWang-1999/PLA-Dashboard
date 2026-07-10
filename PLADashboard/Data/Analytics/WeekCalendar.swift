@@ -58,9 +58,22 @@ enum WeekCalendar {
         return formatDay(weekStartSunday(for: date))
     }
 
-    /// 以 `endDate` 所在周为最近一周，返回由旧到新的 `reportingWeekCount` 个 `week_start`。
+    /// 不晚于 `date` 的最近一个周六（该自然周已完整：周日–周六）。
+    ///
+    /// 看板报告周必须以完整周为锚点：若最新数据日落在周中（如周三），
+    /// 直接以该日所在周为「最近一周」会纳入不完整周并挤掉更早的完整周，
+    /// 导致消费等 6 周汇总系统性偏低。
+    static func lastCompleteWeekEnd(onOrBefore date: Date) -> Date {
+        let calendar = sundayCalendar
+        let weekday = calendar.component(.weekday, from: date) // 1=Sun … 7=Sat
+        let daysBack = weekday % 7
+        return calendar.date(byAdding: .day, value: -daysBack, to: date) ?? date
+    }
+
+    /// 以不晚于 `endDate` 的最近一个**完整周**为最近一周，返回由旧到新的 `reportingWeekCount` 个 `week_start`。
     static func reportingWeekStarts(endingAt endDate: Date, count: Int = AnalyticsConfiguration.reportingWeekCount) -> [String] {
-        let latestWeekStart = weekStartSunday(for: endDate)
+        let completeWeekEnd = lastCompleteWeekEnd(onOrBefore: endDate)
+        let latestWeekStart = weekStartSunday(for: completeWeekEnd)
         let calendar = sundayCalendar
         return (0..<count).reversed().compactMap { offset in
             guard let week = calendar.date(byAdding: .day, value: -7 * offset, to: latestWeekStart) else {

@@ -4,11 +4,37 @@
 
 ## 当前阶段
 
-投放产品明细导入进度条（写入条数）— **已完成**（2026-07-10）
+修复看板 6 周报告窗口锚定（完整周）— **已完成**（2026-07-10）
 
-- 目标：XLSX/CSV 导入显示与其他数据源一致的「写入数据库」确定进度（已处理 / 总行数）
+- 目标：排查 S9730219 消费 5229.74 vs Excel 6984.7，确保看板汇总与业务「近 6 完整周」一致
 
 ## 变更记录
+
+### 2026-07-10 — 修复报告周锚定：排除不完整最新周
+
+**内容**
+
+- 根因：明细最新日为 2026-07-08（周三）时，旧逻辑以该日所在周为锚，6 周变成 05-31…07-05，丢掉完整的 05-24 周并纳入仅 4 天的残缺周 → S9730219 消费显示 5229.74
+- Excel 全量合计 6984.70（含残缺周）；业务参考汇总 Cost_6w（W22–W27）为 6560.21
+- `reportingWeekStarts` 改为先回退到不晚于最新日的最近周六，再取 6 个完整自然周
+- 补充单测复现 5229.74 / 6560.20 / 6984.70 三组数字
+
+**涉及文件**
+
+- `PLADashboard/Data/Analytics/WeekCalendar.swift`
+- `PLADashboardTests/WeekCalendarReportingWindowTests.swift`
+
+**验证结果**
+
+```bash
+xcodebuild -scheme PLADashboard -destination 'platform=macOS' test \
+  -only-testing:PLADashboardTests/WeekCalendarReportingWindowTests
+# TEST SUCCEEDED
+```
+
+**下一步**
+
+- 重新打开看板或点「刷新」验证 S9730219 消费约为 6560.21（非 Excel 全量 6984.7）
 
 ### 2026-07-10 — 投放产品明细导入补齐确定进度条
 
