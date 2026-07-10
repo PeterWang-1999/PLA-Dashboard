@@ -146,6 +146,13 @@ struct DashboardView: View {
                     .accessibilityLabel(viewModel.isExporting ? "正在导出" : "正在加载")
             }
 
+            if let period = viewModel.reportingPeriodLabel, !viewModel.showsEmptyState {
+                Text(period)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(period)
+            }
+
             Spacer()
 
             if !viewModel.showsEmptyState {

@@ -14,6 +14,20 @@ struct DashboardPageResult: Sendable {
     let rows: [ProductPerformanceRowModel]
     let totalCount: Int
     let totalPages: Int
+    /// 当前看板使用的报告周起始日（周日，由旧到新）。
+    let weekStarts: [String]
+
+    init(
+        rows: [ProductPerformanceRowModel],
+        totalCount: Int,
+        totalPages: Int,
+        weekStarts: [String] = []
+    ) {
+        self.rows = rows
+        self.totalCount = totalCount
+        self.totalPages = totalPages
+        self.weekStarts = weekStarts
+    }
 }
 
 enum DashboardMetricFormatter {

@@ -4,12 +4,42 @@
 
 ## 当前阶段
 
-修复看板 6 周报告窗口锚定（完整周）— **已完成**（2026-07-10）
+看板底栏显示报告周期（如 当前报告周期：2026-W22 至 2026-W27）— **已完成**（2026-07-10）
 
-- 目标：排查 S9730219 消费 5229.74 vs Excel 6984.7，确保看板汇总与业务「近 6 完整周」一致
+- 目标：在产品数据底栏左侧展示当前 6 个完整报告周的周次范围
 
 ## 变更记录
 
+### 2026-07-10 — 底栏左侧展示报告周期周次
+
+**内容**
+
+- `WeekCalendar` 按周结束周六的 ISO 周次生成 `yyyy-Www`（与业务 `week_mapping` 一致）
+- `DashboardPageResult` 带回 `weekStarts`；ViewModel 生成 `reportingPeriodLabel`
+- 底栏左侧以次要脚注样式显示，例如 `当前报告周期：2026-W22 至 2026-W27`；账户切换时清空
+
+**涉及文件**
+
+- `PLADashboard/Data/Analytics/WeekCalendar.swift`
+- `PLADashboard/Data/Analytics/ProductPerformanceRowMapper.swift`
+- `PLADashboard/Data/Database/DatabaseClient+Dashboard.swift`
+- `PLADashboard/Features/Dashboard/DashboardViewModel.swift`
+- `PLADashboard/Features/Dashboard/DashboardView.swift`
+- `PLADashboardTests/WeekCalendarReportingWindowTests.swift`
+- `PLADashboardTests/DashboardViewModelAccountSwitchTests.swift`
+
+**验证结果**
+
+```bash
+xcodebuild -scheme PLADashboard -destination 'platform=macOS' test \
+  -only-testing:PLADashboardTests/WeekCalendarReportingWindowTests \
+  -only-testing:PLADashboardTests/DashboardViewModelAccountSwitchTests
+# TEST SUCCEEDED
+```
+
+**补充**
+
+- 文案改为带前缀：`当前报告周期：2026-W22 至 2026-W27`
 ### 2026-07-10 — 修复报告周锚定：排除不完整最新周
 
 **内容**

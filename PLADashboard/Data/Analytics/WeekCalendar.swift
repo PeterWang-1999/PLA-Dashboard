@@ -83,6 +83,31 @@ enum WeekCalendar {
         }
     }
 
+    /// PLA 周标签：周日–周六自然周，按该周**周六**的 ISO 周年/周次格式化为 `yyyy-Www`（如 `2026-W22`）。
+    ///
+    /// 与业务汇总表 `week_mapping` 一致：`2026-05-24`（周日）起的周对应 `2026-W22`。
+    static func plaWeekLabel(forWeekStartDay weekStart: String) -> String? {
+        guard let start = parseDay(weekStart),
+              let saturday = sundayCalendar.date(byAdding: .day, value: 6, to: start) else {
+            return nil
+        }
+        var iso = Calendar(identifier: .iso8601)
+        iso.timeZone = TimeZone(secondsFromGMT: 0)!
+        let year = iso.component(.yearForWeekOfYear, from: saturday)
+        let week = iso.component(.weekOfYear, from: saturday)
+        return String(format: "%d-W%02d", year, week)
+    }
+
+    /// 报告周期文案，例如 `当前报告周期：2026-W22 至 2026-W27`。
+    static func reportingPeriodLabel(weekStarts: [String]) -> String? {
+        guard let first = weekStarts.first.flatMap(plaWeekLabel(forWeekStartDay:)),
+              let last = weekStarts.last.flatMap(plaWeekLabel(forWeekStartDay:)) else {
+            return nil
+        }
+        let range = first == last ? first : "\(first) 至 \(last)"
+        return "当前报告周期：\(range)"
+    }
+
     static func microsToCents(_ micros: Int) -> Int {
         micros / 10_000
     }

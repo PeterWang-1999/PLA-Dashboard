@@ -75,7 +75,7 @@ extension DatabaseClient {
 
         let contextBundle = try loadDashboardMetricsContext()
         guard let contextBundle else {
-            return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1)
+            return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1, weekStarts: [])
         }
 
         let hasAlertFilter = alertFilterLabel(for: filters.alertFilter) != nil
@@ -228,7 +228,7 @@ extension DatabaseClient {
         )
 
         guard ranked.totalCount > 0, !ranked.products.isEmpty else {
-            return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1)
+            return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1, weekStarts: weekStarts)
         }
 
         let totalPages = max(1, Int(ceil(Double(ranked.totalCount) / Double(pageSize))))
@@ -239,7 +239,12 @@ extension DatabaseClient {
             alertFilter: nil
         )
 
-        return DashboardPageResult(rows: pageRows, totalCount: ranked.totalCount, totalPages: totalPages)
+        return DashboardPageResult(
+            rows: pageRows,
+            totalCount: ranked.totalCount,
+            totalPages: totalPages,
+            weekStarts: weekStarts
+        )
     }
 
     private func fetchDashboardPageWithAlertFilter(
@@ -277,7 +282,7 @@ extension DatabaseClient {
         }
 
         guard !mappedRows.isEmpty else {
-            return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1)
+            return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1, weekStarts: weekStarts)
         }
 
         mappedRows.sort { lhs, rhs in
@@ -291,7 +296,12 @@ extension DatabaseClient {
         let end = min(start + pageSize, totalCount)
         let pageRows = start < end ? Array(mappedRows[start..<end]) : []
 
-        return DashboardPageResult(rows: pageRows, totalCount: totalCount, totalPages: totalPages)
+        return DashboardPageResult(
+            rows: pageRows,
+            totalCount: totalCount,
+            totalPages: totalPages,
+            weekStarts: weekStarts
+        )
     }
 
     private struct RankedProductsResult {

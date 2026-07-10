@@ -25,10 +25,12 @@ Ador - 产品数据
         let viewModel = DashboardViewModel()
         viewModel.bootstrapDataSource(hasMetrics: true)
         viewModel.totalPages = 25
+        viewModel.reportingPeriodLabel = "当前报告周期：2026-W22 至 2026-W27"
 
         viewModel.resetForAccountSwitch()
 
         XCTAssertEqual(viewModel.totalPages, 1)
+        XCTAssertNil(viewModel.reportingPeriodLabel)
         XCTAssertTrue(viewModel.showsEmptyState)
     }
 

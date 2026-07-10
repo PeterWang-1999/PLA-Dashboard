@@ -87,4 +87,24 @@ final class WeekCalendarReportingWindowTests: XCTestCase {
         XCTAssertEqual(buggyCost, 5229.74, accuracy: 0.01)
         XCTAssertNotEqual(completeCost, buggyCost, accuracy: 0.01)
     }
+
+    func testPlaWeekLabelUsesISOWeekOfSaturday() {
+        XCTAssertEqual(WeekCalendar.plaWeekLabel(forWeekStartDay: "2026-05-24"), "2026-W22")
+        XCTAssertEqual(WeekCalendar.plaWeekLabel(forWeekStartDay: "2026-06-28"), "2026-W27")
+    }
+
+    func testReportingPeriodLabelFormatsWeekRange() {
+        let weeks = [
+            "2026-05-24",
+            "2026-05-31",
+            "2026-06-07",
+            "2026-06-14",
+            "2026-06-21",
+            "2026-06-28",
+        ]
+        XCTAssertEqual(
+            WeekCalendar.reportingPeriodLabel(weekStarts: weeks),
+            "当前报告周期：2026-W22 至 2026-W27"
+        )
+    }
 }

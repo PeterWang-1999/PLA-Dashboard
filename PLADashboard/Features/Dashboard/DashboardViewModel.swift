@@ -15,6 +15,8 @@ final class DashboardViewModel {
     var currentPage = 1
     var pageSize: Int { AppSettings.defaultPageSize }
     var totalPages = 1
+    /// 当前报告周期文案，例如 `当前报告周期：2026-W22 至 2026-W27`。
+    var reportingPeriodLabel: String?
     var isLoading = false
     var errorMessage: String?
     var tableSort = DashboardTableSort.default
@@ -79,6 +81,7 @@ final class DashboardViewModel {
         selectedCategoryFilter = .all
         currentPage = 1
         totalPages = 1
+        reportingPeriodLabel = nil
         tableSort = .default
         databaseRows = []
         dataSource = .empty
@@ -235,6 +238,7 @@ final class DashboardViewModel {
             guard generation == loadGeneration else { return }
             databaseRows = result.rows
             totalPages = result.totalPages
+            reportingPeriodLabel = WeekCalendar.reportingPeriodLabel(weekStarts: result.weekStarts)
             if currentPage > totalPages {
                 currentPage = totalPages
             }
@@ -243,6 +247,7 @@ final class DashboardViewModel {
             errorMessage = error.localizedDescription
             databaseRows = []
             totalPages = 1
+            reportingPeriodLabel = nil
         }
 
         guard generation == loadGeneration else { return }
