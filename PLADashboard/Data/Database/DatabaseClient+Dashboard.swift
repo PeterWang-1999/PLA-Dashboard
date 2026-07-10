@@ -164,6 +164,8 @@ extension DatabaseClient {
         weekStarts: [String],
         metricsContext: DashboardMetricsCache
     ) throws -> [ProductPerformanceRowModel] {
+        let snapshotLabels = try snapshotLabelsIfNeeded(for: filters.warningLabelEngine)
+
         if alertFilterLabel(for: filters.alertFilter) != nil {
             let batchSize = 200
             var offset = 0
@@ -183,7 +185,9 @@ extension DatabaseClient {
                     products: ranked.products,
                     weekStarts: weekStarts,
                     metricsContext: metricsContext,
-                    alertFilter: filters.alertFilter
+                    alertFilter: filters.alertFilter,
+                    warningLabelEngine: filters.warningLabelEngine,
+                    snapshotLabels: snapshotLabels
                 )
                 mappedRows.append(contentsOf: batchRows)
 
@@ -208,7 +212,9 @@ extension DatabaseClient {
             products: ranked.products,
             weekStarts: weekStarts,
             metricsContext: metricsContext,
-            alertFilter: nil
+            alertFilter: nil,
+            warningLabelEngine: filters.warningLabelEngine,
+            snapshotLabels: snapshotLabels
         )
     }
 
@@ -236,7 +242,9 @@ extension DatabaseClient {
             products: ranked.products,
             weekStarts: weekStarts,
             metricsContext: metricsContext,
-            alertFilter: nil
+            alertFilter: nil,
+            warningLabelEngine: filters.warningLabelEngine,
+            snapshotLabels: try snapshotLabelsIfNeeded(for: filters.warningLabelEngine)
         )
 
         return DashboardPageResult(
@@ -257,6 +265,7 @@ extension DatabaseClient {
         let batchSize = 200
         var offset = 0
         var mappedRows: [ProductPerformanceRowModel] = []
+        let snapshotLabels = try snapshotLabelsIfNeeded(for: filters.warningLabelEngine)
 
         while true {
             let ranked = try fetchRankedProducts(
@@ -273,7 +282,9 @@ extension DatabaseClient {
                 products: ranked.products,
                 weekStarts: weekStarts,
                 metricsContext: metricsContext,
-                alertFilter: filters.alertFilter
+                alertFilter: filters.alertFilter,
+                warningLabelEngine: filters.warningLabelEngine,
+                snapshotLabels: snapshotLabels
             )
             mappedRows.append(contentsOf: batchRows)
 
@@ -421,7 +432,9 @@ extension DatabaseClient {
         products: [ProductRecord],
         weekStarts: [String],
         metricsContext: DashboardMetricsCache,
-        alertFilter: String?
+        alertFilter: String?,
+        warningLabelEngine: WarningLabelEngine,
+        snapshotLabels: [String: String]
     ) throws -> [ProductPerformanceRowModel] {
         guard !products.isEmpty else { return [] }
 
@@ -435,8 +448,19 @@ extension DatabaseClient {
                 weekStarts: weekStarts,
                 weeklyByProduct: weeklyByProduct,
                 metricsContext: metricsContext,
-                alertFilter: alertFilter
+                alertFilter: alertFilter,
+                warningLabelEngine: warningLabelEngine,
+                snapshotLabels: snapshotLabels
             )
+        }
+    }
+
+    private func snapshotLabelsIfNeeded(for engine: WarningLabelEngine) throws -> [String: String] {
+        switch engine {
+        case .selfBuiltSnapshot:
+            try loadLatestLabelDecisionsByProductId()
+        case .thirdPartyCohort:
+            [:]
         }
     }
 
@@ -445,7 +469,9 @@ extension DatabaseClient {
         weekStarts: [String],
         weeklyByProduct: [String: [ProductWeeklyMetricsRecord]],
         metricsContext: DashboardMetricsCache,
-        alertFilter: String?
+        alertFilter: String?,
+        warningLabelEngine: WarningLabelEngine,
+        snapshotLabels: [String: String]
     ) throws -> ProductPerformanceRowModel? {
         let records = weeklyByProduct[product.productId] ?? []
         let recordByWeek = Dictionary(uniqueKeysWithValues: records.map { ($0.weekStart, $0) })
@@ -458,13 +484,23 @@ extension DatabaseClient {
         let sixWeekTotals = productWeeks.map(\.metrics).reduce(AggregatedMetrics()) { $0 + $1 }
         guard sixWeekTotals.costCents > 0 || sixWeekTotals.conversionValueCents > 0 else { return nil }
 
-        let warning = WeeklyMetricsRules.resolveWarningLabel(
-            productWeeks: productWeeks,
-            overallWeeks: metricsContext.overallWeeks,
-            cohortBenchmarks: metricsContext.cohortBenchmarks,
-            totalPortfolioCostCents: metricsContext.totalCostCents,
-            settings: AnalyticsSettingsSnapshot.current(accountID: accountID)
-        )
+        let warning: ProductWarningLabel?
+        switch warningLabelEngine {
+        case .thirdPartyCohort:
+            warning = WeeklyMetricsRules.resolveWarningLabel(
+                productWeeks: productWeeks,
+                overallWeeks: metricsContext.overallWeeks,
+                cohortBenchmarks: metricsContext.cohortBenchmarks,
+                totalPortfolioCostCents: metricsContext.totalCostCents,
+                settings: AnalyticsSettingsSnapshot.current(accountID: accountID)
+            )
+        case .selfBuiltSnapshot:
+            if let raw = snapshotLabels[product.productId] {
+                warning = ProductWarningLabel(rawValue: raw)
+            } else {
+                warning = nil
+            }
+        }
 
         if let required = alertFilterLabel(for: alertFilter ?? DashboardQueryFilters.alertFilterDefaultOption),
            warning != required {

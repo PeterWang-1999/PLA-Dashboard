@@ -27,6 +27,7 @@ final class DashboardViewModel {
     private var refreshTask: Task<Void, Never>?
     /// 每次账户切换递增，用于丢弃过期的异步加载结果。
     private var loadGeneration: UInt = 0
+    private(set) var warningLabelEngine: WarningLabelEngine = .thirdPartyCohort
 
     var rows: [ProductPerformanceRowModel] {
         switch dataSource {
@@ -65,10 +66,15 @@ final class DashboardViewModel {
 
     func configure(
         databaseClient: DatabaseClient,
+        accountKind: WorkspaceAccountKind = .thirdParty,
         bootstrap: @escaping () async -> Void = {}
     ) {
         self.databaseClient = databaseClient
         self.bootstrapAction = bootstrap
+        warningLabelEngine = WarningLabelEngine.forAccountKind(accountKind)
+        if !alertFilterOptions.contains(selectedAlertFilter) {
+            selectedAlertFilter = Self.alertFilterDefaultOption
+        }
     }
 
     func resetForAccountSwitch() {
@@ -91,6 +97,7 @@ final class DashboardViewModel {
         exportErrorMessage = nil
         categoryCatalog = .empty
         customLabelCatalog = .empty
+        warningLabelEngine = .thirdPartyCohort
     }
 
     func retryAfterError() {
@@ -228,7 +235,8 @@ final class DashboardViewModel {
                 alertFilter: selectedAlertFilter,
                 customLabelFilter: selectedCustomLabelFilter,
                 categoryFilter: selectedCategoryFilter,
-                sort: tableSort
+                sort: tableSort,
+                warningLabelEngine: warningLabelEngine
             )
             let result = try await databaseClient.fetchDashboardPage(
                 filters: filters,
@@ -274,14 +282,17 @@ final class DashboardViewModel {
     }
 
     static let alertFilterDefaultOption = DashboardQueryFilters.alertFilterDefaultOption
-    static let alertFilterOptions = [
-        alertFilterDefaultOption,
-        ProductWarningLabel.highSpendHighEfficiency.rawValue,
-        ProductWarningLabel.highSpendLowEfficiency.rawValue,
-        ProductWarningLabel.lowSpend.rawValue,
-        ProductWarningLabel.highSpend.rawValue,
-        ProductWarningLabel.lowEfficiency.rawValue,
-    ]
+
+    var alertFilterOptions: [String] {
+        let cases: [ProductWarningLabel]
+        switch warningLabelEngine {
+        case .thirdPartyCohort:
+            cases = ProductWarningLabel.thirdPartyFilterCases
+        case .selfBuiltSnapshot:
+            cases = ProductWarningLabel.selfBuiltFilterCases
+        }
+        return [Self.alertFilterDefaultOption] + cases.map(\.rawValue)
+    }
 
     var isAlertFilterActive: Bool {
         selectedAlertFilter != Self.alertFilterDefaultOption
@@ -345,7 +356,8 @@ final class DashboardViewModel {
             alertFilter: selectedAlertFilter,
             customLabelFilter: selectedCustomLabelFilter,
             categoryFilter: selectedCategoryFilter,
-            sort: tableSort
+            sort: tableSort,
+            warningLabelEngine: warningLabelEngine
         )
     }
 

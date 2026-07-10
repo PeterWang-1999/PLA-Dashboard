@@ -114,7 +114,7 @@ struct WarningLabelView: View {
             "minus.circle"
         case .lowSpend:
             "arrow.down.circle"
-        case .highSpendHighEfficiency:
+        case .highSpendHighEfficiency, .highEfficiency:
             "checkmark.circle"
         case .highSpendLowEfficiency:
             "exclamationmark.triangle"
@@ -122,6 +122,12 @@ struct WarningLabelView: View {
             "flame"
         case .lowEfficiency:
             "gauge.with.dots.needle.33percent"
+        case .potentialNew:
+            "sparkles"
+        case .lowSampleOld:
+            "hourglass"
+        case .observation:
+            "eye"
         }
     }
 
@@ -131,7 +137,7 @@ struct WarningLabelView: View {
             .clear
         case .lowSpend:
             Color.blue.opacity(0.15)
-        case .highSpendHighEfficiency:
+        case .highSpendHighEfficiency, .highEfficiency:
             Color.green.opacity(0.15)
         case .highSpendLowEfficiency:
             Color.red.opacity(0.15)
@@ -139,6 +145,12 @@ struct WarningLabelView: View {
             Color.orange.opacity(0.18)
         case .lowEfficiency:
             Color.orange.opacity(0.22)
+        case .potentialNew:
+            Color.teal.opacity(0.15)
+        case .lowSampleOld:
+            Color.blue.opacity(0.12)
+        case .observation:
+            Color.secondary.opacity(0.12)
         }
     }
 
@@ -148,7 +160,7 @@ struct WarningLabelView: View {
             .secondary
         case .lowSpend:
             .blue
-        case .highSpendHighEfficiency:
+        case .highSpendHighEfficiency, .highEfficiency:
             .green
         case .highSpendLowEfficiency:
             .red
@@ -156,6 +168,12 @@ struct WarningLabelView: View {
             .orange
         case .lowEfficiency:
             .orange
+        case .potentialNew:
+            .teal
+        case .lowSampleOld:
+            .blue
+        case .observation:
+            .secondary
         }
     }
 }

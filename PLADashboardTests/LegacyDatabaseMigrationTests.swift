@@ -60,6 +60,7 @@ final class LegacyDatabaseMigrationTests: XCTestCase {
                 customLabel4: nil,
                 lsin: nil,
                 googleProductCategory: nil,
+                firstListedAt: nil,
                 firstSeenAt: importedAt,
                 lastSeenAt: importedAt,
                 updatedFromImportId: "legacy-import"

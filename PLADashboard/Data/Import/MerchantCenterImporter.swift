@@ -178,6 +178,7 @@ actor MerchantCenterImporter {
                         customLabel4: merchantItem.customLabel4,
                         lsin: nil,
                         googleProductCategory: category,
+                        firstListedAt: nil,
                         firstSeenAt: nil,
                         lastSeenAt: nil,
                         updatedFromImportId: nil

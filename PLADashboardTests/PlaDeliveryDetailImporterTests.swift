@@ -3,9 +3,9 @@ import XCTest
 
 final class PlaDeliveryDetailImporterTests: XCTestCase {
     private let sampleCSV = """
-日期,LSIN,Market Cost,Impressions,Clicks,Conversions,Conversion Value
-2026-05-24,S9730219,282.68,25401.0,380.0,6.94,314.16
-2026-05-24,S19954192,127.99,11342.0,165.0,5.63,147.42
+日期,LSIN,Market Cost,Impressions,Clicks,Conversions,Conversion Value,首次上架时间
+2026-05-24,S9730219,282.68,25401.0,380.0,6.94,314.16,2026-03-01
+2026-05-24,S19954192,127.99,11342.0,165.0,5.63,147.42,2025-01-15
 """
 
     func testImportCSVWithoutSkippingHeaderLines() async throws {
@@ -37,6 +37,28 @@ final class PlaDeliveryDetailImporterTests: XCTestCase {
         XCTAssertEqual(first.clicks, 380)
         XCTAssertEqual(first.costMicros, 282_680_000)
         XCTAssertEqual(first.conversionValueCents, 31416)
+
+        let product = try await databaseClient.fetchProducts(ids: ["9730219"]).first
+        XCTAssertEqual(product?.firstListedAt, "2026-03-01")
+    }
+
+    func testImportCSVWithoutFirstListedColumnStillSucceeds() async throws {
+        let csv = """
+日期,LSIN,Market Cost,Impressions,Clicks,Conversions,Conversion Value
+2026-05-24,S9730219,282.68,25401.0,380.0,6.94,314.16
+"""
+        let databaseClient = try DatabaseClient.makeInMemoryForTesting()
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("csv")
+        try csv.write(to: tempURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let importer = PlaDeliveryDetailImporter(databaseClient: databaseClient)
+        let result = try await importer.importFile(sourceURL: tempURL) { _ in }
+        XCTAssertEqual(result.job.validRows, 1)
+        let product = try await databaseClient.fetchProducts(ids: ["9730219"]).first
+        XCTAssertNil(product)
     }
 
     func testImportXLSXFixture() async throws {
@@ -134,5 +156,26 @@ Ador - 产品数据
         let jobs = try await databaseClient.fetchImportJobs()
         XCTAssertFalse(jobs.contains { $0.sourceKind == ImportSourceKind.adsProduct.rawValue })
         XCTAssertTrue(jobs.contains { $0.sourceKind == ImportSourceKind.plaDeliveryDetail.rawValue })
+    }
+
+    func testImportCSVStoresPrimaryCMS3BySpend() async throws {
+        let csv = """
+日期,LSIN,Market Cost,Impressions,Clicks,Conversions,Conversion Value,CMS3
+2026-05-24,S9730219,100.00,1000.0,10.0,1.0,50.00,Dresses
+2026-05-25,S9730219,300.00,2000.0,20.0,2.0,100.00,Shoes
+2026-05-26,S9730219,50.00,500.0,5.0,0.5,20.00,Dresses
+"""
+        let databaseClient = try DatabaseClient.makeInMemoryForTesting()
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("csv")
+        try csv.write(to: tempURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let importer = PlaDeliveryDetailImporter(databaseClient: databaseClient)
+        _ = try await importer.importFile(sourceURL: tempURL) { _ in }
+
+        let product = try await databaseClient.fetchProducts(ids: ["9730219"]).first
+        XCTAssertEqual(product?.plaCms3, "Shoes")
     }
 }

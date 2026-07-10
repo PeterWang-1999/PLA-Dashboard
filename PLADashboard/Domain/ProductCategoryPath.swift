@@ -56,6 +56,23 @@ enum ProductCategoryPath {
         return levels.joined(separator: storageSeparator)
     }
 
+    /// 从已入库类目路径取末级名称，作为标签引擎 CMS3（与 PLA `CMS3` 列等价）。
+    ///
+    /// - 优先使用规范化展示路径（` > ` 分隔）
+    /// - 空路径返回 `未分类`
+    static func cms3Leaf(fromStored stored: String?) -> String {
+        guard let stored else { return "未分类" }
+        let normalized = normalizedForCatalog(fromStored: stored)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return "未分类" }
+        let levels = normalized
+            .components(separatedBy: storageSeparator)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard let leaf = levels.last else { return "未分类" }
+        return leaf
+    }
+
     /// 导入写入 `products.google_product_category` 的值：自建站规范化，三方站保留原样（浅层路径除外）。
     static func storedValue(from raw: String, accountKind: WorkspaceAccountKind) -> String? {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)

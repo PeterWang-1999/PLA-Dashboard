@@ -34,7 +34,7 @@ struct DashboardToolbarAlertFilterPicker: View {
 
             Divider()
 
-            ForEach(DashboardViewModel.alertFilterOptions.dropFirst(), id: \.self) { value in
+            ForEach(viewModel.alertFilterOptions.dropFirst(), id: \.self) { value in
                 Button(value) {
                     viewModel.selectedAlertFilter = value
                 }

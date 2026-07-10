@@ -8,6 +8,7 @@ struct DashboardQueryFilters: Sendable, Hashable {
     var customLabelFilter: CustomLabelFilterSelection = .all
     var categoryFilter: CategoryFilterSelection = .all
     var sort: DashboardTableSort = .default
+    var warningLabelEngine: WarningLabelEngine = .thirdPartyCohort
 }
 
 struct DashboardPageResult: Sendable {
@@ -173,6 +174,14 @@ enum ProductPerformanceRowMapper {
             .highSpend
         case .lowEfficiency:
             .lowEfficiency
+        case .highEfficiency:
+            .highEfficiency
+        case .potentialNew:
+            .potentialNew
+        case .lowSampleOld:
+            .lowSampleOld
+        case .observation:
+            .observation
         case nil:
             .none
         }

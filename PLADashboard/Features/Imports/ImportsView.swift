@@ -129,7 +129,7 @@ struct ImportsView: View {
         case .plaDeliveryDetail:
             "选择投放产品明细导出文件（CSV 或 XLSX，第 1 行为表头）。将写入 ads_product_daily；消费与「销售趋势」来自 Conversion Value 等字段。"
         case .salesReport:
-            "选择 Product Sales CSV 文件。将写入 sales_daily；看板「销售趋势」列仍来自投放明细转化价值，不会自动切换为 Gross Sales。"
+            "选择 Product Sales CSV 文件（需含 Gross Sales($) 与 毛利额($)）。将写入 sales_daily；看板「销售趋势」列仍来自投放明细转化价值，不会自动切换为 Gross Sales。"
         }
     }
 

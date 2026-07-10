@@ -15,6 +15,10 @@ struct ProductRecord: Codable, FetchableRecord, PersistableRecord, Identifiable,
     var customLabel4: String?
     var lsin: String?
     var googleProductCategory: String?
+    /// 业务首次上架日（`yyyy-MM-dd`），来自投放明细「首次上架时间」；用于新品判定。
+    var firstListedAt: String?
+    /// 投放明细 CMS3（按花费主类目）；标签类目基准优先于 Merchant 末级。
+    var plaCms3: String? = nil
     var firstSeenAt: String?
     var lastSeenAt: String?
     var updatedFromImportId: String?
@@ -33,6 +37,8 @@ struct ProductRecord: Codable, FetchableRecord, PersistableRecord, Identifiable,
         case customLabel4 = "custom_label_4"
         case lsin
         case googleProductCategory = "google_product_category"
+        case firstListedAt = "first_listed_at"
+        case plaCms3 = "pla_cms3"
         case firstSeenAt = "first_seen_at"
         case lastSeenAt = "last_seen_at"
         case updatedFromImportId = "updated_from_import_id"
@@ -50,6 +56,8 @@ struct ProductRecord: Codable, FetchableRecord, PersistableRecord, Identifiable,
         case customLabel4 = "custom_label_4"
         case lsin
         case googleProductCategory = "google_product_category"
+        case firstListedAt = "first_listed_at"
+        case plaCms3 = "pla_cms3"
         case firstSeenAt = "first_seen_at"
         case lastSeenAt = "last_seen_at"
         case updatedFromImportId = "updated_from_import_id"

@@ -18,8 +18,8 @@ final class ImportTextEncodingTests: XCTestCase {
 
     func testNormalizeGBKFileToUTF8() throws {
         let csv = """
-日期,LSIN,Gross Sales($)
-2026-06-20,S14429548,$100.00
+日期,LSIN,Gross Sales($),毛利额($)
+2026-06-20,S14429548,$100.00,$30.00
 """
         guard let gbkData = csv.data(using: ImportTextEncoding.gb18030) else {
             XCTFail("GB18030 encoding unavailable")

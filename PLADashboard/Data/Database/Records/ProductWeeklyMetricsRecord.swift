@@ -12,6 +12,7 @@ struct ProductWeeklyMetricsRecord: Codable, FetchableRecord, PersistableRecord, 
     var conversions: Double
     var conversionValueCents: Int
     var grossSalesCents: Int
+    var grossProfitCents: Int
     var roi: Double?
     var cpaCents: Int?
     var cpcCents: Int?
@@ -28,6 +29,7 @@ struct ProductWeeklyMetricsRecord: Codable, FetchableRecord, PersistableRecord, 
         case conversions
         case conversionValueCents = "conversion_value_cents"
         case grossSalesCents = "gross_sales_cents"
+        case grossProfitCents = "gross_profit_cents"
         case roi
         case cpaCents = "cpa_cents"
         case cpcCents = "cpc_cents"
@@ -45,6 +47,7 @@ struct ProductWeeklyMetricsRecord: Codable, FetchableRecord, PersistableRecord, 
         case conversions
         case conversionValueCents = "conversion_value_cents"
         case grossSalesCents = "gross_sales_cents"
+        case grossProfitCents = "gross_profit_cents"
         case roi
         case cpaCents = "cpa_cents"
         case cpcCents = "cpc_cents"
@@ -60,7 +63,8 @@ struct ProductWeeklyMetricsRecord: Codable, FetchableRecord, PersistableRecord, 
             clicks: clicks,
             conversions: conversions,
             conversionValueCents: conversionValueCents,
-            grossSalesCents: grossSalesCents
+            grossSalesCents: grossSalesCents,
+            grossProfitCents: grossProfitCents
         )
     }
 
@@ -88,6 +92,7 @@ struct ProductWeeklyMetricsRecord: Codable, FetchableRecord, PersistableRecord, 
             conversions: metrics.conversions,
             conversionValueCents: metrics.conversionValueCents,
             grossSalesCents: metrics.grossSalesCents,
+            grossProfitCents: metrics.grossProfitCents,
             roi: roi,
             cpaCents: cpaCents,
             cpcCents: cpcCents,

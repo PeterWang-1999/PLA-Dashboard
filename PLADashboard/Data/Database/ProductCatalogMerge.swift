@@ -66,6 +66,16 @@ enum ProductCatalogMerge {
         if let sourceLastSeen = source.lastSeenAt {
             target.lastSeenAt = pickBetterString(target.lastSeenAt, sourceLastSeen)
         }
+        if let incomingListed = source.firstListedAt?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !incomingListed.isEmpty {
+            if let existingListed = target.firstListedAt?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !existingListed.isEmpty {
+                target.firstListedAt = min(existingListed, incomingListed)
+            } else {
+                target.firstListedAt = incomingListed
+            }
+        }
+        target.plaCms3 = pickBetterString(target.plaCms3, source.plaCms3)
         target.updatedFromImportId = pickBetterString(target.updatedFromImportId, source.updatedFromImportId)
     }
 }

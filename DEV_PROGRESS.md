@@ -4,11 +4,248 @@
 
 ## 当前阶段
 
-看板底栏显示报告周期（如 当前报告周期：2026-W22 至 2026-W27）— **已完成**（2026-07-10）
+自建站预警标签 E2E 验收修复 — **已完成**（2026-07-10）
 
-- 目标：在产品数据底栏左侧展示当前 6 个完整报告周的周次范围
+- 目标：修复「全普通」根因（同周导入跳过重算），并用真实 PLA+毛利大文件验收标签分布
 
 ## 变更记录
+
+### 2026-07-10 — 修复同周导入不重算 + PLA CMS3 + 真实文件 E2E
+
+**内容**
+
+- 根因：先导投放无毛利时算出「几乎全普通」快照后，再导 Product Sales 因同周已有快照被 `skippedAlreadyComputed` 跳过，标签不更新
+- `recomputeWarningLabelsIfNeeded` 增加 `refreshSameWeek`；导入流水线对投放/毛利导入传 `true`，允许覆盖本周快照
+- 设置页增加「重新计算预警标签」（同周刷新，不清空历史）
+- 投放明细可选列 `CMS3` 按花费选主类目写入 `products.pla_cms3`；标签指标优先用 PLA CMS3
+- 新增真实大文件 E2E 测试（`touch /tmp/pla_e2e_label_files` 触发）
+
+**涉及文件**
+
+- `PLADashboard/Data/Analytics/LabelEngine/DatabaseClient+LabelCompute.swift`
+- `PLADashboard/Data/Analytics/LabelEngine/DatabaseClient+LabelMetrics.swift`
+- `PLADashboard/Data/Analytics/LabelEngine/LabelProductMetrics.swift`
+- `PLADashboard/Data/Import/ImportPipelineRunner.swift`
+- `PLADashboard/Data/Import/PlaDeliveryDetailColumnMap.swift`
+- `PLADashboard/Data/Import/PlaDeliveryDetailImporter.swift`
+- `PLADashboard/Data/Database/Migrations/Migration_v8_ProductPlaCMS3.swift`
+- `PLADashboard/Data/Database/Migrations/DatabaseMigrator.swift`
+- `PLADashboard/Data/Database/Records/ProductRecord.swift`
+- `PLADashboard/Data/Database/DatabaseClient+Import.swift`
+- `PLADashboard/Data/Database/ProductCatalogMerge.swift`
+- `PLADashboard/Features/Settings/SettingsView.swift`
+- `PLADashboardTests/LabelStateMachineTests.swift`
+- `PLADashboardTests/PlaDeliveryDetailImporterTests.swift`
+- `PLADashboardTests/SelfBuiltLabelEngineE2ETests.swift`
+- `DEV_PROGRESS.md`
+
+**验证结果**
+
+```bash
+# 单元：同周 skip / refreshSameWeek、CMS3 按花费入库 — TEST SUCCEEDED
+
+# 真实文件 E2E（约 98s）— TEST SUCCEEDED
+# 先导 PLA 仅毛利缺失：普通/观察=11738，低效=55（几乎全普通）
+# 再导 Sales 同周刷新后：
+#   total=11793
+#   普通/观察=11248  低样本老品=350  潜力新品=110  高效=33  低效=52
+```
+
+**下一步**
+
+- 用户在已有账户上：设置 →「重新计算预警标签」，或重新导入毛利文件即可刷新
+
+### 2026-07-10 — Phase 4：Python 对照用例与回归
+
+**内容**
+
+- 状态机补充对照：分位缺失时潜力仅走 ROI、旧 flag 不误作出池、高效首次未达标暂留、潜力晋升高效、低样本老品入池、上周快照可读
+- 回归：`WeeklyMetricsRulesTests`（三方站旧标签）、周聚合、看板筛选、销售导入、类目 CMS3、自建站看板标签
+
+**涉及文件**
+
+- `PLADashboardTests/LabelStateMachineTests.swift`
+- `DEV_PROGRESS.md`
+
+**验证结果**
+
+```bash
+xcodebuild -scheme PLADashboard -destination 'platform=macOS' test \
+  -only-testing:PLADashboardTests/LabelStateMachineTests \
+  -only-testing:PLADashboardTests/LabelMetricsBuilderTests \
+  -only-testing:PLADashboardTests/SelfBuiltWarningLabelDashboardTests \
+  -only-testing:PLADashboardTests/WeeklyMetricsRulesTests \
+  -only-testing:PLADashboardTests/WeeklyMetricsAggregatorTests \
+  -only-testing:PLADashboardTests/DashboardFilterTests \
+  -only-testing:PLADashboardTests/SalesReportImporterTests \
+  -only-testing:PLADashboardTests/ProductCategoryPathTests
+# TEST SUCCEEDED
+```
+
+**下一步**
+
+- 等待确认后可将本轮标为全部完成；可选：用真实 PLA+毛利大文件做一次端到端人工验收
+
+### 2026-07-10 — Phase 3：看板接线与一键 reset
+
+**内容**
+
+- 自建站看板通过 `WarningLabelEngine.selfBuiltSnapshot` 读取最新周快照标签；无快照显示「—」；「普通/观察」显式展示
+- 预警筛选选项按账户类型切换（高效/潜力新品/低样本老品/低效/普通/观察）
+- 标签胶囊样式补充高效、潜力新品、低样本老品、普通/观察
+- 设置页：自建站隐藏旧 ROI 门槛，提供「重置预警标签历史」→ `force` 重算
+- 快照标签按页批量加载一次，避免筛选分页重复读库
+
+**涉及文件**
+
+- `PLADashboard/Data/Analytics/WeeklyMetricsRules.swift`
+- `PLADashboard/Data/Analytics/ProductPerformanceRowMapper.swift`
+- `PLADashboard/Data/Database/DatabaseClient+Dashboard.swift`
+- `PLADashboard/Domain/ProductPerformanceRowModel.swift`
+- `PLADashboard/Features/Dashboard/ProductPerformanceRow.swift`
+- `PLADashboard/Features/Dashboard/DashboardViewModel.swift`
+- `PLADashboard/Features/Dashboard/DashboardToolbarComponents.swift`
+- `PLADashboard/Features/Settings/SettingsView.swift`
+- `PLADashboard/App/RootView.swift`
+- `PLADashboardTests/SelfBuiltWarningLabelDashboardTests.swift`
+- `DEV_PROGRESS.md`
+
+**验证结果**
+
+```bash
+xcodebuild -scheme PLADashboard -destination 'platform=macOS' test \
+  -only-testing:PLADashboardTests/SelfBuiltWarningLabelDashboardTests \
+  -only-testing:PLADashboardTests/LabelStateMachineTests \
+  -only-testing:PLADashboardTests/DashboardViewModelAccountSwitchTests
+# TEST SUCCEEDED
+```
+
+**下一步**
+
+- 等待确认后进入 Phase 4：与 Python 黄金对照补充、回归三方站旧标签
+
+### 2026-07-10 — Phase 2：状态机、快照与触发重算
+
+**内容**
+
+- 新增 `LabelStateMachine`：高效/潜力新品/低样本老品/低效的入池、留池、出池、暂留（对标 Python）
+- 迁移 `v7_label_snapshots`：`label_snapshots` + `label_snapshot_products`（保留最近 26 周）
+- `recomputeWarningLabelsIfNeeded`：仅当出现比已有快照更新的完整报告周时重算；`force` 清空历史后仅入池
+- 自建站导入投放明细或 Product Sales 并重建周聚合后自动尝试重算
+- 提供 `resetLabelHistory` / `loadLatestLabelDecisionsByProductId` 供 Phase 3 与设置页使用
+
+**涉及文件**
+
+- `PLADashboard/Data/Database/Migrations/Migration_v7_LabelSnapshots.swift`
+- `PLADashboard/Data/Database/Migrations/DatabaseMigrator.swift`
+- `PLADashboard/Data/Analytics/LabelEngine/LabelSnapshotModels.swift`
+- `PLADashboard/Data/Analytics/LabelEngine/LabelStateMachine.swift`
+- `PLADashboard/Data/Analytics/LabelEngine/DatabaseClient+LabelCompute.swift`
+- `PLADashboard/Data/Import/ImportPipelineRunner.swift`
+- `PLADashboard/Features/Imports/ImportViewModel.swift`
+- `PLADashboardTests/LabelStateMachineTests.swift`
+- `DEV_PROGRESS.md`
+
+**验证结果**
+
+```bash
+xcodebuild -scheme PLADashboard -destination 'platform=macOS' test \
+  -only-testing:PLADashboardTests/LabelStateMachineTests \
+  -only-testing:PLADashboardTests/LabelMetricsBuilderTests
+# TEST SUCCEEDED
+```
+
+**下一步**
+
+- 等待确认后进入 Phase 3：看板展示新标签、筛选样式、设置页一键 reset
+
+### 2026-07-10 — Phase 1：标签指标与基准引擎
+
+**内容**
+
+- 新增 `LabelEngine` 纯计算层：`LabelEngineConstants` / `LabelProductMetrics` / `LabelMetricsBuilder`
+- 加权广告 ROI = Σ(CV×w)/Σ(Cost×w)；毛利回报、活跃周、新品 cutoff、Data_Normal 与 Python 对齐
+- 类目样本不足回退全站基准；成熟毛利 P50、新品 GS P50/P75、老品 GS P50
+- `DatabaseClient.buildLabelMetrics`：两次 SQL 批量读周表+产品维，内存聚合（避免逐产品查询）
+- CMS3 使用 `ProductCategoryPath.cms3Leaf`（Merchant 末级）
+
+**涉及文件**
+
+- `PLADashboard/Data/Analytics/LabelEngine/LabelEngineConstants.swift`
+- `PLADashboard/Data/Analytics/LabelEngine/LabelProductMetrics.swift`
+- `PLADashboard/Data/Analytics/LabelEngine/LabelMetricsBuilder.swift`
+- `PLADashboard/Data/Analytics/LabelEngine/DatabaseClient+LabelMetrics.swift`
+- `PLADashboardTests/LabelMetricsBuilderTests.swift`
+- `DEV_PROGRESS.md`
+
+**验证结果**
+
+```bash
+xcodebuild -scheme PLADashboard -destination 'platform=macOS' test \
+  -only-testing:PLADashboardTests/LabelMetricsBuilderTests
+# TEST SUCCEEDED
+```
+
+**下一步**
+
+- 等待确认后进入 Phase 2：入池/留池/出池状态机 + 周快照持久化 + 新完整周触发重算
+
+### 2026-07-10 — Phase 0：标签引擎数据地基
+
+**内容**
+
+- 新增迁移 `v6_label_engine_data_foundation`：`sales_daily.gross_profit_cents`、`product_weekly_metrics.gross_profit_cents`、`products.first_listed_at`
+- Product Sales 导入强制要求 `毛利额($)`，写入毛利分
+- `rebuildProductWeeklyMetrics` 在单条 SQL 内 LEFT JOIN 去重后的销售周汇总（GS + 毛利），避免二次扫描
+- 投放明细可选列 `首次上架时间`：导入结束批量 upsert，保留更早日期
+- `ProductCategoryPath.cms3Leaf`：从 Merchant 类目路径取末级作为 CMS3
+- 样例 CSV / 导入文案同步更新
+
+**涉及文件**
+
+- `PLADashboard/Data/Database/Migrations/Migration_v6_LabelEngineDataFoundation.swift`
+- `PLADashboard/Data/Database/Migrations/DatabaseMigrator.swift`
+- `PLADashboard/Data/Database/Records/SalesDailyRecord.swift`
+- `PLADashboard/Data/Database/Records/ProductWeeklyMetricsRecord.swift`
+- `PLADashboard/Data/Database/Records/ProductRecord.swift`
+- `PLADashboard/Data/Database/DatabaseClient+Analytics.swift`
+- `PLADashboard/Data/Database/DatabaseClient+Import.swift`
+- `PLADashboard/Data/Database/ProductCatalogMerge.swift`
+- `PLADashboard/Data/Import/SalesColumnMap.swift`
+- `PLADashboard/Data/Import/SalesReportImporter.swift`
+- `PLADashboard/Data/Import/PlaDeliveryDetailColumnMap.swift`
+- `PLADashboard/Data/Import/PlaDeliveryDetailImporter.swift`
+- `PLADashboard/Data/Import/MerchantCenterImporter.swift`
+- `PLADashboard/Data/Analytics/WeeklyMetricsRules.swift`
+- `PLADashboard/Domain/ProductCategoryPath.swift`
+- `PLADashboard/Features/Imports/ImportsView.swift`
+- `PLADashboard/Resources/SampleSales.csv`
+- `PLADashboard/Resources/SamplePlaDeliveryDetail.csv`
+- `PLADashboardTests/SalesReportImporterTests.swift`
+- `PLADashboardTests/WeeklyMetricsAggregatorTests.swift`
+- `PLADashboardTests/PlaDeliveryDetailImporterTests.swift`
+- `PLADashboardTests/ProductCategoryPathTests.swift`
+- `PLADashboardTests/LsinProductIDReconciliationTests.swift`
+- `PLADashboardTests/LegacyDatabaseMigrationTests.swift`
+- `PLADashboardTests/ImportTextEncodingTests.swift`
+
+**验证结果**
+
+```bash
+xcodebuild -scheme PLADashboard -destination 'platform=macOS' test \
+  -only-testing:PLADashboardTests/SalesReportImporterTests \
+  -only-testing:PLADashboardTests/WeeklyMetricsAggregatorTests \
+  -only-testing:PLADashboardTests/PlaDeliveryDetailImporterTests \
+  -only-testing:PLADashboardTests/ProductCategoryPathTests \
+  -only-testing:PLADashboardTests/LsinProductIDReconciliationTests \
+  -only-testing:PLADashboardTests/LegacyDatabaseMigrationTests \
+  -only-testing:PLADashboardTests/AccountStoreTests/testSelfBuiltAccountCanImportSampleSales
+# TEST SUCCEEDED
+```
+
+**下一步**
+
+- 等待确认后进入 Phase 1：Swift 指标/基准层（加权 ROI、类目基准、分位阈值）
 
 ### 2026-07-10 — 底栏左侧展示报告周期周次
 

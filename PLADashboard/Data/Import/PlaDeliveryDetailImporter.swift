@@ -107,6 +107,8 @@ actor PlaDeliveryDetailImporter {
             }
 
             try await flushBatch(state)
+            try await flushFirstListedDates(state, importId: importId, importedAt: importedAt)
+            try await flushPlaCMS3(state, importId: importId, importedAt: importedAt)
             try await appendErrors(state, force: true)
 
             job.totalRows = state.processedRows
@@ -387,6 +389,29 @@ actor PlaDeliveryDetailImporter {
                 conversionValueCents: conversionValueCents,
                 importId: importId
             ))
+
+            if let listedIndex = columnMap.firstListedAtIndex,
+               let listedRaw = columnMap.value(at: listedIndex, in: fields),
+               let listedDay = ImportValueParsers.parseISODate(listedRaw) {
+                if let existing = state.firstListedByProductID[normalized.productID] {
+                    if listedDay < existing {
+                        state.firstListedByProductID[normalized.productID] = listedDay
+                    }
+                } else {
+                    state.firstListedByProductID[normalized.productID] = listedDay
+                }
+            }
+
+            if let cms3Index = columnMap.cms3Index,
+               let cms3Raw = columnMap.value(at: cms3Index, in: fields) {
+                let cms3 = cms3Raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !cms3.isEmpty {
+                    var byCMS3 = state.cms3CostMicrosByProductID[normalized.productID] ?? [:]
+                    byCMS3[cms3, default: 0] += costMicros
+                    state.cms3CostMicrosByProductID[normalized.productID] = byCMS3
+                }
+            }
+
             state.validRows += 1
 
             if state.adsBatch.count >= batchSize {
@@ -414,6 +439,39 @@ actor PlaDeliveryDetailImporter {
         let batch = state.adsBatch
         state.adsBatch.removeAll(keepingCapacity: true)
         try await databaseClient.insertAdsProductDailyBatch(batch)
+    }
+
+    private func flushFirstListedDates(
+        _ state: ImportAccumulationState,
+        importId: String,
+        importedAt: String
+    ) async throws {
+        guard !state.firstListedByProductID.isEmpty else { return }
+        let entries = state.firstListedByProductID.map { (productId: $0.key, firstListedAt: $0.value) }
+        state.firstListedByProductID.removeAll(keepingCapacity: true)
+        try await databaseClient.upsertProductFirstListedAtBatch(
+            entries,
+            importId: importId,
+            importedAt: importedAt
+        )
+    }
+
+    private func flushPlaCMS3(
+        _ state: ImportAccumulationState,
+        importId: String,
+        importedAt: String
+    ) async throws {
+        guard !state.cms3CostMicrosByProductID.isEmpty else { return }
+        let entries: [(productId: String, plaCms3: String)] = state.cms3CostMicrosByProductID.compactMap { productId, costs in
+            guard let best = costs.max(by: { $0.value < $1.value }) else { return nil }
+            return (productId: productId, plaCms3: best.key)
+        }
+        state.cms3CostMicrosByProductID.removeAll(keepingCapacity: true)
+        try await databaseClient.upsertProductPlaCMS3Batch(
+            entries,
+            importId: importId,
+            importedAt: importedAt
+        )
     }
 
     private func appendErrors(
@@ -452,6 +510,10 @@ private final class ImportAccumulationState: @unchecked Sendable {
     var estimatedTotalRows: Int?
     var adsBatch: [AdsProductDailyRecord] = []
     var errorBatch: [ImportRowErrorRecord] = []
+    /// product_id → 本文件内最早的首次上架日（`yyyy-MM-dd`）。
+    var firstListedByProductID: [String: String] = [:]
+    /// product_id → CMS3 → 本文件累计花费（micros），用于选主类目。
+    var cms3CostMicrosByProductID: [String: [String: Int]] = [:]
     var processedRows = 0
     var validRows = 0
     var invalidRows = 0

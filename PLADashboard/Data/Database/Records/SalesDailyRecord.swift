@@ -8,6 +8,7 @@ struct SalesDailyRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
     var lsin: String
     var productId: String?
     var grossSalesCents: Int
+    var grossProfitCents: Int
     var importId: String
 
     enum Columns: String, ColumnExpression {
@@ -15,6 +16,7 @@ struct SalesDailyRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
         case lsin
         case productId = "product_id"
         case grossSalesCents = "gross_sales_cents"
+        case grossProfitCents = "gross_profit_cents"
         case importId = "import_id"
     }
 
@@ -23,6 +25,7 @@ struct SalesDailyRecord: Codable, FetchableRecord, PersistableRecord, Sendable {
         case lsin
         case productId = "product_id"
         case grossSalesCents = "gross_sales_cents"
+        case grossProfitCents = "gross_profit_cents"
         case importId = "import_id"
     }
 }

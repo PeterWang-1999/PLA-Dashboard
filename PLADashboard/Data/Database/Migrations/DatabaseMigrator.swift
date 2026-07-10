@@ -36,6 +36,18 @@ struct AppDatabaseMigrator {
             try Migration_v5_LsinProductIDReconciliation.migrate(db)
         }
 
+        migrator.registerMigration("v6_label_engine_data_foundation") { db in
+            try Migration_v6_LabelEngineDataFoundation.migrate(db)
+        }
+
+        migrator.registerMigration("v7_label_snapshots") { db in
+            try Migration_v7_LabelSnapshots.migrate(db)
+        }
+
+        migrator.registerMigration("v8_product_pla_cms3") { db in
+            try Migration_v8_ProductPlaCMS3.migrate(db)
+        }
+
         try migrator.migrate(dbQueue)
     }
 }

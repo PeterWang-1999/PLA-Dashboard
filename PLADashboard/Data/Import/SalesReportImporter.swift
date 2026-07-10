@@ -162,6 +162,21 @@ actor SalesReportImporter {
                         return
                     }
 
+                    guard let profitRaw = columnMap.value(at: columnMap.grossProfitIndex, in: fields),
+                          let profitCents = ImportValueParsers.parseCurrencyToCents(profitRaw) else {
+                        invalidRows += 1
+                        errorBatch.append(makeError(
+                            importId: importId,
+                            rowNumber: rowNumber,
+                            severity: .error,
+                            fieldName: "毛利额($)",
+                            message: "无法解析毛利额",
+                            rawValue: columnMap.value(at: columnMap.grossProfitIndex, in: fields)
+                        ))
+                        try await appendErrors(&errorBatch, importId: importId)
+                        return
+                    }
+
                     let normalized = ProductIDNormalizer.normalizeLSIN(lsinRaw)
                     guard !normalized.productID.isEmpty else {
                         invalidRows += 1
@@ -194,6 +209,7 @@ actor SalesReportImporter {
                         lsin: normalized.rawValue,
                         productId: normalized.productID,
                         grossSalesCents: grossCents,
+                        grossProfitCents: profitCents,
                         importId: importId
                     ))
                     lsinBatch.append((productId: normalized.productID, lsin: normalized.rawValue))

@@ -49,4 +49,19 @@ final class ProductCategoryPathTests: XCTestCase {
             catalog.groups.first(where: { $0.level2 == "Men's Shoes" })?.level3.contains("Men's Sandals") == true
         )
     }
+
+    func testCMS3LeafFromStoredPath() {
+        XCTAssertEqual(
+            ProductCategoryPath.cms3Leaf(fromStored: selfBuiltSample),
+            "Outdoor Sandals"
+        )
+        XCTAssertEqual(
+            ProductCategoryPath.cms3Leaf(
+                fromStored: "Apparel & Accessories > Clothing > Dresses"
+            ),
+            "Dresses"
+        )
+        XCTAssertEqual(ProductCategoryPath.cms3Leaf(fromStored: nil), "未分类")
+        XCTAssertEqual(ProductCategoryPath.cms3Leaf(fromStored: "   "), "未分类")
+    }
 }

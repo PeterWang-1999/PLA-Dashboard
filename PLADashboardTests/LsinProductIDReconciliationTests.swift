@@ -20,6 +20,7 @@ final class LsinProductIDReconciliationTests: XCTestCase {
                     customLabel4: nil,
                     lsin: "S9730219",
                     googleProductCategory: nil,
+                    firstListedAt: nil,
                     firstSeenAt: importedAt,
                     lastSeenAt: importedAt,
                     updatedFromImportId: "ads"
@@ -43,6 +44,7 @@ final class LsinProductIDReconciliationTests: XCTestCase {
                     customLabel4: nil,
                     lsin: nil,
                     googleProductCategory: nil,
+                    firstListedAt: nil,
                     firstSeenAt: importedAt,
                     lastSeenAt: importedAt,
                     updatedFromImportId: "merchant"
@@ -81,6 +83,7 @@ final class LsinProductIDReconciliationTests: XCTestCase {
                     customLabel4: nil,
                     lsin: nil,
                     googleProductCategory: nil,
+                    firstListedAt: nil,
                     firstSeenAt: importedAt,
                     lastSeenAt: importedAt,
                     updatedFromImportId: "seed"

@@ -169,6 +169,7 @@ final class ImportViewModel {
                     sourceKind: sourceKind,
                     result: result,
                     databaseClient: databaseClient,
+                    accountKind: accountKind,
                     onProgress: { update in
                         await MainActor.run { [weak self] in
                             self?.progress = update

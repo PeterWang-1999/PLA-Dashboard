@@ -263,11 +263,139 @@ extension DatabaseClient {
                         customLabel4: nil,
                         lsin: entry.lsin,
                         googleProductCategory: nil,
+                        firstListedAt: nil,
                         firstSeenAt: importedAt,
                         lastSeenAt: importedAt,
                         updatedFromImportId: importId
                     )
                     toInsert.append(product)
+                }
+            }
+
+            if !toInsert.isEmpty {
+                try db.insertRecords(toInsert)
+            }
+            for product in toUpdate {
+                try product.update(db)
+            }
+        }
+        invalidateDashboardCache()
+    }
+
+    /// 写入投放明细中的首次上架日：保留更早的日期；不存在的产品则创建占位行。
+    func upsertProductFirstListedAtBatch(
+        _ entries: [(productId: String, firstListedAt: String)],
+        importId: String,
+        importedAt: String
+    ) throws {
+        guard !entries.isEmpty else { return }
+        let signpost = PerformanceSignposts.beginImportFlush()
+        defer { PerformanceSignposts.endImportFlush(signpost) }
+        try dbQueue.write { db in
+            let ids = entries.map(\.productId)
+            let existingRows = try ProductRecord
+                .filter(ids.contains(ProductRecord.Columns.productId))
+                .fetchAll(db)
+            var existingByID = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.productId, $0) })
+
+            var toInsert: [ProductRecord] = []
+            var toUpdate: [ProductRecord] = []
+
+            for entry in entries {
+                if var existing = existingByID[entry.productId] {
+                    if let current = existing.firstListedAt,
+                       !current.isEmpty,
+                       current <= entry.firstListedAt {
+                        continue
+                    }
+                    existing.firstListedAt = entry.firstListedAt
+                    existing.lastSeenAt = importedAt
+                    existing.updatedFromImportId = importId
+                    toUpdate.append(existing)
+                    existingByID[entry.productId] = existing
+                } else {
+                    let product = ProductRecord(
+                        productId: entry.productId,
+                        title: nil,
+                        canonicalLink: nil,
+                        imageUrl: nil,
+                        customLabel0: nil,
+                        customLabel1: nil,
+                        customLabel2: nil,
+                        customLabel3: nil,
+                        customLabel4: nil,
+                        lsin: nil,
+                        googleProductCategory: nil,
+                        firstListedAt: entry.firstListedAt,
+                        firstSeenAt: importedAt,
+                        lastSeenAt: importedAt,
+                        updatedFromImportId: importId
+                    )
+                    toInsert.append(product)
+                    existingByID[entry.productId] = product
+                }
+            }
+
+            if !toInsert.isEmpty {
+                try db.insertRecords(toInsert)
+            }
+            for product in toUpdate {
+                try product.update(db)
+            }
+        }
+        invalidateDashboardCache()
+    }
+
+    /// 写入投放明细主 CMS3（按本文件花费最高的类目覆盖）。
+    func upsertProductPlaCMS3Batch(
+        _ entries: [(productId: String, plaCms3: String)],
+        importId: String,
+        importedAt: String
+    ) throws {
+        guard !entries.isEmpty else { return }
+        let signpost = PerformanceSignposts.beginImportFlush()
+        defer { PerformanceSignposts.endImportFlush(signpost) }
+        try dbQueue.write { db in
+            let ids = entries.map(\.productId)
+            let existingRows = try ProductRecord
+                .filter(ids.contains(ProductRecord.Columns.productId))
+                .fetchAll(db)
+            var existingByID = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.productId, $0) })
+
+            var toInsert: [ProductRecord] = []
+            var toUpdate: [ProductRecord] = []
+
+            for entry in entries {
+                let cms3 = entry.plaCms3.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !cms3.isEmpty else { continue }
+
+                if var existing = existingByID[entry.productId] {
+                    existing.plaCms3 = cms3
+                    existing.lastSeenAt = importedAt
+                    existing.updatedFromImportId = importId
+                    toUpdate.append(existing)
+                    existingByID[entry.productId] = existing
+                } else {
+                    let product = ProductRecord(
+                        productId: entry.productId,
+                        title: nil,
+                        canonicalLink: nil,
+                        imageUrl: nil,
+                        customLabel0: nil,
+                        customLabel1: nil,
+                        customLabel2: nil,
+                        customLabel3: nil,
+                        customLabel4: nil,
+                        lsin: nil,
+                        googleProductCategory: nil,
+                        firstListedAt: nil,
+                        plaCms3: cms3,
+                        firstSeenAt: importedAt,
+                        lastSeenAt: importedAt,
+                        updatedFromImportId: importId
+                    )
+                    toInsert.append(product)
+                    existingByID[entry.productId] = product
                 }
             }
 

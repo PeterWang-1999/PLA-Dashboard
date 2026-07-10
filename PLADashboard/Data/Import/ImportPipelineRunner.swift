@@ -51,6 +51,7 @@ enum ImportPipelineRunner: Sendable {
         sourceKind: ImportSourceKind,
         result: ImportResult,
         databaseClient: DatabaseClient,
+        accountKind: WorkspaceAccountKind,
         onProgress: @Sendable @escaping (ImportProgress) async -> Void,
         reloadFilterCatalogs: @Sendable @escaping () async -> Void,
         refreshDashboard: @Sendable @escaping () async -> Void
@@ -81,6 +82,23 @@ enum ImportPipelineRunner: Sendable {
                 message: "正在重建周聚合…"
             ))
             try await databaseClient.rebuildProductWeeklyMetrics()
+        }
+
+        try Task.checkCancellation()
+
+        if accountKind == .selfBuilt,
+           shouldRebuildMetrics,
+           sourceKind == .plaDeliveryDetail || sourceKind == .salesReport {
+            await onProgress(ImportProgress.fromJob(
+                phase: .rebuildingMetrics,
+                job: job,
+                message: "正在计算预警标签…"
+            ))
+            // 同周先导投放再导毛利、或同周重导时必须允许覆盖本周快照，否则会卡在「全普通」。
+            _ = try await databaseClient.recomputeWarningLabelsIfNeeded(
+                force: false,
+                refreshSameWeek: true
+            )
         }
 
         try Task.checkCancellation()

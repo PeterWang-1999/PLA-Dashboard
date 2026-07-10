@@ -13,6 +13,10 @@ struct PlaDeliveryDetailColumnMap: Sendable {
     let clicksIndex: Int
     let conversionsIndex: Int
     let conversionValueIndex: Int
+    /// 可选：业务首次上架时间，用于新品判定。
+    let firstListedAtIndex: Int?
+    /// 可选：PLA CMS3，用于标签类目基准。
+    let cms3Index: Int?
 
     init(headers: [String]) throws {
         let normalizedHeaders = headers.map(ImportTextEncoding.normalizeHeaderField)
@@ -31,6 +35,8 @@ struct PlaDeliveryDetailColumnMap: Sendable {
         clicksIndex = try index(of: "Clicks")
         conversionsIndex = try index(of: "Conversions")
         conversionValueIndex = try index(of: "Conversion Value")
+        firstListedAtIndex = normalizedHeaders.firstIndex(of: "首次上架时间")
+        cms3Index = normalizedHeaders.firstIndex(of: "CMS3")
     }
 
     func value(at index: Int, in fields: [String]) -> String? {

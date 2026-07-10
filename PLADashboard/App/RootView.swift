@@ -165,7 +165,10 @@ struct RootView: View {
         let capabilities = accountStore.activeCapabilities
             ?? WorkspaceCapabilities.forKind(.thirdParty)
 
-        dashboardViewModel.configure(databaseClient: databaseClient) {
+        dashboardViewModel.configure(
+            databaseClient: databaseClient,
+            accountKind: accountStore.activeAccount?.kind ?? .thirdParty
+        ) {
             await dashboardViewModel.bootstrapDashboard()
         }
         importViewModel.configure(

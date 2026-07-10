@@ -7,6 +7,7 @@ struct AggregatedMetrics: Sendable, Hashable {
     var conversions: Double = 0
     var conversionValueCents: Int = 0
     var grossSalesCents: Int = 0
+    var grossProfitCents: Int = 0
 
     var roi: Double {
         guard costCents > 0 else { return 0 }
@@ -44,7 +45,8 @@ struct AggregatedMetrics: Sendable, Hashable {
             clicks: lhs.clicks + rhs.clicks,
             conversions: lhs.conversions + rhs.conversions,
             conversionValueCents: lhs.conversionValueCents + rhs.conversionValueCents,
-            grossSalesCents: lhs.grossSalesCents + rhs.grossSalesCents
+            grossSalesCents: lhs.grossSalesCents + rhs.grossSalesCents,
+            grossProfitCents: lhs.grossProfitCents + rhs.grossProfitCents
         )
     }
 }
@@ -63,11 +65,49 @@ struct WeeklyCohortSpendBenchmark: Sendable, Hashable {
 }
 
 enum ProductWarningLabel: String, Sendable, CaseIterable {
+    // 三方站（消费 cohort 规则）
     case lowSpend = "低消费"
     case highSpendHighEfficiency = "高消高效"
     case highSpendLowEfficiency = "高消低效"
     case highSpend = "高消费"
     case lowEfficiency = "低效"
+
+    // 自建站（标签引擎快照）
+    case highEfficiency = "高效"
+    case potentialNew = "潜力新品"
+    case lowSampleOld = "低样本老品"
+    case observation = "普通/观察"
+
+    static let thirdPartyFilterCases: [ProductWarningLabel] = [
+        .highSpendHighEfficiency,
+        .highSpendLowEfficiency,
+        .lowSpend,
+        .highSpend,
+        .lowEfficiency,
+    ]
+
+    static let selfBuiltFilterCases: [ProductWarningLabel] = [
+        .highEfficiency,
+        .potentialNew,
+        .lowSampleOld,
+        .lowEfficiency,
+        .observation,
+    ]
+}
+
+/// 看板预警标签解析引擎。
+enum WarningLabelEngine: String, Sendable, Hashable {
+    /// 三方站：近 6 周消费 cohort + 加权 ROI。
+    case thirdPartyCohort
+    /// 自建站：读取标签引擎周快照。
+    case selfBuiltSnapshot
+
+    static func forAccountKind(_ kind: WorkspaceAccountKind) -> WarningLabelEngine {
+        switch kind {
+        case .thirdParty: .thirdPartyCohort
+        case .selfBuilt: .selfBuiltSnapshot
+        }
+    }
 }
 
 enum WeeklyMetricsRules {

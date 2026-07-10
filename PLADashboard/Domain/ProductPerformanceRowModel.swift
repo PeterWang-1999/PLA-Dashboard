@@ -39,6 +39,10 @@ struct ProductPerformanceRowModel: Identifiable, Hashable, Sendable {
         case highSpendLowEfficiency
         case highSpend
         case lowEfficiency
+        case highEfficiency
+        case potentialNew
+        case lowSampleOld
+        case observation
     }
 }
 

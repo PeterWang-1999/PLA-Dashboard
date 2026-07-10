@@ -4,6 +4,7 @@ struct SalesColumnMap: Sendable {
     let dateIndex: Int
     let lsinIndex: Int
     let grossSalesIndex: Int
+    let grossProfitIndex: Int
 
     init(headers: [String]) throws {
         let normalizedHeaders = headers.map(ImportTextEncoding.normalizeHeaderField)
@@ -18,6 +19,7 @@ struct SalesColumnMap: Sendable {
         dateIndex = try index(of: "日期")
         lsinIndex = try index(of: "LSIN")
         grossSalesIndex = try index(of: "Gross Sales($)")
+        grossProfitIndex = try index(of: "毛利额($)")
     }
 
     func value(at index: Int, in fields: [String]) -> String? {

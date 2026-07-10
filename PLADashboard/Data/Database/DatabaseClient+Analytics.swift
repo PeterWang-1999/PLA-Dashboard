@@ -35,6 +35,7 @@ extension DatabaseClient {
                   conversions,
                   conversion_value_cents,
                   gross_sales_cents,
+                  gross_profit_cents,
                   roi,
                   cpa_cents,
                   cpc_cents,
@@ -43,35 +44,36 @@ extension DatabaseClient {
                   warning_label
                 )
                 SELECT
-                  product_id,
-                  week_start,
-                  cost_cents,
-                  impressions,
-                  clicks,
-                  conversions,
-                  conversion_value_cents,
-                  0 AS gross_sales_cents,
+                  a.product_id,
+                  a.week_start,
+                  a.cost_cents,
+                  a.impressions,
+                  a.clicks,
+                  a.conversions,
+                  a.conversion_value_cents,
+                  COALESCE(s.gross_sales_cents, 0) AS gross_sales_cents,
+                  COALESCE(s.gross_profit_cents, 0) AS gross_profit_cents,
                   CASE
-                    WHEN cost_cents > 0
-                    THEN CAST(conversion_value_cents AS REAL) / CAST(cost_cents AS REAL)
+                    WHEN a.cost_cents > 0
+                    THEN CAST(a.conversion_value_cents AS REAL) / CAST(a.cost_cents AS REAL)
                     ELSE NULL
                   END AS roi,
                   CASE
-                    WHEN conversions > 0
-                    THEN CAST(ROUND(CAST(cost_cents AS REAL) / conversions) AS INTEGER)
+                    WHEN a.conversions > 0
+                    THEN CAST(ROUND(CAST(a.cost_cents AS REAL) / a.conversions) AS INTEGER)
                     ELSE NULL
                   END AS cpa_cents,
                   CASE
-                    WHEN clicks > 0 THEN cost_cents / clicks
+                    WHEN a.clicks > 0 THEN a.cost_cents / a.clicks
                     ELSE NULL
                   END AS cpc_cents,
                   CASE
-                    WHEN clicks > 0 THEN conversions / CAST(clicks AS REAL)
+                    WHEN a.clicks > 0 THEN a.conversions / CAST(a.clicks AS REAL)
                     ELSE NULL
                   END AS cvr,
                   CASE
-                    WHEN conversions > 0
-                    THEN CAST(conversion_value_cents AS REAL) / conversions / 100.0
+                    WHEN a.conversions > 0
+                    THEN CAST(a.conversion_value_cents AS REAL) / a.conversions / 100.0
                     ELSE NULL
                   END AS aos,
                   NULL AS warning_label
@@ -114,8 +116,42 @@ extension DatabaseClient {
                     WHERE rn = 1
                   ) AS deduped_daily
                   GROUP BY product_id, week_start
-                ) AS weekly_rollup;
-                """, arguments: [ImportJobStatus.succeeded.rawValue])
+                ) AS a
+                LEFT JOIN (
+                  SELECT
+                    product_id,
+                    date(date, '-' || CAST(strftime('%w', date) AS INTEGER) || ' days') AS week_start,
+                    SUM(gross_sales_cents) AS gross_sales_cents,
+                    SUM(gross_profit_cents) AS gross_profit_cents
+                  FROM (
+                    WITH ranked_sales AS (
+                      SELECT
+                        s.product_id,
+                        s.date,
+                        s.gross_sales_cents,
+                        s.gross_profit_cents,
+                        ROW_NUMBER() OVER (
+                          PARTITION BY s.date, s.lsin
+                          ORDER BY j.imported_at DESC
+                        ) AS rn
+                      FROM sales_daily s
+                      INNER JOIN import_jobs j ON j.id = s.import_id
+                      WHERE j.status = ?
+                        AND s.product_id IS NOT NULL
+                        AND TRIM(s.product_id) != ''
+                    )
+                    SELECT product_id, date, gross_sales_cents, gross_profit_cents
+                    FROM ranked_sales
+                    WHERE rn = 1
+                  ) AS deduped_sales
+                  GROUP BY product_id, week_start
+                ) AS s
+                  ON s.product_id = a.product_id
+                 AND s.week_start = a.week_start;
+                """, arguments: [
+                ImportJobStatus.succeeded.rawValue,
+                ImportJobStatus.succeeded.rawValue,
+            ])
         }
         invalidateDashboardCache()
     }
@@ -187,7 +223,8 @@ extension DatabaseClient {
                        SUM(clicks) AS clicks,
                        SUM(conversions) AS conversions,
                        SUM(conversion_value_cents) AS conversion_value_cents,
-                       SUM(gross_sales_cents) AS gross_sales_cents
+                       SUM(gross_sales_cents) AS gross_sales_cents,
+                       SUM(gross_profit_cents) AS gross_profit_cents
                 FROM product_weekly_metrics
                 WHERE week_start IN (\(placeholders))
                 GROUP BY week_start
@@ -205,7 +242,8 @@ extension DatabaseClient {
                     clicks: row["clicks"] ?? 0,
                     conversions: row["conversions"] ?? 0,
                     conversionValueCents: row["conversion_value_cents"] ?? 0,
-                    grossSalesCents: row["gross_sales_cents"] ?? 0
+                    grossSalesCents: row["gross_sales_cents"] ?? 0,
+                    grossProfitCents: row["gross_profit_cents"] ?? 0
                 )
                 return WeeklyProductMetrics(productId: "__overall__", weekStart: weekStart, metrics: metrics)
             }
