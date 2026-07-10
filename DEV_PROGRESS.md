@@ -4,11 +4,35 @@
 
 ## 当前阶段
 
-Merchant Center TSV 中英文列名兼容 — **已完成**（2026-07-10）
+投放产品明细导入进度条（写入条数）— **已完成**（2026-07-10）
 
-- 目标：导入时同时接受中文与英文表头别名
+- 目标：XLSX/CSV 导入显示与其他数据源一致的「写入数据库」确定进度（已处理 / 总行数）
 
 ## 变更记录
+
+### 2026-07-10 — 投放产品明细导入补齐确定进度条
+
+**内容**
+
+- XLSX 解压后根据 `dimension`（或 `<row` 扫描）预估数据行数，写入 `totalRowsEstimate`
+- 进度阶段与 Merchant/Ads 对齐：统计行数 → 解析 →「写入数据库」并显示 `processed / total`
+- CSV 路径同样在统计后立即带上总行数
+
+**涉及文件**
+
+- `PLADashboard/Data/Import/XLSXSheetRowCounter.swift`
+- `PLADashboard/Data/Import/StreamingXLSXRowParser.swift`
+- `PLADashboard/Data/Import/PlaDeliveryDetailImporter.swift`
+- `PLADashboardTests/XLSXSheetRowCounterTests.swift`
+
+**验证结果**
+
+```bash
+xcodebuild -scheme PLADashboard -destination 'platform=macOS' test \
+  -only-testing:PLADashboardTests/XLSXSheetRowCounterTests \
+  -only-testing:PLADashboardTests/PlaDeliveryDetailImporterTests
+# TEST SUCCEEDED
+```
 
 ### 2026-07-10 — 支持 Merchant Center TSV 中英文列名
 

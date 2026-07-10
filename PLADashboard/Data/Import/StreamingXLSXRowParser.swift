@@ -30,7 +30,11 @@ struct StreamingXLSXRowParser: Sendable {
     }
 
     /// 解压工作表后逐行回调；解析线程在每行处理完成前阻塞，形成背压。
-    func forEachEvent(_ handler: @escaping @Sendable (Event) async throws -> Void) async throws {
+    /// - Parameter onEstimate: 解压完成后、解析开始前回调数据行预估（不含表头）。
+    func forEachEvent(
+        onEstimate: (@Sendable (Int) async -> Void)? = nil,
+        handler: @escaping @Sendable (Event) async throws -> Void
+    ) async throws {
         let fileURL = self.fileURL
         let worksheetEntryPath = self.worksheetEntryPath
         let sharedStringsEntryPath = self.sharedStringsEntryPath
@@ -59,6 +63,18 @@ struct StreamingXLSXRowParser: Sendable {
                         from: fileURL,
                         to: sheetURL
                     )
+
+                    if let onEstimate {
+                        let estimate = try XLSXSheetRowCounter.estimateDataRowCount(
+                            sheetXMLURL: sheetURL
+                        )
+                        let estimateGate = DispatchSemaphore(value: 0)
+                        Task {
+                            await onEstimate(estimate)
+                            estimateGate.signal()
+                        }
+                        estimateGate.wait()
+                    }
 
                     let bridge = XLSXSheetXMLBridge(sharedStrings: sharedStrings)
                     var headerEmitted = false

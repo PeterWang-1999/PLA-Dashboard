@@ -65,29 +65,39 @@ actor PlaDeliveryDetailImporter {
             validRows: 0,
             invalidRows: 0,
             warningRows: 0,
-            message: format == .xlsx ? "正在解析投放产品明细（XLSX）…" : "正在统计行数…"
+            message: "正在统计行数…"
         ))
 
-        var estimatedTotalRows: Int?
+        let state = ImportAccumulationState()
+
         if format == .delimited {
-            estimatedTotalRows = try DelimitedFileLineCounter.estimateDataRowCount(
+            let estimate = try DelimitedFileLineCounter.estimateDataRowCount(
                 fileURL: staging.stagedFileURL,
                 linesToSkip: Self.linesToSkip
             )
+            state.estimatedTotalRows = estimate > 0 ? estimate : nil
+            await onProgress(ImportProgress(
+                phase: .parsing,
+                processedRows: 0,
+                totalRowsEstimate: state.estimatedTotalRows,
+                validRows: 0,
+                invalidRows: 0,
+                warningRows: 0,
+                message: "正在解析投放产品明细…"
+            ))
         }
-
-        let state = ImportAccumulationState()
 
         do {
             try await consumeRows(
                 format: format,
-                stagedFileURL: staging.stagedFileURL
+                stagedFileURL: staging.stagedFileURL,
+                state: state,
+                onProgress: onProgress
             ) { event in
                 try await self.handleEvent(
                     event,
                     importId: importId,
                     state: state,
-                    estimatedTotalRows: estimatedTotalRows,
                     onProgress: onProgress
                 )
             }
@@ -149,19 +159,35 @@ actor PlaDeliveryDetailImporter {
     private func consumeRows(
         format: ImportSpreadsheetFormat,
         stagedFileURL: URL,
+        state: ImportAccumulationState,
+        onProgress: @Sendable @escaping (ImportProgress) async -> Void,
         handler: @escaping @Sendable (RowEvent) async throws -> Void
     ) async throws {
         switch format {
         case .xlsx:
             let parser = StreamingXLSXRowParser(fileURL: stagedFileURL)
-            try await parser.forEachEvent { event in
-                switch event {
-                case .header(let headers):
-                    try await handler(.header(headers))
-                case .row(let rowNumber, let fields):
-                    try await handler(.row(rowNumber: rowNumber, fields: fields))
+            try await parser.forEachEvent(
+                onEstimate: { estimate in
+                    state.estimatedTotalRows = estimate > 0 ? estimate : nil
+                    await onProgress(ImportProgress(
+                        phase: .parsing,
+                        processedRows: 0,
+                        totalRowsEstimate: state.estimatedTotalRows,
+                        validRows: 0,
+                        invalidRows: 0,
+                        warningRows: 0,
+                        message: "正在解析投放产品明细…"
+                    ))
+                },
+                handler: { event in
+                    switch event {
+                    case .header(let headers):
+                        try await handler(.header(headers))
+                    case .row(let rowNumber, let fields):
+                        try await handler(.row(rowNumber: rowNumber, fields: fields))
+                    }
                 }
-            }
+            )
         case .delimited:
             let separator = try DelimitedFileSniffer.detectSeparator(
                 fileURL: stagedFileURL,
@@ -187,22 +213,22 @@ actor PlaDeliveryDetailImporter {
         _ event: RowEvent,
         importId: String,
         state: ImportAccumulationState,
-        estimatedTotalRows: Int?,
         onProgress: @Sendable (ImportProgress) async -> Void
     ) async throws {
         try Task.checkCancellation()
+        let estimatedTotalRows = state.estimatedTotalRows
 
         switch event {
         case .header(let headers):
             state.columnMap = try PlaDeliveryDetailColumnMap(headers: headers)
             await onProgress(ImportProgress(
-                phase: .parsing,
+                phase: .writing,
                 processedRows: 0,
-                totalRowsEstimate: estimatedTotalRows.flatMap { $0 > 0 ? $0 : nil },
+                totalRowsEstimate: estimatedTotalRows,
                 validRows: 0,
                 invalidRows: 0,
                 warningRows: 0,
-                message: "正在解析投放产品明细…"
+                message: nil
             ))
 
         case .row(let rowNumber, let fields):
@@ -373,7 +399,7 @@ actor PlaDeliveryDetailImporter {
                 await onProgress(ImportProgress(
                     phase: .writing,
                     processedRows: state.processedRows,
-                    totalRowsEstimate: estimatedTotalRows.flatMap { $0 > 0 ? $0 : nil },
+                    totalRowsEstimate: state.estimatedTotalRows,
                     validRows: state.validRows,
                     invalidRows: state.invalidRows,
                     warningRows: state.warningRows,
@@ -423,6 +449,7 @@ actor PlaDeliveryDetailImporter {
 /// 跨回调累积导入状态（由 Importer actor 串行访问）。
 private final class ImportAccumulationState: @unchecked Sendable {
     var columnMap: PlaDeliveryDetailColumnMap?
+    var estimatedTotalRows: Int?
     var adsBatch: [AdsProductDailyRecord] = []
     var errorBatch: [ImportRowErrorRecord] = []
     var processedRows = 0
