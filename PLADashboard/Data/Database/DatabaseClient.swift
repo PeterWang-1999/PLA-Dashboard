@@ -85,4 +85,45 @@ actor DatabaseClient {
         }
         invalidateDashboardCache()
     }
+
+    /// 清除自建站遗留的 Google Ads（`ads_product`）导入数据；投放明细写入同一事实表但 `source_kind` 不同。
+    /// - Returns: 是否删除了任何行（用于决定是否重建周聚合）。
+    @discardableResult
+    func purgeLegacyGoogleAdsImports() throws -> Bool {
+        let didDelete = try dbQueue.write { db -> Bool in
+            let jobIDs = try String.fetchAll(db, sql: """
+                SELECT id FROM import_jobs WHERE source_kind = ?;
+                """, arguments: [ImportSourceKind.adsProduct.rawValue])
+            guard !jobIDs.isEmpty else { return false }
+
+            try db.execute(
+                sql: """
+                DELETE FROM ads_product_daily
+                WHERE import_id IN (
+                  SELECT id FROM import_jobs WHERE source_kind = ?
+                );
+                """,
+                arguments: [ImportSourceKind.adsProduct.rawValue]
+            )
+            try db.execute(
+                sql: """
+                DELETE FROM import_row_errors
+                WHERE import_id IN (
+                  SELECT id FROM import_jobs WHERE source_kind = ?
+                );
+                """,
+                arguments: [ImportSourceKind.adsProduct.rawValue]
+            )
+            try db.execute(
+                sql: "DELETE FROM import_jobs WHERE source_kind = ?;",
+                arguments: [ImportSourceKind.adsProduct.rawValue]
+            )
+            try db.execute(sql: "DELETE FROM product_weekly_metrics;")
+            return true
+        }
+        if didDelete {
+            invalidateDashboardCache()
+        }
+        return didDelete
+    }
 }

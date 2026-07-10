@@ -67,6 +67,16 @@ enum ImportValueParsers {
         return value
     }
 
+    /// 解析展示/点击等计数；兼容 Excel 导出的 `25401.0`。
+    static func parseCount(_ raw: String) -> Int? {
+        if let value = parseInteger(raw) {
+            return value
+        }
+        guard let decimal = parseDecimal(raw) else { return nil }
+        guard decimal.isFinite, decimal >= 0 else { return nil }
+        return Int(decimal.rounded())
+    }
+
     static func parseDecimal(_ raw: String) -> Double? {
         guard let decimal = parseDecimalString(raw) else { return nil }
         return (decimal as NSDecimalNumber).doubleValue

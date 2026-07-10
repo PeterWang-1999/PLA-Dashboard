@@ -12,6 +12,21 @@ struct RootView: View {
     @State private var selectedNavigationItem: AppNavigationItem? = .dashboard
     @State private var showImportBlockingAlert = false
 
+    private static var importAllowedContentTypes: [UTType] {
+        var types: [UTType] = [
+            .commaSeparatedText,
+            .tabSeparatedText,
+            .plainText,
+            .text,
+            .data,
+            .spreadsheet
+        ]
+        if let xlsx = UTType(filenameExtension: "xlsx") {
+            types.append(xlsx)
+        }
+        return types
+    }
+
     var body: some View {
         let workspaceRevision = accountStore.workspaceRevision
         let settingsRevision = dashboardSettingsNotifier.revision
@@ -34,7 +49,7 @@ struct RootView: View {
         .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 280)
         .fileImporter(
             isPresented: $importViewModel.showFileImporter,
-            allowedContentTypes: [.commaSeparatedText, .tabSeparatedText, .plainText, .text, .data],
+            allowedContentTypes: RootView.importAllowedContentTypes,
             allowsMultipleSelection: false
         ) { result in
             switch result {

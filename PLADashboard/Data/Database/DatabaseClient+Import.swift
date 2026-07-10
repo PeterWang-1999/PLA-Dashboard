@@ -474,7 +474,7 @@ extension DatabaseClient {
                     sql: "DELETE FROM sales_daily WHERE import_id = ?;",
                     arguments: [importId]
                 )
-            case .adsProduct:
+            case .adsProduct, .plaDeliveryDetail:
                 try db.execute(
                     sql: "DELETE FROM ads_product_daily WHERE import_id = ?;",
                     arguments: [importId]

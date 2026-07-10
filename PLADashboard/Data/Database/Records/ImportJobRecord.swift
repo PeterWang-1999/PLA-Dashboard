@@ -5,6 +5,7 @@ enum ImportSourceKind: String, Codable, Sendable, CaseIterable, Identifiable {
     case merchantCenter = "merchant_center"
     case salesReport = "sales_report"
     case adsProduct = "ads_product"
+    case plaDeliveryDetail = "pla_delivery_detail"
 
     var id: String { rawValue }
 
@@ -17,6 +18,7 @@ enum ImportSourceKind: String, Codable, Sendable, CaseIterable, Identifiable {
         case .merchantCenter: "Merchant Center"
         case .salesReport: "Product Sales"
         case .adsProduct: "Google Ads"
+        case .plaDeliveryDetail: "投放产品明细"
         }
     }
 
@@ -30,13 +32,14 @@ enum ImportSourceKind: String, Codable, Sendable, CaseIterable, Identifiable {
             MerchantCenterExportFormat.sampleResourceName(for: accountKind)
         case .salesReport: "SampleSales"
         case .adsProduct: "SampleAds"
+        case .plaDeliveryDetail: "SamplePlaDeliveryDetail"
         }
     }
 
     var sampleFileExtension: String {
         switch self {
         case .merchantCenter: "tsv"
-        case .salesReport, .adsProduct: "csv"
+        case .salesReport, .adsProduct, .plaDeliveryDetail: "csv"
         }
     }
 }

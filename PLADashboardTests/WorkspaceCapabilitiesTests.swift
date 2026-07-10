@@ -12,8 +12,9 @@ final class WorkspaceCapabilitiesTests: XCTestCase {
         let capabilities = WorkspaceCapabilities.forKind(.selfBuilt)
         XCTAssertEqual(
             capabilities.importSourceKinds,
-            [.merchantCenter, .adsProduct, .salesReport]
+            [.merchantCenter, .plaDeliveryDetail, .salesReport]
         )
+        XCTAssertFalse(capabilities.importSourceKinds.contains(.adsProduct))
     }
 
     func testSidebarItemsEqualForV1() {

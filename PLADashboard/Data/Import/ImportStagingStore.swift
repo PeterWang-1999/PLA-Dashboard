@@ -40,11 +40,13 @@ enum ImportStagingStore {
             throw ImportStagingError.copyFailed(path: sourceURL.path, underlying: error)
         }
 
-        do {
-            _ = try ImportTextEncoding.normalizeToUTF8IfNeeded(at: destinationURL)
-        } catch {
-            try? fileManager.removeItem(at: destinationURL)
-            throw ImportStagingError.encodingFailed(path: destinationURL.path, underlying: error)
+        if !ImportSpreadsheetFormat.isBinarySpreadsheet(at: destinationURL) {
+            do {
+                _ = try ImportTextEncoding.normalizeToUTF8IfNeeded(at: destinationURL)
+            } catch {
+                try? fileManager.removeItem(at: destinationURL)
+                throw ImportStagingError.encodingFailed(path: destinationURL.path, underlying: error)
+            }
         }
 
         let checksum: String

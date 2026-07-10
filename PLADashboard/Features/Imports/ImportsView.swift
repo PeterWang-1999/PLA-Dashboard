@@ -115,6 +115,7 @@ struct ImportsView: View {
         switch viewModel.selectedSourceKind {
         case .merchantCenter: "Merchant Center TSV"
         case .adsProduct: "Google Ads 产品数据"
+        case .plaDeliveryDetail: "投放产品明细"
         case .salesReport: "Product Sales CSV"
         }
     }
@@ -125,8 +126,10 @@ struct ImportsView: View {
             "选择 Google Merchant Center 导出的 TSV 文件。文件将复制到应用容器并按批流式导入。"
         case .adsProduct:
             "选择 Google Ads 产品数据导出文件（跳过前两行标题）。将写入 ads_product_daily；消费与「销售趋势」均来自 Ads 转化价值等字段。"
+        case .plaDeliveryDetail:
+            "选择投放产品明细导出文件（CSV 或 XLSX，第 1 行为表头）。将写入 ads_product_daily；消费与「销售趋势」来自 Conversion Value 等字段。"
         case .salesReport:
-            "选择 Product Sales CSV 文件。将写入 sales_daily；看板「销售趋势」列仍来自 Google Ads 转化价值，不会自动切换为 Gross Sales。"
+            "选择 Product Sales CSV 文件。将写入 sales_daily；看板「销售趋势」列仍来自投放明细转化价值，不会自动切换为 Gross Sales。"
         }
     }
 
@@ -134,6 +137,7 @@ struct ImportsView: View {
         switch viewModel.selectedSourceKind {
         case .merchantCenter: "选择 TSV 文件…"
         case .adsProduct: "选择 CSV 文件…"
+        case .plaDeliveryDetail: "选择 CSV / XLSX 文件…"
         case .salesReport: "选择 CSV 文件…"
         }
     }

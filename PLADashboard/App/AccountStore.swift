@@ -40,6 +40,11 @@ final class AccountStore {
             AccountSettingsMigration.migrateLegacyGlobalSettingsIfNeeded(for: loadedManifest.activeAccountID)
             let client = try DatabaseClient.make(accountID: loadedManifest.activeAccountID)
             try await client.migrateIfNeeded()
+            try await Self.purgeLegacyGoogleAdsIfNeeded(
+                client: client,
+                accountID: loadedManifest.activeAccountID,
+                accounts: loadedManifest.accounts
+            )
             manifest = loadedManifest
             activeDatabaseClient = client
             workspaceRevision &+= 1
@@ -63,6 +68,11 @@ final class AccountStore {
         let client = try DatabaseClient.make(accountID: accountID)
         try await client.migrateIfNeeded()
         let updatedManifest = try WorkspaceAccountPersistence.updateActiveAccountID(accountID)
+        try await Self.purgeLegacyGoogleAdsIfNeeded(
+            client: client,
+            accountID: accountID,
+            accounts: updatedManifest.accounts
+        )
         manifest = updatedManifest
         activeDatabaseClient = client
         workspaceRevision &+= 1
@@ -78,5 +88,20 @@ final class AccountStore {
         let account = try WorkspaceAccountPersistence.createAccount(name: name, kind: kind)
         manifest = try WorkspaceAccountPersistence.load()
         return account
+    }
+
+    /// 自建站账户打开时清除遗留 Google Ads 导入（幂等）。
+    private static func purgeLegacyGoogleAdsIfNeeded(
+        client: DatabaseClient,
+        accountID: String,
+        accounts: [WorkspaceAccount]
+    ) async throws {
+        guard accounts.contains(where: { $0.id == accountID && $0.kind == .selfBuilt }) else {
+            return
+        }
+        let didDelete = try await client.purgeLegacyGoogleAdsImports()
+        if didDelete {
+            try await client.rebuildProductWeeklyMetrics()
+        }
     }
 }

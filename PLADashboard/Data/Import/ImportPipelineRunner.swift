@@ -37,6 +37,13 @@ enum ImportPipelineRunner: Sendable {
                 fileName: fileName,
                 onProgress: onProgress
             )
+        case .plaDeliveryDetail:
+            let importer = PlaDeliveryDetailImporter(databaseClient: databaseClient)
+            return try await importer.importFile(
+                sourceURL: sourceURL,
+                fileName: fileName,
+                onProgress: onProgress
+            )
         }
     }
 
@@ -62,7 +69,8 @@ enum ImportPipelineRunner: Sendable {
 
         try Task.checkCancellation()
 
-        var shouldRebuildMetrics = sourceKind == .adsProduct
+        var shouldRebuildMetrics =
+            sourceKind == .adsProduct || sourceKind == .plaDeliveryDetail
         if !shouldRebuildMetrics {
             shouldRebuildMetrics = try await databaseClient.hasFactTableData()
         }

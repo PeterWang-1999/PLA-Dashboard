@@ -20,5 +20,7 @@ final class ImportValueParsersTests: XCTestCase {
         XCTAssertEqual(ImportValueParsers.parseInteger("1,000"), 1000)
         XCTAssertEqual(ImportValueParsers.parseInteger("\"1,259\""), 1259)
         XCTAssertEqual(ImportValueParsers.parseDecimal("2.5"), 2.5)
+        XCTAssertEqual(ImportValueParsers.parseCount("25401.0"), 25401)
+        XCTAssertEqual(ImportValueParsers.parseCount("380"), 380)
     }
 }
