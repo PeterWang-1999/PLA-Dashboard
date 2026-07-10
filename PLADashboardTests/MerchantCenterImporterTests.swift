@@ -43,9 +43,42 @@ Invalid Row\t\thttps://example.com/missing\thttps://example.com/missing.jpg\t\t\
         } catch let error as MerchantCenterColumnMapError {
             XCTAssertEqual(
                 error.errorDescription,
-                "TSV 缺少必需列：链接（自建站 导出格式）"
+                "TSV 缺少必需列：链接 / link（自建站 导出格式）"
             )
         }
+    }
+
+    func testImportEnglishHeaderTSV() async throws {
+        let englishTSV = """
+title\tid\tlink\timage link\tcustom label 0\tcustom label 1\tcustom label 2\tcustom label 3\tcustom label 4\t类型
+Sample Sandals\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/sandals\thttps://example.com/sandals.jpg\tEN\t\t\t\t\tShoes & Bags c3349_ > Men's Shoes c16445_ > Men's Sandals c37219_ > Outdoor Sandals c123985_
+Sample Shoes\t15091206_00002_US_en\thttps://example.com/shoes\thttps://example.com/shoes.jpg\tShopify产品\t\t\t\t\tShoes & Bags c3349_ > Men's Shoes c16445_
+Invalid Row\t\thttps://example.com/missing\thttps://example.com/missing.jpg\t\t\t\t\t\tShoes & Bags c3349_
+"""
+        try await assertImportsMerchantSample(
+            tsv: englishTSV,
+            accountKind: .selfBuilt
+        )
+    }
+
+    func testColumnMapAcceptsEnglishAliases() throws {
+        let headers = [
+            "title", "id", "link", "image link",
+            "custom label 0", "custom label 1", "custom label 2", "custom label 3", "custom label 4",
+        ]
+        let map = try MerchantCenterColumnMap(headers: headers, accountKind: .selfBuilt)
+        XCTAssertEqual(map.itemIdIndex, 1)
+        XCTAssertEqual(map.titleIndex, 0)
+        XCTAssertEqual(map.canonicalLinkIndex, 2)
+        XCTAssertEqual(map.imageURLIndex, 3)
+        XCTAssertEqual(map.customLabelIndexByPosition[0], 4)
+        XCTAssertEqual(map.customLabelIndexByPosition[4], 8)
+    }
+
+    func testThirdPartyColumnMapAcceptsLinkAlias() throws {
+        let headers = ["title", "id", "link", "image link"]
+        let map = try MerchantCenterColumnMap(headers: headers, accountKind: .thirdParty)
+        XCTAssertEqual(map.canonicalLinkIndex, 2)
     }
 
     private func assertImportsMerchantSample(

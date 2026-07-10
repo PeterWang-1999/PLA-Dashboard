@@ -1,6 +1,6 @@
 import Foundation
 
-/// 从 Merchant Center TSV 的 `自定义标签 0`…`自定义标签 4` 列解析出的筛选项。
+/// 从 Merchant Center TSV 的自定义标签列解析出的筛选项（中文 `自定义标签 0`…`4` 或英文 `custom label 0`…`4`）。
 struct CustomLabelCatalog: Hashable, Codable {
     struct Group: Hashable, Codable, Identifiable {
         let columnName: String
@@ -13,7 +13,8 @@ struct CustomLabelCatalog: Hashable, Codable {
 
     let groups: [Group]
 
-    static let columnNames = (0...4).map { "自定义标签 \($0)" }
+    /// UI / 筛选统一使用中文列名。
+    static let columnNames = MerchantCenterExportFormat.customLabelColumnNames
 
     static let empty = CustomLabelCatalog(groups: [])
 
@@ -51,9 +52,12 @@ struct CustomLabelCatalog: Hashable, Codable {
         lines.removeFirst()
 
         let headers = parseTSVFields(String(headerLine))
-        let columnIndexes = columnNames.compactMap { name -> (String, Int)? in
-            guard let index = headers.firstIndex(of: name) else { return nil }
-            return (name, index)
+        let columnIndexes = columnNames.enumerated().compactMap { position, canonicalName -> (String, Int)? in
+            let aliases = MerchantCenterExportFormat.customLabelColumnAliases(position: position)
+            guard let index = aliases.lazy.compactMap({ headers.firstIndex(of: $0) }).first else {
+                return nil
+            }
+            return (canonicalName, index)
         }
         guard !columnIndexes.isEmpty else {
             throw CustomLabelCatalogError.missingCustomLabelColumns
