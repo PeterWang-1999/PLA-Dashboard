@@ -15,13 +15,23 @@ struct ProductImageView: View {
                     .resizable()
                     .scaledToFill()
             } else if isLoading {
-                ProgressView()
-                    .controlSize(.small)
+                Image(systemName: "photo")
+                    .font(.body)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.quaternarySystemFill))
+                    .overlay {
+                        ProgressView()
+                            .controlSize(.mini)
+                    }
             } else if loadFailed {
                 failurePlaceholder
             } else if imageURL != nil {
-                ProgressView()
-                    .controlSize(.small)
+                Image(systemName: "photo")
+                    .font(.body)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.quaternarySystemFill))
             } else {
                 placeholder
             }

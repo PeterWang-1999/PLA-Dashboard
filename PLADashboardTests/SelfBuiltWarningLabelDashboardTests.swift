@@ -1,4 +1,5 @@
 import XCTest
+import GRDB
 @testable import PLADashboard
 
 final class SelfBuiltWarningLabelDashboardTests: XCTestCase {
@@ -64,6 +65,137 @@ final class SelfBuiltWarningLabelDashboardTests: XCTestCase {
             pageSize: 30
         )
         XCTAssertEqual(highOnly.rows.count, 0)
+    }
+
+    /// 自建站按标签筛选应 SQL 真分页：第 2 页只返回剩余行，且 totalPages 正确。
+    func testSelfBuiltAlertFilterUsesTruePagination() async throws {
+        let client = try DatabaseClient.makeInMemoryForTesting()
+        let weekStarts = self.weekStarts
+        let weekId = weekStarts.last!
+        let importId = "seed-import"
+        let importedAt = ISO8601DateFormatter().string(from: Date())
+
+        try await client.dbQueue.write { db in
+            try ImportJobRecord(
+                id: importId,
+                sourceKind: ImportSourceKind.plaDeliveryDetail.rawValue,
+                fileName: "seed.csv",
+                filePathBookmark: Data(),
+                fileChecksum: "seed",
+                importedAt: importedAt,
+                status: ImportJobStatus.succeeded.rawValue,
+                totalRows: 5,
+                validRows: 5,
+                invalidRows: 0,
+                warningRows: 0,
+                schemaVersion: DatabaseClient.currentImportSchemaVersion
+            ).insert(db)
+
+            for index in 1...5 {
+                let productId = "P\(index)"
+                try ProductRecord(
+                    productId: productId,
+                    title: "Item \(index)",
+                    canonicalLink: nil,
+                    imageUrl: nil,
+                    customLabel0: nil,
+                    customLabel1: nil,
+                    customLabel2: nil,
+                    customLabel3: nil,
+                    customLabel4: nil,
+                    lsin: "S\(productId)",
+                    googleProductCategory: "Apparel & Accessories > Clothing > Dresses",
+                    firstListedAt: "2025-01-01",
+                    firstSeenAt: importedAt,
+                    lastSeenAt: importedAt,
+                    updatedFromImportId: importId
+                ).insert(db)
+
+                for week in weekStarts {
+                    try ProductWeeklyMetricsRecord.make(
+                        productId: productId,
+                        weekStart: week,
+                        metrics: AggregatedMetrics(
+                            costCents: 1_000 * index,
+                            impressions: 100,
+                            clicks: 10,
+                            conversions: 1,
+                            conversionValueCents: 1_200,
+                            grossSalesCents: 2_000,
+                            grossProfitCents: 800
+                        )
+                    ).insert(db)
+                }
+
+                // 锚定报告周：最新投放日取完整周周六 2026-07-04
+                try AdsProductDailyRecord(
+                    date: "2026-07-04",
+                    itemId: "item-\(productId)",
+                    productId: productId,
+                    variantId: nil,
+                    campaign: "C",
+                    currencyCode: "USD",
+                    costMicros: 1_000_000,
+                    impressions: 10,
+                    clicks: 1,
+                    conversions: 0,
+                    conversionValueCents: 50,
+                    importId: importId
+                ).insert(db)
+            }
+
+            try LabelSnapshotRecord(
+                weekId: weekId,
+                createdAt: importedAt,
+                adsWeeksJSON: #"["\#(weekStarts.joined(separator: "\",\""))"]"#,
+                historyNote: "test"
+            ).insert(db)
+
+            for index in 1...5 {
+                try LabelSnapshotProductRecord(
+                    weekId: weekId,
+                    productId: "P\(index)",
+                    label: LabelEngineConstants.labelHigh,
+                    failHighRetain: false,
+                    marginLt1: false,
+                    noSignalRecent3: false,
+                    noConvGSCurrentWeek: false,
+                    roiGe1x: true,
+                    marginGe1: true,
+                    weeksInLowSampleOld: 0,
+                    weeksInPotentialNew: 0,
+                    transitionAction: nil,
+                    reason: nil
+                ).insert(db)
+            }
+        }
+
+        let filters = DashboardQueryFilters(
+            alertFilter: ProductWarningLabel.highEfficiency.rawValue,
+            warningLabelEngine: .selfBuiltSnapshot
+        )
+        let page1 = try await client.fetchDashboardPage(filters: filters, page: 1, pageSize: 2)
+        XCTAssertEqual(page1.totalPages, 3)
+        XCTAssertEqual(page1.rows.count, 2)
+        XCTAssertTrue(page1.rows.allSatisfy { $0.warningLabel == LabelEngineConstants.labelHigh })
+
+        let page2 = try await client.fetchDashboardPage(filters: filters, page: 2, pageSize: 2)
+        XCTAssertEqual(page2.rows.count, 2)
+        XCTAssertEqual(page2.totalPages, 3)
+
+        let page3 = try await client.fetchDashboardPage(filters: filters, page: 3, pageSize: 2)
+        XCTAssertEqual(page3.rows.count, 1)
+        XCTAssertEqual(page3.totalPages, 3)
+
+        let observation = try await client.fetchDashboardPage(
+            filters: DashboardQueryFilters(
+                alertFilter: ProductWarningLabel.observation.rawValue,
+                warningLabelEngine: .selfBuiltSnapshot
+            ),
+            page: 1,
+            pageSize: 30
+        )
+        XCTAssertEqual(observation.rows.count, 0)
     }
 
     private func seedAds(client: DatabaseClient) async throws {

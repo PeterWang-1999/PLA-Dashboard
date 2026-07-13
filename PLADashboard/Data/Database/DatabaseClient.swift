@@ -5,6 +5,8 @@ actor DatabaseClient {
     nonisolated let accountID: String
     let dbQueue: DatabaseQueue
     private var dashboardMetricsCache: DashboardMetricsCache?
+    /// 自建站最新一周标签快照缓存，避免每次翻页全表重读。
+    private var cachedLabelDecisions: (weekId: String, labels: [String: String])?
 
     static let databaseDirectoryName = WorkspacePaths.applicationDirectoryName
     static let databaseFileName = WorkspacePaths.databaseFileName
@@ -65,6 +67,7 @@ actor DatabaseClient {
 
     func invalidateDashboardCache() {
         dashboardMetricsCache = nil
+        cachedLabelDecisions = nil
     }
 
     func cachedDashboardMetrics(for weekStarts: [String]) -> DashboardMetricsCache? {
@@ -76,6 +79,17 @@ actor DatabaseClient {
 
     func storeDashboardMetricsCache(_ cache: DashboardMetricsCache) {
         dashboardMetricsCache = cache
+    }
+
+    /// 按最新 `week_id` 缓存标签字典；快照变更后由 `invalidateDashboardCache` 清空。
+    func cachedOrLoadLatestLabelDecisions() throws -> [String: String] {
+        guard let weekId = try latestLabelSnapshotWeekId() else { return [:] }
+        if let cached = cachedLabelDecisions, cached.weekId == weekId {
+            return cached.labels
+        }
+        let labels = try loadLatestLabelDecisionsByProductId()
+        cachedLabelDecisions = (weekId, labels)
+        return labels
     }
 
     /// 合并自建站 `S` 前缀 product_id 与数字 ID（幂等，可由诊断或迁移触发）。

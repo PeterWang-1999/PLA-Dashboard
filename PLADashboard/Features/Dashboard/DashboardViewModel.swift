@@ -18,6 +18,8 @@ final class DashboardViewModel {
     /// 当前报告周期文案，例如 `当前报告周期：2026-W22 至 2026-W27`。
     var reportingPeriodLabel: String?
     var isLoading = false
+    /// 仅翻页时的轻量加载，不整表禁用、不盖全屏转圈。
+    var isPaging = false
     var errorMessage: String?
     var tableSort = DashboardTableSort.default
 
@@ -93,6 +95,7 @@ final class DashboardViewModel {
         dataSource = .empty
         errorMessage = nil
         isLoading = false
+        isPaging = false
         isExporting = false
         exportErrorMessage = nil
         categoryCatalog = .empty
@@ -170,13 +173,13 @@ final class DashboardViewModel {
     func goToPreviousPage() {
         guard currentPage > 1 else { return }
         currentPage -= 1
-        scheduleRefresh()
+        scheduleRefresh(mode: .paging)
     }
 
     func goToNextPage() {
         guard currentPage < totalPages else { return }
         currentPage += 1
-        scheduleRefresh()
+        scheduleRefresh(mode: .paging)
     }
 
     func onSearchTextChanged() {
@@ -186,13 +189,13 @@ final class DashboardViewModel {
         searchTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))
             guard !Task.isCancelled, generation == loadGeneration else { return }
-            await refreshData()
+            await refreshData(mode: .full)
         }
     }
 
     func onFiltersChanged() {
         currentPage = 1
-        scheduleRefresh()
+        scheduleRefresh(mode: .full)
     }
 
     func setTableSort(_ sort: DashboardTableSort) {
@@ -202,7 +205,7 @@ final class DashboardViewModel {
         if dataSource == .preview {
             return
         }
-        scheduleRefresh()
+        scheduleRefresh(mode: .full)
     }
 
     func applyColumnSort(_ order: [KeyPathComparator<ProductPerformanceRowModel>]) {
@@ -214,19 +217,30 @@ final class DashboardViewModel {
         tableSort.columnSortOrder
     }
 
-    func scheduleRefresh() {
+    enum RefreshMode {
+        case full
+        case paging
+    }
+
+    func scheduleRefresh(mode: RefreshMode = .full) {
         refreshTask?.cancel()
         let generation = loadGeneration
         refreshTask = Task { @MainActor in
             guard generation == loadGeneration else { return }
-            await refreshData()
+            await refreshData(mode: mode)
         }
     }
 
-    func refreshData() async {
+    func refreshData(mode: RefreshMode = .full) async {
         let generation = loadGeneration
         guard dataSource == .database, let databaseClient else { return }
-        isLoading = true
+        switch mode {
+        case .full:
+            isLoading = true
+            isPaging = false
+        case .paging:
+            isPaging = true
+        }
         errorMessage = nil
 
         do {
@@ -260,6 +274,7 @@ final class DashboardViewModel {
 
         guard generation == loadGeneration else { return }
         isLoading = false
+        isPaging = false
     }
 
     func rebuildMetricsAndRefresh() async {

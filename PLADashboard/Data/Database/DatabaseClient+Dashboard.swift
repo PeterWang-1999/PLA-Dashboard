@@ -78,9 +78,22 @@ extension DatabaseClient {
             return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1, weekStarts: [])
         }
 
-        let hasAlertFilter = alertFilterLabel(for: filters.alertFilter) != nil
+        let alertLabel = alertFilterLabel(for: filters.alertFilter)
 
-        if hasAlertFilter {
+        // 自建站标签已落库：预警筛选走 SQL JOIN + LIMIT/OFFSET，避免翻页全量扫描。
+        if let alertLabel, filters.warningLabelEngine == .selfBuiltSnapshot {
+            return try fetchDashboardPageSQLPaginated(
+                filters: filters,
+                weekStarts: contextBundle.weekStarts,
+                metricsContext: contextBundle.metricsContext,
+                page: page,
+                pageSize: pageSize,
+                snapshotLabelFilter: alertLabel
+            )
+        }
+
+        // 三方站标签即时计算：筛选仍需内存过滤（保持原路径）。
+        if alertLabel != nil {
             return try fetchDashboardPageWithAlertFilter(
                 filters: filters,
                 weekStarts: contextBundle.weekStarts,
@@ -95,7 +108,8 @@ extension DatabaseClient {
             weekStarts: contextBundle.weekStarts,
             metricsContext: contextBundle.metricsContext,
             page: page,
-            pageSize: pageSize
+            pageSize: pageSize,
+            snapshotLabelFilter: nil
         )
     }
 
@@ -165,8 +179,29 @@ extension DatabaseClient {
         metricsContext: DashboardMetricsCache
     ) throws -> [ProductPerformanceRowModel] {
         let snapshotLabels = try snapshotLabelsIfNeeded(for: filters.warningLabelEngine)
+        let alertLabel = alertFilterLabel(for: filters.alertFilter)
 
-        if alertFilterLabel(for: filters.alertFilter) != nil {
+        // 自建站：预警筛选可在 SQL 侧完成，导出也走同一路径。
+        if filters.warningLabelEngine == .selfBuiltSnapshot {
+            let ranked = try fetchRankedProducts(
+                filters: filters,
+                weekStarts: weekStarts,
+                limit: nil,
+                offset: 0,
+                includeTotalCount: false,
+                snapshotLabelFilter: alertLabel
+            )
+            return try mapProductsToPerformanceRows(
+                products: ranked.products,
+                weekStarts: weekStarts,
+                metricsContext: metricsContext,
+                alertFilter: nil,
+                warningLabelEngine: filters.warningLabelEngine,
+                snapshotLabels: snapshotLabels
+            )
+        }
+
+        if alertLabel != nil {
             let batchSize = 200
             var offset = 0
             var mappedRows: [ProductPerformanceRowModel] = []
@@ -177,7 +212,8 @@ extension DatabaseClient {
                     weekStarts: weekStarts,
                     limit: batchSize,
                     offset: offset,
-                    includeTotalCount: false
+                    includeTotalCount: false,
+                    snapshotLabelFilter: nil
                 )
                 if ranked.products.isEmpty { break }
 
@@ -206,7 +242,8 @@ extension DatabaseClient {
             weekStarts: weekStarts,
             limit: nil,
             offset: 0,
-            includeTotalCount: false
+            includeTotalCount: false,
+            snapshotLabelFilter: nil
         )
         return try mapProductsToPerformanceRows(
             products: ranked.products,
@@ -223,14 +260,16 @@ extension DatabaseClient {
         weekStarts: [String],
         metricsContext: DashboardMetricsCache,
         page: Int,
-        pageSize: Int
+        pageSize: Int,
+        snapshotLabelFilter: ProductWarningLabel?
     ) throws -> DashboardPageResult {
         let ranked = try fetchRankedProducts(
             filters: filters,
             weekStarts: weekStarts,
             limit: pageSize,
             offset: max(0, (page - 1) * pageSize),
-            includeTotalCount: true
+            includeTotalCount: true,
+            snapshotLabelFilter: snapshotLabelFilter
         )
 
         guard ranked.totalCount > 0, !ranked.products.isEmpty else {
@@ -273,7 +312,8 @@ extension DatabaseClient {
                 weekStarts: weekStarts,
                 limit: batchSize,
                 offset: offset,
-                includeTotalCount: false
+                includeTotalCount: false,
+                snapshotLabelFilter: nil
             )
 
             if ranked.products.isEmpty { break }
@@ -325,17 +365,40 @@ extension DatabaseClient {
         weekStarts: [String],
         limit: Int?,
         offset: Int,
-        includeTotalCount: Bool
+        includeTotalCount: Bool,
+        snapshotLabelFilter: ProductWarningLabel?
     ) throws -> RankedProductsResult {
-        try dbQueue.read { db in
+        let snapshotJoin: (weekId: String, label: String)?
+        if let snapshotLabelFilter {
+            guard let weekId = try latestLabelSnapshotWeekId() else {
+                return RankedProductsResult(products: [], totalCount: 0)
+            }
+            snapshotJoin = (weekId, snapshotLabelFilter.rawValue)
+        } else {
+            snapshotJoin = nil
+        }
+
+        return try dbQueue.read { db in
             let filterClause = try buildProductFilterClause(filters: filters, weekStarts: weekStarts, db: db)
             let weekPlaceholders = Array(repeating: "?", count: weekStarts.count).joined(separator: ", ")
+            let snapshotJoinSQL: String
+            if snapshotJoin != nil {
+                snapshotJoinSQL = """
+                    INNER JOIN label_snapshot_products lsp
+                      ON lsp.product_id = p.product_id
+                     AND lsp.week_id = ?
+                     AND lsp.label = ?
+                    """
+            } else {
+                snapshotJoinSQL = ""
+            }
 
             var countSQL = """
                 SELECT COUNT(*) FROM (
                   SELECT p.product_id
                   FROM products p
                   INNER JOIN product_weekly_metrics m ON m.product_id = p.product_id
+                  \(snapshotJoinSQL)
                   WHERE m.week_start IN (\(weekPlaceholders))
                   \(filterClause.sql)
                   GROUP BY p.product_id
@@ -343,6 +406,9 @@ extension DatabaseClient {
                 );
                 """
             var countArgs = StatementArguments()
+            if let snapshotJoin {
+                countArgs += [snapshotJoin.weekId, snapshotJoin.label]
+            }
             for week in weekStarts { countArgs += [week] }
             countArgs += filterClause.arguments
 
@@ -357,6 +423,7 @@ extension DatabaseClient {
                 SELECT p.*
                 FROM products p
                 INNER JOIN product_weekly_metrics m ON m.product_id = p.product_id
+                \(snapshotJoinSQL)
                 WHERE m.week_start IN (\(weekPlaceholders))
                 \(filterClause.sql)
                 GROUP BY p.product_id
@@ -364,6 +431,9 @@ extension DatabaseClient {
                 ORDER BY \(filters.sort.sqlOrderClause)
                 """
             var dataArgs = StatementArguments()
+            if let snapshotJoin {
+                dataArgs += [snapshotJoin.weekId, snapshotJoin.label]
+            }
             for week in weekStarts { dataArgs += [week] }
             dataArgs += filterClause.arguments
 
@@ -458,7 +528,7 @@ extension DatabaseClient {
     private func snapshotLabelsIfNeeded(for engine: WarningLabelEngine) throws -> [String: String] {
         switch engine {
         case .selfBuiltSnapshot:
-            try loadLatestLabelDecisionsByProductId()
+            try cachedOrLoadLatestLabelDecisions()
         case .thirdPartyCohort:
             [:]
         }

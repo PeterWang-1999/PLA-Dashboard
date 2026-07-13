@@ -56,11 +56,15 @@ struct DashboardView: View {
                 columnSortOrder = viewModel.columnSortOrder
             }
             .focusedSceneValue(\.dashboardGoToPreviousPage) {
-                guard viewModel.currentPage > 1, !viewModel.isLoading else { return }
+                guard viewModel.currentPage > 1,
+                      !viewModel.isLoading,
+                      !viewModel.isPaging else { return }
                 viewModel.goToPreviousPage()
             }
             .focusedSceneValue(\.dashboardGoToNextPage) {
-                guard viewModel.currentPage < viewModel.totalPages, !viewModel.isLoading else { return }
+                guard viewModel.currentPage < viewModel.totalPages,
+                      !viewModel.isLoading,
+                      !viewModel.isPaging else { return }
                 viewModel.goToNextPage()
             }
             .fileExporter(
@@ -109,6 +113,7 @@ struct DashboardView: View {
                     sortOrder: $columnSortOrder
                 )
                 .disabled(viewModel.isLoading)
+                .opacity(viewModel.isPaging ? 0.85 : 1)
 
                 if viewModel.isLoading {
                     ProgressView()
@@ -140,10 +145,14 @@ struct DashboardView: View {
 
     private var dashboardFooter: some View {
         HStack(spacing: 12) {
-            if viewModel.isLoading || viewModel.isExporting {
+            if viewModel.isLoading || viewModel.isPaging || viewModel.isExporting {
                 ProgressView()
                     .controlSize(.small)
-                    .accessibilityLabel(viewModel.isExporting ? "正在导出" : "正在加载")
+                    .accessibilityLabel(
+                        viewModel.isExporting
+                            ? "正在导出"
+                            : (viewModel.isPaging ? "正在翻页" : "正在加载")
+                    )
             }
 
             if let period = viewModel.reportingPeriodLabel, !viewModel.showsEmptyState {
@@ -165,7 +174,7 @@ struct DashboardView: View {
                 Button("导出当前视图…") {
                     Task { await beginExport() }
                 }
-                .disabled(viewModel.isLoading || viewModel.isExporting || viewModel.showsEmptyState)
+                .disabled(viewModel.isLoading || viewModel.isPaging || viewModel.isExporting || viewModel.showsEmptyState)
                 Divider()
                 Button("刷新聚合") {
                     Task { await viewModel.rebuildMetricsAndRefresh() }
@@ -193,7 +202,7 @@ struct DashboardView: View {
                 Image(systemName: "chevron.left")
             }
             .buttonStyle(.bordered)
-            .disabled(viewModel.currentPage <= 1 || viewModel.isLoading)
+            .disabled(viewModel.currentPage <= 1 || viewModel.isLoading || viewModel.isPaging)
             .help("上一页")
             .accessibilityLabel("上一页")
             .keyboardShortcut(.leftArrow, modifiers: .command)
@@ -210,7 +219,7 @@ struct DashboardView: View {
                 Image(systemName: "chevron.right")
             }
             .buttonStyle(.bordered)
-            .disabled(viewModel.currentPage >= viewModel.totalPages || viewModel.isLoading)
+            .disabled(viewModel.currentPage >= viewModel.totalPages || viewModel.isLoading || viewModel.isPaging)
             .help("下一页")
             .accessibilityLabel("下一页")
             .keyboardShortcut(.rightArrow, modifiers: .command)

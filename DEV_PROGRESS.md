@@ -4,11 +4,41 @@
 
 ## 当前阶段
 
-自建站预警标签数量对齐 Python — **已完成**（2026-07-11）
+优化看板翻页性能 — **已完成**（2026-07-13）
 
-- 目标：周表完整键 + 超长小数毛利入库修复后，冷启动标签分布与 Python 权威口径一致
+- 目标：自建站预警筛选 SQL 真分页；翻页轻量 loading；标签快照缓存
 
 ## 变更记录
+
+### 2026-07-13 — 优化看板翻页性能
+
+**内容**
+
+- 自建站按预警标签筛选：`JOIN label_snapshot_products` + `LIMIT/OFFSET`，翻页不再全量扫描
+- 标签决策按最新 `week_id` 缓存，随 `invalidateDashboardCache` 失效
+- 翻页使用 `isPaging`：不整表 disabled、不盖右上角转圈；底栏保留轻量指示
+- 产品图加载占位改为静态图 + 小菊花，减少翻页时满屏 Progress
+- 导出路径对自建站预警筛选同步走 SQL 过滤
+
+**涉及文件**
+
+- `PLADashboard/Data/Database/DatabaseClient.swift`
+- `PLADashboard/Data/Database/DatabaseClient+Dashboard.swift`
+- `PLADashboard/Features/Dashboard/DashboardViewModel.swift`
+- `PLADashboard/Features/Dashboard/DashboardView.swift`
+- `PLADashboard/Features/Dashboard/ProductImageView.swift`
+- `PLADashboardTests/SelfBuiltWarningLabelDashboardTests.swift`
+- `DEV_PROGRESS.md`
+
+**验证结果**
+
+```bash
+xcodebuild … test \
+  -only-testing:PLADashboardTests/SelfBuiltWarningLabelDashboardTests \
+  -only-testing:PLADashboardTests/DashboardFilterTests \
+  -only-testing:PLADashboardTests/DashboardViewModelAccountSwitchTests
+# TEST SUCCEEDED
+```
 
 ### 2026-07-11 — 修复超长小数毛利入库为 0
 
