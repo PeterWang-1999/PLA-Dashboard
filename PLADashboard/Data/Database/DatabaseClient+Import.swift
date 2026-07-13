@@ -182,7 +182,7 @@ extension DatabaseClient {
         let signpost = PerformanceSignposts.beginImportFlush()
         defer { PerformanceSignposts.endImportFlush(signpost) }
         try dbQueue.write { db in
-            try db.insertRecords(rows, onConflict: .replace)
+            try db.bulkInsertSalesDaily(rows)
         }
         invalidateDashboardCache()
     }
@@ -192,6 +192,71 @@ extension DatabaseClient {
             try SalesDailyRecord
                 .filter(SalesDailyRecord.Columns.importId == importId)
                 .fetchCount(db)
+        }
+    }
+
+    /// 诊断：销售日表 / 周表的 GS、毛利覆盖（供 E2E 对照 Python）。
+    func salesGrossProfitCoverage(weekStarts: [String]) throws -> (
+        salesRowsWithGS: Int,
+        salesRowsWithGP: Int,
+        salesProductsWithGS: Int,
+        salesProductsWithGP: Int,
+        weeklyProductsWithGS: Int,
+        weeklyProductsWithGP: Int,
+        salesProfitSumCents: Int,
+        salesGrossSumCents: Int
+    ) {
+        try dbQueue.read { db in
+            let salesRowsWithGS = try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM sales_daily WHERE gross_sales_cents > 0;
+                """) ?? 0
+            let salesRowsWithGP = try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM sales_daily WHERE gross_profit_cents > 0;
+                """) ?? 0
+            let salesProductsWithGS = try Int.fetchOne(db, sql: """
+                SELECT COUNT(DISTINCT product_id) FROM sales_daily
+                WHERE gross_sales_cents > 0 AND product_id IS NOT NULL AND TRIM(product_id) != '';
+                """) ?? 0
+            let salesProductsWithGP = try Int.fetchOne(db, sql: """
+                SELECT COUNT(DISTINCT product_id) FROM sales_daily
+                WHERE gross_profit_cents > 0 AND product_id IS NOT NULL AND TRIM(product_id) != '';
+                """) ?? 0
+            let sums = try Row.fetchOne(db, sql: """
+                SELECT
+                  COALESCE(SUM(gross_sales_cents), 0) AS gs,
+                  COALESCE(SUM(gross_profit_cents), 0) AS gp
+                FROM sales_daily;
+                """)
+            let salesGrossSumCents: Int = sums?["gs"] ?? 0
+            let salesProfitSumCents: Int = sums?["gp"] ?? 0
+
+            guard !weekStarts.isEmpty else {
+                return (
+                    salesRowsWithGS, salesRowsWithGP,
+                    salesProductsWithGS, salesProductsWithGP,
+                    0, 0, salesProfitSumCents, salesGrossSumCents
+                )
+            }
+            let placeholders = Array(repeating: "?", count: weekStarts.count).joined(separator: ", ")
+            var args = StatementArguments()
+            for week in weekStarts { args += [week] }
+            let weeklyProductsWithGS = try Int.fetchOne(db, sql: """
+                SELECT COUNT(DISTINCT product_id) FROM product_weekly_metrics
+                WHERE week_start IN (\(placeholders)) AND gross_sales_cents > 0;
+                """, arguments: args) ?? 0
+            var args2 = StatementArguments()
+            for week in weekStarts { args2 += [week] }
+            let weeklyProductsWithGP = try Int.fetchOne(db, sql: """
+                SELECT COUNT(DISTINCT product_id) FROM product_weekly_metrics
+                WHERE week_start IN (\(placeholders)) AND gross_profit_cents > 0;
+                """, arguments: args2) ?? 0
+
+            return (
+                salesRowsWithGS, salesRowsWithGP,
+                salesProductsWithGS, salesProductsWithGP,
+                weeklyProductsWithGS, weeklyProductsWithGP,
+                salesProfitSumCents, salesGrossSumCents
+            )
         }
     }
 

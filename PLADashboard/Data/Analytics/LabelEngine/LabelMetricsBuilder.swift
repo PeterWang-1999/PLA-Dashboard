@@ -49,7 +49,17 @@ enum LabelMetricsBuilder {
             factsByProduct[fact.productId, default: [:]][fact.weekStart] = fact
         }
 
-        let productIDs = factsByProduct.keys.sorted()
+        let productIDs = factsByProduct.keys.filter { productId in
+            // 与 Python 一致：仅纳入报告窗内有过投放事实的产品（排除「窗内仅有销售、投放在窗外」）。
+            let weeks = factsByProduct[productId] ?? [:]
+            return weeks.values.contains {
+                $0.costCents > 0
+                    || $0.impressions > 0
+                    || $0.clicks > 0
+                    || $0.conversions > 0
+                    || $0.conversionValueCents > 0
+            }
+        }.sorted()
         let newCutoffDay = try newProductCutoffDay(currentWeekStart: currentWeek)
 
         // —— 类目基准（按产品主 CMS3 聚合广告周数据）——

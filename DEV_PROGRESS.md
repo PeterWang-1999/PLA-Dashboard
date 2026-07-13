@@ -4,11 +4,68 @@
 
 ## 当前阶段
 
-自建站预警标签 E2E 验收修复 — **已完成**（2026-07-10）
+自建站预警标签数量对齐 Python — **已完成**（2026-07-11）
 
-- 目标：修复「全普通」根因（同周导入跳过重算），并用真实 PLA+毛利大文件验收标签分布
+- 目标：周表完整键 + 超长小数毛利入库修复后，冷启动标签分布与 Python 权威口径一致
 
 ## 变更记录
+
+### 2026-07-11 — 修复超长小数毛利入库为 0
+
+**内容**
+
+- 根因：Product Sales 的 `毛利额($)` 常含 30+ 位小数；`NSDecimalMultiplyByPowerOf10` 后直接取 `NSDecimalNumber.intValue` 会误返回 0，约 1/3 正毛利行丢失
+- `parseCurrencyToCents` / `parseCostToMicros`：先按目标小数位舍入再缩放取整
+- 单测覆盖超长小数解析与导入后 `gross_profit_cents` 非零
+
+**涉及文件**
+
+- `PLADashboard/Data/Import/ImportValueParsers.swift`
+- `PLADashboardTests/ImportValueParsersTests.swift`
+- `PLADashboardTests/SalesReportImporterTests.swift`
+- `DEV_PROGRESS.md`
+
+**验证结果**
+
+```bash
+xcodebuild … test -only-testing:PLADashboardTests/ImportValueParsersTests \
+  -only-testing:PLADashboardTests/SalesReportImporterTests \
+  -only-testing:PLADashboardTests/WeeklyMetricsAggregatorTests
+# TEST SUCCEEDED
+
+touch /tmp/pla_e2e_label_files && xcodebuild … test \
+  -only-testing:PLADashboardTests/SelfBuiltLabelEngineE2ETests
+# TEST SUCCEEDED（约 87s）
+# 普通/观察=10974 低样本老品=530 潜力新品=174 高效=65 低效=50
+```
+
+**下一步**
+
+- 现有账户：设置 →「重新计算预警标签」，或重导 Product Sales 后再算
+
+### 2026-07-11 — 修复周表只保留投放周导致毛利/活跃周丢失
+
+**内容**
+
+- `rebuildProductWeeklyMetrics` 改为：有投放的产品 ×（投放周 ∪ 销售周）为键，再 LEFT JOIN 广告与销售指标
+- 标签宇宙仅纳入报告窗内有过投放事实的产品
+- 新增单测：销售落在无投放周时仍写入 GS/毛利
+- E2E 断言改为与 Python 冷启动精确对齐（高效 65 / 潜力 174 / 老品 530 等）
+
+**涉及文件**
+
+- `PLADashboard/Data/Database/DatabaseClient+Analytics.swift`
+- `PLADashboard/Data/Analytics/LabelEngine/LabelMetricsBuilder.swift`
+- `PLADashboard/Data/Database/DatabaseBulkInsert.swift`
+- `PLADashboardTests/WeeklyMetricsAggregatorTests.swift`
+- `PLADashboardTests/SelfBuiltLabelEngineE2ETests.swift`
+- `DEV_PROGRESS.md`
+
+**验证结果**
+
+```bash
+# 与「超长小数毛利」修复一并经真实文件 E2E 通过，见上条
+```
 
 ### 2026-07-10 — 修复同周导入不重算 + PLA CMS3 + 真实文件 E2E
 

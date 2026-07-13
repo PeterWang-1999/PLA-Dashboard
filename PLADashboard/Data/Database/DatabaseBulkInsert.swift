@@ -48,4 +48,32 @@ extension Database {
             try execute(sql: sql, arguments: arguments)
         }
     }
+
+    /// Sales 日事实表多行 `INSERT OR REPLACE`，显式写入毛利列，避免 Codable 漏列。
+    func bulkInsertSalesDaily(_ rows: [SalesDailyRecord]) throws {
+        guard !rows.isEmpty else { return }
+        let maxRowsPerStatement = 100
+        for chunkStart in stride(from: 0, to: rows.count, by: maxRowsPerStatement) {
+            let chunk = Array(rows[chunkStart..<min(chunkStart + maxRowsPerStatement, rows.count)])
+            let valuePlaceholders = Array(repeating: "(?,?,?,?,?,?)", count: chunk.count)
+                .joined(separator: ", ")
+            let sql = """
+                INSERT OR REPLACE INTO sales_daily (
+                  date, lsin, product_id, gross_sales_cents, gross_profit_cents, import_id
+                ) VALUES \(valuePlaceholders);
+                """
+            var arguments = StatementArguments()
+            for row in chunk {
+                arguments += [
+                    row.date,
+                    row.lsin,
+                    row.productId,
+                    row.grossSalesCents,
+                    row.grossProfitCents,
+                    row.importId,
+                ]
+            }
+            try execute(sql: sql, arguments: arguments)
+        }
+    }
 }

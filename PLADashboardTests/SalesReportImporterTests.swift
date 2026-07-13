@@ -57,6 +57,28 @@ final class SalesReportImporterTests: XCTestCase {
         }
     }
 
+    func testImportPreservesUltraLongGrossProfitFraction() async throws {
+        let csv = """
+日期,LSIN,Gross Sales($),毛利额($)
+2026/7/8,S13918614,216.67,104.351501070163032066938202220754409954
+"""
+        let databaseClient = try DatabaseClient.makeInMemoryForTesting()
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("csv")
+        try csv.write(to: tempURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let importer = SalesReportImporter(databaseClient: databaseClient)
+        let result = try await importer.importFile(sourceURL: tempURL) { _ in }
+        XCTAssertEqual(result.job.validRows, 1)
+
+        let coverage = try await databaseClient.salesGrossProfitCoverage(weekStarts: [])
+        XCTAssertEqual(coverage.salesRowsWithGP, 1)
+        XCTAssertEqual(coverage.salesProfitSumCents, 10_435)
+        XCTAssertEqual(coverage.salesGrossSumCents, 21_667)
+    }
+
     func testImportGBKEncodedCSV() async throws {
         let csv = """
 日期,LSIN,Gross Sales($),毛利额($)

@@ -47,18 +47,27 @@ enum ImportValueParsers {
 
     static func parseCurrencyToCents(_ raw: String) -> Int? {
         guard let decimal = parseDecimalString(raw) else { return nil }
-        var scaled = decimal
-        var result = Decimal()
-        NSDecimalMultiplyByPowerOf10(&result, &scaled, 2, .plain)
-        return (result as NSDecimalNumber).intValue
+        return intValueByScaling(decimal, fractionalDigits: 2)
     }
 
     static func parseCostToMicros(_ raw: String) -> Int? {
         guard let decimal = parseDecimalString(raw) else { return nil }
-        var scaled = decimal
+        return intValueByScaling(decimal, fractionalDigits: 6)
+    }
+
+    /// 先按目标小数位舍入再乘 10^n 取整。
+    /// 毛利 CSV 常含 30+ 位小数；直接 `NSDecimalMultiplyByPowerOf10` 后取 `intValue`
+    /// 会因有效位过长误返回 0，导致 `gross_profit_cents` 大面积丢失。
+    private static func intValueByScaling(_ decimal: Decimal, fractionalDigits: Int16) -> Int {
+        var value = decimal
+        var rounded = Decimal()
+        NSDecimalRound(&rounded, &value, Int(fractionalDigits), .plain)
+        var scaled = rounded
         var result = Decimal()
-        NSDecimalMultiplyByPowerOf10(&result, &scaled, 6, .plain)
-        return (result as NSDecimalNumber).intValue
+        NSDecimalMultiplyByPowerOf10(&result, &scaled, fractionalDigits, .plain)
+        var intPart = Decimal()
+        NSDecimalRound(&intPart, &result, 0, .plain)
+        return (intPart as NSDecimalNumber).intValue
     }
 
     static func parseInteger(_ raw: String) -> Int? {

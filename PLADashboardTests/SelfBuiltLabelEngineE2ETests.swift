@@ -99,6 +99,24 @@ final class SelfBuiltLabelEngineE2ETests: XCTestCase {
         let counts = Self.countLabels(labels)
         print("E2E: final label counts: \(counts)")
         print("E2E: total products=\(labels.count)")
+
+        let weekStarts = try await Self.reportingWeeks(client: client)
+        let coverage = try await client.salesGrossProfitCoverage(weekStarts: weekStarts)
+        let metrics = try await client.buildLabelMetrics(weekStarts: weekStarts)
+        let withGP = metrics.products.filter { $0.grossProfit6wCents > 0 }.count
+        let withGS = metrics.products.filter { $0.grossSales6wCents > 0 }.count
+        let withListed = metrics.products.filter { ($0.firstListedAt?.isEmpty == false) }.count
+        let withCMS3 = metrics.products.filter {
+            $0.primaryCMS3 != LabelEngineConstants.unclassifiedCMS3
+        }.count
+        let dataNormal = metrics.products.filter(\.dataNormal).count
+        let catBench = metrics.products.filter {
+            $0.benchmarkSource == LabelEngineConstants.benchmarkSourceCategory
+        }.count
+        let enterProbe = metrics.products.filter {
+            $0.clicks6w >= 300 && ($0.weightedMarginReturn ?? 0) >= 1.0
+        }.count
+
         let report = """
             total=\(labels.count)
             \(LabelEngineConstants.labelObservation)=\(counts[LabelEngineConstants.labelObservation, default: 0])
@@ -107,6 +125,19 @@ final class SelfBuiltLabelEngineE2ETests: XCTestCase {
             \(LabelEngineConstants.labelHigh)=\(counts[LabelEngineConstants.labelHigh, default: 0])
             \(LabelEngineConstants.labelLow)=\(counts[LabelEngineConstants.labelLow, default: 0])
             afterPLA=\(afterPLACounts)
+            salesValid=\(salesResult.job.validRows) salesInvalid=\(salesResult.job.invalidRows)
+            weeks=\(weekStarts.joined(separator: ","))
+            withGS=\(withGS) withGP=\(withGP) withListed=\(withListed) withCMS3=\(withCMS3)
+            dataNormal=\(dataNormal) catBench=\(catBench) matureMarginGe1=\(enterProbe)
+            dbSalesRowsGS=\(coverage.salesRowsWithGS) dbSalesRowsGP=\(coverage.salesRowsWithGP)
+            dbSalesProductsGS=\(coverage.salesProductsWithGS) dbSalesProductsGP=\(coverage.salesProductsWithGP)
+            dbWeeklyProductsGS=\(coverage.weeklyProductsWithGS) dbWeeklyProductsGP=\(coverage.weeklyProductsWithGP)
+            dbSalesGrossSum=\(coverage.salesGrossSumCents) dbSalesProfitSum=\(coverage.salesProfitSumCents)
+            siteROI=\(metrics.thresholds.siteBenchmarkROI.map { String(format: "%.4f", $0) } ?? "nil")
+            highMarginThr=\(String(format: "%.4f", metrics.thresholds.highMarginThreshold))
+            matureP50=\(metrics.thresholds.matureMarginP50.map { String(format: "%.4f", $0) } ?? "nil") matureN=\(metrics.thresholds.matureSampleN)
+            newGSp50=\(metrics.thresholds.newGSP50Cents.map { String($0) } ?? "nil") newGSp75=\(metrics.thresholds.newGSP75Cents.map { String($0) } ?? "nil") newN=\(metrics.thresholds.newPositiveN)
+            oldGSp50=\(metrics.thresholds.oldGSP50Cents.map { String($0) } ?? "nil") oldN=\(metrics.thresholds.oldPositiveN)
             """
         let reportURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("pla_e2e_label_counts.txt")
@@ -117,33 +148,36 @@ final class SelfBuiltLabelEngineE2ETests: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
 
-        // 离线诊断期望量级（报告周约 2026-05-24…2026-06-28）：
-        // 普通/观察 ~10974，低样本老品 ~530，潜力新品 ~174，高效 ~65，低效 ~50
-        XCTAssertGreaterThan(labels.count, 5_000, "应有大量产品参与标签")
-        XCTAssertGreaterThan(
-            counts[LabelEngineConstants.labelOld, default: 0],
-            100,
-            "低样本老品不应接近 0（否则仍像无毛利全普通）"
-        )
-        XCTAssertGreaterThan(
-            counts[LabelEngineConstants.labelPotential, default: 0],
-            50,
-            "潜力新品不应接近 0"
-        )
-        XCTAssertGreaterThan(
+        // 与 Python 冷启动权威口径对齐（同文件、同报告周）：
+        // 普通/观察=10974，低样本老品=530，潜力新品=174，高效=65，低效=50
+        XCTAssertEqual(labels.count, 11_793)
+        XCTAssertEqual(withGS, 3_566, "有 GS 的产品数应与 Python 全网格一致")
+        XCTAssertGreaterThanOrEqual(withGP, 3_400, "有毛利的产品数应接近 Python")
+        XCTAssertEqual(
             counts[LabelEngineConstants.labelHigh, default: 0],
-            20,
-            "高效不应接近 0"
+            65,
+            "高效数量应对齐 Python"
         )
-        XCTAssertGreaterThan(
+        XCTAssertEqual(
             counts[LabelEngineConstants.labelLow, default: 0],
-            10,
-            "低效不应接近 0"
+            50,
+            "低效数量应对齐 Python"
         )
-
-        let observation = counts[LabelEngineConstants.labelObservation, default: 0]
-        let observationShare = Double(observation) / Double(max(labels.count, 1))
-        XCTAssertLessThan(observationShare, 0.98, "普通/观察占比不应接近 100%")
+        XCTAssertEqual(
+            counts[LabelEngineConstants.labelPotential, default: 0],
+            174,
+            "潜力新品数量应对齐 Python"
+        )
+        XCTAssertEqual(
+            counts[LabelEngineConstants.labelOld, default: 0],
+            530,
+            "低样本老品数量应对齐 Python"
+        )
+        XCTAssertEqual(
+            counts[LabelEngineConstants.labelObservation, default: 0],
+            10_974,
+            "普通/观察数量应对齐 Python"
+        )
     }
 
     private static func countLabels(_ map: [String: String]) -> [String: Int] {
@@ -152,5 +186,13 @@ final class SelfBuiltLabelEngineE2ETests: XCTestCase {
             counts[label, default: 0] += 1
         }
         return counts
+    }
+
+    private static func reportingWeeks(client: DatabaseClient) async throws -> [String] {
+        let latestDay = try await client.fetchLatestMetricDay()
+        let endDate = try XCTUnwrap(latestDay.flatMap(WeekCalendar.parseDay(_:)))
+        let weeks = WeekCalendar.reportingWeekStarts(endingAt: endDate)
+        XCTAssertEqual(weeks.count, LabelEngineConstants.reportingWeekCount)
+        return weeks
     }
 }

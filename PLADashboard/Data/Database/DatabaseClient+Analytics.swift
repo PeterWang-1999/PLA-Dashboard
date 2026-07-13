@@ -25,6 +25,9 @@ extension DatabaseClient {
 
         try dbQueue.write { db in
             try db.execute(sql: "DELETE FROM product_weekly_metrics;")
+            // 键集 = 有投放的产品 ×（该产品有投放或有销售的周）。
+            // 不能只用投放周 LEFT JOIN 销售：无花费但有 GS 的周必须保留，
+            // 否则加权毛利/近 3 周活跃会丢数（对标 Python 产品×周完整网格）。
             try db.execute(sql: """
                 INSERT INTO product_weekly_metrics (
                   product_id,
@@ -43,41 +46,7 @@ extension DatabaseClient {
                   aos,
                   warning_label
                 )
-                SELECT
-                  a.product_id,
-                  a.week_start,
-                  a.cost_cents,
-                  a.impressions,
-                  a.clicks,
-                  a.conversions,
-                  a.conversion_value_cents,
-                  COALESCE(s.gross_sales_cents, 0) AS gross_sales_cents,
-                  COALESCE(s.gross_profit_cents, 0) AS gross_profit_cents,
-                  CASE
-                    WHEN a.cost_cents > 0
-                    THEN CAST(a.conversion_value_cents AS REAL) / CAST(a.cost_cents AS REAL)
-                    ELSE NULL
-                  END AS roi,
-                  CASE
-                    WHEN a.conversions > 0
-                    THEN CAST(ROUND(CAST(a.cost_cents AS REAL) / a.conversions) AS INTEGER)
-                    ELSE NULL
-                  END AS cpa_cents,
-                  CASE
-                    WHEN a.clicks > 0 THEN a.cost_cents / a.clicks
-                    ELSE NULL
-                  END AS cpc_cents,
-                  CASE
-                    WHEN a.clicks > 0 THEN a.conversions / CAST(a.clicks AS REAL)
-                    ELSE NULL
-                  END AS cvr,
-                  CASE
-                    WHEN a.conversions > 0
-                    THEN CAST(a.conversion_value_cents AS REAL) / a.conversions / 100.0
-                    ELSE NULL
-                  END AS aos,
-                  NULL AS warning_label
-                FROM (
+                WITH ads_weekly AS (
                   SELECT
                     product_id,
                     date(date, '-' || CAST(strftime('%w', date) AS INTEGER) || ' days') AS week_start,
@@ -87,67 +56,104 @@ extension DatabaseClient {
                     SUM(conversions) AS conversions,
                     SUM(conversion_value_cents) AS conversion_value_cents
                   FROM (
-                    WITH ranked AS (
-                      SELECT
-                        a.product_id,
-                        a.date,
-                        a.cost_micros,
-                        a.impressions,
-                        a.clicks,
-                        a.conversions,
-                        a.conversion_value_cents,
-                        ROW_NUMBER() OVER (
-                          PARTITION BY a.date, a.item_id, a.campaign, a.currency_code
-                          ORDER BY j.imported_at DESC
-                        ) AS rn
-                      FROM ads_product_daily a
-                      INNER JOIN import_jobs j ON j.id = a.import_id
-                      WHERE j.status = ?
-                    )
                     SELECT
-                      product_id,
-                      date,
-                      cost_micros,
-                      impressions,
-                      clicks,
-                      conversions,
-                      conversion_value_cents
-                    FROM ranked
-                    WHERE rn = 1
-                  ) AS deduped_daily
+                      a.product_id,
+                      a.date,
+                      a.cost_micros,
+                      a.impressions,
+                      a.clicks,
+                      a.conversions,
+                      a.conversion_value_cents,
+                      ROW_NUMBER() OVER (
+                        PARTITION BY a.date, a.item_id, a.campaign, a.currency_code
+                        ORDER BY j.imported_at DESC
+                      ) AS rn
+                    FROM ads_product_daily a
+                    INNER JOIN import_jobs j ON j.id = a.import_id
+                    WHERE j.status = ?
+                  ) AS ranked_ads
+                  WHERE rn = 1
                   GROUP BY product_id, week_start
-                ) AS a
-                LEFT JOIN (
+                ),
+                sales_weekly AS (
                   SELECT
                     product_id,
                     date(date, '-' || CAST(strftime('%w', date) AS INTEGER) || ' days') AS week_start,
                     SUM(gross_sales_cents) AS gross_sales_cents,
                     SUM(gross_profit_cents) AS gross_profit_cents
                   FROM (
-                    WITH ranked_sales AS (
-                      SELECT
-                        s.product_id,
-                        s.date,
-                        s.gross_sales_cents,
-                        s.gross_profit_cents,
-                        ROW_NUMBER() OVER (
-                          PARTITION BY s.date, s.lsin
-                          ORDER BY j.imported_at DESC
-                        ) AS rn
-                      FROM sales_daily s
-                      INNER JOIN import_jobs j ON j.id = s.import_id
-                      WHERE j.status = ?
-                        AND s.product_id IS NOT NULL
-                        AND TRIM(s.product_id) != ''
-                    )
-                    SELECT product_id, date, gross_sales_cents, gross_profit_cents
-                    FROM ranked_sales
-                    WHERE rn = 1
-                  ) AS deduped_sales
+                    SELECT
+                      s.product_id,
+                      s.date,
+                      s.gross_sales_cents,
+                      s.gross_profit_cents,
+                      ROW_NUMBER() OVER (
+                        PARTITION BY s.date, s.lsin
+                        ORDER BY j.imported_at DESC
+                      ) AS rn
+                    FROM sales_daily s
+                    INNER JOIN import_jobs j ON j.id = s.import_id
+                    WHERE j.status = ?
+                      AND s.product_id IS NOT NULL
+                      AND TRIM(s.product_id) != ''
+                  ) AS ranked_sales
+                  WHERE rn = 1
                   GROUP BY product_id, week_start
-                ) AS s
-                  ON s.product_id = a.product_id
-                 AND s.week_start = a.week_start;
+                ),
+                week_keys AS (
+                  SELECT product_id, week_start FROM ads_weekly
+                  UNION
+                  SELECT s.product_id, s.week_start
+                  FROM sales_weekly s
+                  WHERE s.product_id IN (SELECT DISTINCT product_id FROM ads_weekly)
+                )
+                SELECT
+                  k.product_id,
+                  k.week_start,
+                  COALESCE(a.cost_cents, 0) AS cost_cents,
+                  COALESCE(a.impressions, 0) AS impressions,
+                  COALESCE(a.clicks, 0) AS clicks,
+                  COALESCE(a.conversions, 0) AS conversions,
+                  COALESCE(a.conversion_value_cents, 0) AS conversion_value_cents,
+                  COALESCE(s.gross_sales_cents, 0) AS gross_sales_cents,
+                  COALESCE(s.gross_profit_cents, 0) AS gross_profit_cents,
+                  CASE
+                    WHEN COALESCE(a.cost_cents, 0) > 0
+                    THEN CAST(COALESCE(a.conversion_value_cents, 0) AS REAL)
+                         / CAST(a.cost_cents AS REAL)
+                    ELSE NULL
+                  END AS roi,
+                  CASE
+                    WHEN COALESCE(a.conversions, 0) > 0
+                    THEN CAST(ROUND(
+                      CAST(COALESCE(a.cost_cents, 0) AS REAL) / a.conversions
+                    ) AS INTEGER)
+                    ELSE NULL
+                  END AS cpa_cents,
+                  CASE
+                    WHEN COALESCE(a.clicks, 0) > 0
+                    THEN COALESCE(a.cost_cents, 0) / a.clicks
+                    ELSE NULL
+                  END AS cpc_cents,
+                  CASE
+                    WHEN COALESCE(a.clicks, 0) > 0
+                    THEN COALESCE(a.conversions, 0) / CAST(a.clicks AS REAL)
+                    ELSE NULL
+                  END AS cvr,
+                  CASE
+                    WHEN COALESCE(a.conversions, 0) > 0
+                    THEN CAST(COALESCE(a.conversion_value_cents, 0) AS REAL)
+                         / a.conversions / 100.0
+                    ELSE NULL
+                  END AS aos,
+                  NULL AS warning_label
+                FROM week_keys k
+                LEFT JOIN ads_weekly a
+                  ON a.product_id = k.product_id
+                 AND a.week_start = k.week_start
+                LEFT JOIN sales_weekly s
+                  ON s.product_id = k.product_id
+                 AND s.week_start = k.week_start;
                 """, arguments: [
                 ImportJobStatus.succeeded.rawValue,
                 ImportJobStatus.succeeded.rawValue,
