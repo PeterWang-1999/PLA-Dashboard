@@ -72,10 +72,10 @@ struct DashboardExportCSVDocument: FileDocument {
                 Self.escapeCSV(row.roi),
                 Self.escapeCSV(row.warningLabel),
             ]
-            for cents in row.costTrendWeeks {
+            for cents in row.costTrendWeeks.prefix(bundle.weekStarts.count) {
                 fields.append(Self.escapeCSV(DashboardMetricFormatter.formatCurrencyFromCents(cents)))
             }
-            for cents in row.gsTrendWeeks {
+            for cents in row.gsTrendWeeks.prefix(bundle.weekStarts.count) {
                 fields.append(Self.escapeCSV(DashboardMetricFormatter.formatCurrencyFromCents(cents)))
             }
             fields += [

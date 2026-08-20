@@ -509,13 +509,25 @@ extension DatabaseClient {
         guard !products.isEmpty else { return [] }
 
         let productIds = products.map(\.productId)
-        let weeklyRecords = try fetchWeeklyMetrics(productIds: productIds, weekStarts: weekStarts)
+        let latestDay = try fetchLatestMetricDay() ?? weekStarts.last ?? ""
+        let trendWeekStarts = WeekCalendar.trendWeekStarts(
+            reportingWeekStarts: weekStarts,
+            latestDay: latestDay
+        )
+        let trendCoverageDays = trendWeekStarts.map { weekStart in
+            weekStarts.contains(weekStart)
+                ? 7
+                : WeekCalendar.coveredDayCount(weekStart: weekStart, through: latestDay)
+        }
+        let weeklyRecords = try fetchWeeklyMetrics(productIds: productIds, weekStarts: trendWeekStarts)
         let weeklyByProduct = Dictionary(grouping: weeklyRecords, by: \.productId)
 
         return try products.compactMap { product in
             try makePerformanceRowIfMatchingAlert(
                 product: product,
                 weekStarts: weekStarts,
+                trendWeekStarts: trendWeekStarts,
+                trendCoverageDays: trendCoverageDays,
                 weeklyByProduct: weeklyByProduct,
                 metricsContext: metricsContext,
                 alertFilter: alertFilter,
@@ -537,6 +549,8 @@ extension DatabaseClient {
     private func makePerformanceRowIfMatchingAlert(
         product: ProductRecord,
         weekStarts: [String],
+        trendWeekStarts: [String],
+        trendCoverageDays: [Int],
         weeklyByProduct: [String: [ProductWeeklyMetricsRecord]],
         metricsContext: DashboardMetricsCache,
         alertFilter: String?,
@@ -577,8 +591,8 @@ extension DatabaseClient {
             return nil
         }
 
-        let costTrend = weekStarts.map { recordByWeek[$0]?.costCents ?? 0 }
-        let gsTrend = weekStarts.map { recordByWeek[$0]?.conversionValueCents ?? 0 }
+        let costTrend = trendWeekStarts.map { recordByWeek[$0]?.costCents ?? 0 }
+        let gsTrend = trendWeekStarts.map { recordByWeek[$0]?.conversionValueCents ?? 0 }
 
         return ProductPerformanceRowMapper.map(
             product: product,
@@ -587,6 +601,8 @@ extension DatabaseClient {
             overallBenchmark: metricsContext.overallBenchmark,
             weeklyCostTrend: costTrend,
             weeklyGSTrend: gsTrend,
+            trendWeekStarts: trendWeekStarts,
+            trendCoverageDays: trendCoverageDays,
             warningLabel: warning
         )
     }

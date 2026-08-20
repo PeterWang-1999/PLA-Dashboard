@@ -103,17 +103,17 @@ struct ProductPerformanceTable: View {
 
     private var costTrendColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
         staticColumn(DashboardColumn.costTrend, accessibilityValue: { row in
-            trendAccessibilityValue(row.costTrendWeeks)
+            trendAccessibilityValue(row.costTrendWeeks, coverageDays: row.trendCoverageDays)
         }) { row in
-            WeeklyTrendBarChart(values: row.costTrendWeeks)
+            WeeklyTrendBarChart(productID: row.lsin, values: row.costTrendWeeks, weekStarts: row.trendWeekStarts, coverageDays: row.trendCoverageDays)
         }
     }
 
     private var gsTrendColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
         staticColumn(DashboardColumn.gsTrend, accessibilityValue: { row in
-            trendAccessibilityValue(row.gsTrendWeeks)
+            trendAccessibilityValue(row.gsTrendWeeks, coverageDays: row.trendCoverageDays)
         }) { row in
-            WeeklyTrendBarChart(values: row.gsTrendWeeks, style: .sales)
+            WeeklyTrendBarChart(productID: row.lsin, values: row.gsTrendWeeks, weekStarts: row.trendWeekStarts, coverageDays: row.trendCoverageDays, style: .sales)
         }
     }
 
@@ -222,10 +222,13 @@ struct ProductPerformanceTable: View {
         }
     }
 
-    private func trendAccessibilityValue(_ values: [Int]) -> String {
+    private func trendAccessibilityValue(_ values: [Int], coverageDays: [Int]) -> String {
         guard !values.isEmpty else { return "无数据" }
         return values.enumerated()
-            .map { "第 \($0.offset + 1) 周 \($0.element)" }
+            .map { index, value in
+                let days = coverageDays.indices.contains(index) ? coverageDays[index] : 7
+                return "第 \(index + 1) 周 \(value)，覆盖 \(days) 天"
+            }
             .joined(separator: "，")
     }
 }

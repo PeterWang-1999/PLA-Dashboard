@@ -55,6 +55,39 @@ final class WeekCalendarReportingWindowTests: XCTestCase {
         )
     }
 
+    func testTrendWeeksAppendCurrentPartialWeekStartingSunday() {
+        let reportingWeeks = [
+            "2026-05-24", "2026-05-31", "2026-06-07",
+            "2026-06-14", "2026-06-21", "2026-06-28",
+        ]
+
+        XCTAssertEqual(
+            WeekCalendar.trendWeekStarts(
+                reportingWeekStarts: reportingWeeks,
+                latestDay: "2026-07-08"
+            ),
+            reportingWeeks + ["2026-07-05"]
+        )
+        XCTAssertEqual(
+            WeekCalendar.coveredDayCount(weekStart: "2026-07-05", through: "2026-07-08"),
+            4
+        )
+    }
+
+    func testTrendWeeksDoNotDuplicateACompleteCurrentWeek() {
+        let reportingWeeks = [
+            "2026-05-24", "2026-05-31", "2026-06-07",
+            "2026-06-14", "2026-06-21", "2026-06-28",
+        ]
+        XCTAssertEqual(
+            WeekCalendar.trendWeekStarts(
+                reportingWeekStarts: reportingWeeks,
+                latestDay: "2026-07-04"
+            ),
+            reportingWeeks
+        )
+    }
+
     /// 复现 S9730219：错误窗口 5229.74 vs 完整 6 周 6560.20（全量 6984.70 含不完整第 7 周）。
     func testS9730219SixWeekCostMatchesCompleteWindowNotPartial() {
         let costByWeekStart: [String: Double] = [

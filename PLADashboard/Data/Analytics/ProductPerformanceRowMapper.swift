@@ -110,6 +110,8 @@ enum ProductPerformanceRowMapper {
         weeklyCostTrend: [Int],
         /// 销售趋势列：近 6 周 Google Ads `conversion_value_cents` 周汇总（非自归因 Gross Sales）。
         weeklyGSTrend: [Int],
+        trendWeekStarts: [String] = [],
+        trendCoverageDays: [Int] = [],
         warningLabel: ProductWarningLabel?
     ) -> ProductPerformanceRowModel {
         let displayLSIN = product.lsin ?? product.productId
@@ -155,6 +157,8 @@ enum ProductPerformanceRowMapper {
             conversions: DashboardMetricFormatter.formatDecimal(sixWeekTotals.conversions, fractionDigits: 0),
             costTrendWeeks: weeklyCostTrend,
             gsTrendWeeks: weeklyGSTrend,
+            trendWeekStarts: trendWeekStarts,
+            trendCoverageDays: trendCoverageDays,
             sortCostCents: sixWeekTotals.costCents,
             sortROI: sixWeekTotals.roi,
             sortClicks: sixWeekTotals.clicks,

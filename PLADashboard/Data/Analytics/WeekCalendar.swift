@@ -58,6 +58,23 @@ enum WeekCalendar {
         return formatDay(weekStartSunday(for: date))
     }
 
+    /// 趋势图使用的周：保留完整报告周，并在最新数据位于下一周时追加当前不完整周。
+    static func trendWeekStarts(reportingWeekStarts: [String], latestDay: String) -> [String] {
+        guard let currentWeekStart = weekStartSunday(forDay: latestDay) else {
+            return reportingWeekStarts
+        }
+        return reportingWeekStarts.contains(currentWeekStart)
+            ? reportingWeekStarts
+            : reportingWeekStarts + [currentWeekStart]
+    }
+
+    /// 从周日到数据截止日（含首尾）的覆盖天数，限制在 1...7。
+    static func coveredDayCount(weekStart: String, through latestDay: String) -> Int {
+        guard let start = parseDay(weekStart), let end = parseDay(latestDay) else { return 7 }
+        let days = sundayCalendar.dateComponents([.day], from: start, to: end).day ?? 6
+        return min(7, max(1, days + 1))
+    }
+
     /// 不晚于 `date` 的最近一个周六（该自然周已完整：周日–周六）。
     ///
     /// 看板报告周必须以完整周为锚点：若最新数据日落在周中（如周三），
