@@ -20,7 +20,6 @@ struct DashboardView: View {
     var body: some View {
         dashboardContent
             .navigationTitle("产品数据")
-            .toolbar(removing: .sidebarToggle)
             .toolbar {
                 DashboardToolbarContent(viewModel: viewModel)
             }
@@ -185,6 +184,8 @@ struct DashboardView: View {
             .menuStyle(.borderedButton)
             .controlSize(.large)
             .help("导出当前筛选结果或刷新聚合")
+
+            DashboardMaintenanceMenu()
 
             if !viewModel.showsEmptyState {
                 paginationControls

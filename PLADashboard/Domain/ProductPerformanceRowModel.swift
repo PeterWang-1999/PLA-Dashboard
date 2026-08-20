@@ -28,10 +28,6 @@ struct ProductPerformanceRowModel: Identifiable, Hashable, Sendable {
     let sortClicks: Int
     let sortLSIN: String
 
-    var accessibilitySummary: String {
-        "产品 \(lsin)，消费 \(cost)，投资回报率 \(roi)，预警 \(warningLabel)"
-    }
-
     enum WarningLabelStyle: String, Hashable, Sendable {
         case none
         case lowSpend

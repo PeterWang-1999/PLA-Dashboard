@@ -106,18 +106,6 @@ struct RootView: View {
             .padding(.vertical, 10)
         }
         .navigationTitle("PLA Dashboard")
-        .toolbar(removing: .sidebarToggle)
-        .toolbar {
-            ToolbarItem(placement: .automatic) {
-                Button {
-                    windowState.toggleSidebar()
-                } label: {
-                    Image(systemName: "sidebar.leading")
-                }
-                .help("切换侧边栏")
-                .accessibilityLabel("切换侧边栏")
-            }
-        }
     }
 
     @ViewBuilder

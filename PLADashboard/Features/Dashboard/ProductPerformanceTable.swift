@@ -23,8 +23,10 @@ struct ProductPerformanceTable: View {
             Group {
                 lsinColumn
                 productImageColumn
-                costColumn
-                roiColumn
+            }
+            costColumn
+            roiColumn
+            Group {
                 warningLabelColumn
                 costTrendColumn
                 gsTrendColumn
@@ -44,8 +46,10 @@ struct ProductPerformanceTable: View {
             Group {
                 lsinColumn
                 productImageColumn
-                costColumn
-                roiColumn
+            }
+            costColumn
+            roiColumn
+            Group {
                 warningLabelColumn
                 costTrendColumn
                 gsTrendColumn
@@ -62,14 +66,16 @@ struct ProductPerformanceTable: View {
         }
     }
 
-    private var lsinColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
-        column(DashboardColumn.lsin, value: \.sortLSIN) { row in
+    private var lsinColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
+        staticColumn(DashboardColumn.lsin, accessibilityValue: \.lsin) { row in
             Text(row.lsin).font(.body)
         }
     }
 
-    private var productImageColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
-        column(DashboardColumn.productImage, value: \.sortLSIN) { row in
+    private var productImageColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
+        staticColumn(DashboardColumn.productImage, accessibilityValue: { row in
+            row.imageURL == nil ? "无图片" : "产品 \(row.lsin) 的图片"
+        }) { row in
             ProductImageView(imageURL: row.imageURL)
         }
     }
@@ -89,62 +95,66 @@ struct ProductPerformanceTable: View {
         }
     }
 
-    private var warningLabelColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
-        column(DashboardColumn.warningLabel, value: \.sortLSIN) { row in
+    private var warningLabelColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
+        staticColumn(DashboardColumn.warningLabel, accessibilityValue: \.warningLabel) { row in
             WarningLabelView(text: row.warningLabel, style: row.warningStyle)
         }
     }
 
-    private var costTrendColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
-        column(DashboardColumn.costTrend, value: \.sortCostCents) { row in
+    private var costTrendColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
+        staticColumn(DashboardColumn.costTrend, accessibilityValue: { row in
+            trendAccessibilityValue(row.costTrendWeeks)
+        }) { row in
             WeeklyTrendBarChart(values: row.costTrendWeeks)
         }
     }
 
-    private var gsTrendColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
-        column(DashboardColumn.gsTrend, value: \.sortCostCents) { row in
+    private var gsTrendColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
+        staticColumn(DashboardColumn.gsTrend, accessibilityValue: { row in
+            trendAccessibilityValue(row.gsTrendWeeks)
+        }) { row in
             WeeklyTrendBarChart(values: row.gsTrendWeeks, style: .sales)
         }
     }
 
-    private var cpaColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
-        column(DashboardColumn.cpa, value: \.sortROI) { row in
+    private var cpaColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
+        staticColumn(DashboardColumn.cpa, accessibilityValue: { "\($0.cpa)，相较整体 \($0.cpaDelta)" }) { row in
             MetricDeltaCell(value: row.cpa, delta: row.cpaDelta, polarity: .lowerIsBetter)
         }
     }
 
-    private var arpuColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
-        column(DashboardColumn.arpu, value: \.sortROI) { row in
+    private var arpuColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
+        staticColumn(DashboardColumn.arpu, accessibilityValue: { "\($0.arpu)，相较整体 \($0.arpuDelta)" }) { row in
             MetricDeltaCell(value: row.arpu, delta: row.arpuDelta, polarity: .higherIsBetter)
         }
     }
 
-    private var cpcColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
-        column(DashboardColumn.cpc, value: \.sortROI) { row in
+    private var cpcColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
+        staticColumn(DashboardColumn.cpc, accessibilityValue: { "\($0.cpc)，相较整体 \($0.cpcDelta)" }) { row in
             MetricDeltaCell(value: row.cpc, delta: row.cpcDelta, polarity: .lowerIsBetter)
         }
     }
 
-    private var cvrColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
-        column(DashboardColumn.cvr, value: \.sortROI) { row in
+    private var cvrColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
+        staticColumn(DashboardColumn.cvr, accessibilityValue: { "\($0.cvr)，相较整体 \($0.cvrDelta)" }) { row in
             MetricDeltaCell(value: row.cvr, delta: row.cvrDelta, polarity: .higherIsBetter)
         }
     }
 
-    private var aosColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
-        column(DashboardColumn.aos, value: \.sortROI) { row in
+    private var aosColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
+        staticColumn(DashboardColumn.aos, accessibilityValue: { "\($0.aos)，相较整体 \($0.aosDelta)" }) { row in
             MetricDeltaCell(value: row.aos, delta: row.aosDelta, polarity: .higherIsBetter)
         }
     }
 
-    private var clicksColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
-        column(DashboardColumn.clicks, value: \.sortClicks) { row in
+    private var clicksColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
+        staticColumn(DashboardColumn.clicks, accessibilityValue: { $0.clicks ?? "无数据" }) { row in
             Text(row.clicks ?? "—").font(.body)
         }
     }
 
-    private var conversionsColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
-        column(DashboardColumn.conversions, value: \.sortLSIN) { row in
+    private var conversionsColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
+        staticColumn(DashboardColumn.conversions, accessibilityValue: { $0.conversions ?? "无数据" }) { row in
             Text(row.conversions ?? "—").font(.body)
         }
     }
@@ -155,7 +165,7 @@ struct ProductPerformanceTable: View {
         @ViewBuilder content: @escaping (ProductPerformanceRowModel) -> Content
     ) -> some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
         TableColumn(dashboardColumn.rawValue, value: value) { row in
-            rowCell(row) {
+            accessibleCell(column: dashboardColumn, value: displayedValue(for: dashboardColumn, row: row)) {
                 content(row)
             }
         }
@@ -166,12 +176,56 @@ struct ProductPerformanceTable: View {
         )
     }
 
-    private func rowCell<Content: View>(
-        _ row: ProductPerformanceRowModel,
+    private func staticColumn<Content: View>(
+        _ dashboardColumn: DashboardColumn,
+        accessibilityValue: @escaping (ProductPerformanceRowModel) -> String,
+        @ViewBuilder content: @escaping (ProductPerformanceRowModel) -> Content
+    ) -> some TableColumnContent<ProductPerformanceRowModel, Never> {
+        TableColumn(dashboardColumn.rawValue) { row in
+            accessibleCell(column: dashboardColumn, value: accessibilityValue(row)) {
+                content(row)
+            }
+        }
+        .width(
+            min: dashboardColumn.widthSpec.min,
+            ideal: dashboardColumn.widthSpec.ideal,
+            max: dashboardColumn.widthSpec.max
+        )
+    }
+
+    private func staticColumn<Value, Content: View>(
+        _ dashboardColumn: DashboardColumn,
+        accessibilityValue: KeyPath<ProductPerformanceRowModel, Value>,
+        @ViewBuilder content: @escaping (ProductPerformanceRowModel) -> Content
+    ) -> some TableColumnContent<ProductPerformanceRowModel, Never> where Value: StringProtocol {
+        staticColumn(dashboardColumn, accessibilityValue: { String($0[keyPath: accessibilityValue]) }, content: content)
+    }
+
+    private func accessibleCell<Content: View>(
+        column: DashboardColumn,
+        value: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
         content()
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(row.accessibilitySummary)
+            .accessibilityLabel("\(column.rawValue)，\(value)")
+    }
+
+    private func displayedValue(
+        for column: DashboardColumn,
+        row: ProductPerformanceRowModel
+    ) -> String {
+        switch column {
+        case .cost: "\(row.cost)，占总消费 \(row.costShare)"
+        case .roi: row.roi
+        default: ""
+        }
+    }
+
+    private func trendAccessibilityValue(_ values: [Int]) -> String {
+        guard !values.isEmpty else { return "无数据" }
+        return values.enumerated()
+            .map { "第 \($0.offset + 1) 周 \($0.element)" }
+            .joined(separator: "，")
     }
 }

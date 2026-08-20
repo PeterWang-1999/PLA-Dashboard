@@ -6,16 +6,6 @@ struct SettingsView: View {
 
     @AppStorage(AppSettings.defaultPageSizeKey) private var defaultPageSize = 30
 
-    @State private var showPurgeConfirmation = false
-    @State private var pendingPurgeCount = 0
-    @State private var isPurging = false
-    @State private var purgeResultMessage: String?
-    @State private var showPurgeResult = false
-    @State private var showResetLabelsConfirmation = false
-    @State private var isResettingLabels = false
-    @State private var resetLabelsMessage: String?
-    @State private var showResetLabelsResult = false
-
     var body: some View {
         let workspaceRevision = accountStore.workspaceRevision
 
@@ -65,23 +55,7 @@ struct SettingsView: View {
                 Text("每页行数为全局设置，更改后将在下次刷新看板时生效。")
             }
 
-            if isSelfBuilt {
-                Section {
-                    Button("重新计算预警标签") {
-                        Task { await performRefreshLabels(accountID: accountID) }
-                    }
-                    .disabled(isResettingLabels)
-
-                    Button("重置预警标签历史…") {
-                        showResetLabelsConfirmation = true
-                    }
-                    .disabled(isResettingLabels)
-                } header: {
-                    Text("预警标签")
-                } footer: {
-                    Text("「重新计算」保留历史并用最新投放/毛利覆盖本周快照；「重置」清空入池/留池历史后仅执行入池。看板将显示高效、潜力新品、低样本老品、低效与普通/观察。")
-                }
-            } else {
+            if !isSelfBuilt {
                 Section {
                     LabeledContent("高消高效 ROI 倍数") {
                         HStack(spacing: 8) {
@@ -127,54 +101,13 @@ struct SettingsView: View {
                     Text("180 天").tag(180)
                 }
                 .pickerStyle(.radioGroup)
-
-                Button("立即清理过期数据…") {
-                    Task { await preparePurgeConfirmation(accountID: accountID) }
-                }
-                .disabled(AppSettings.dataRetentionDays(accountID: accountID) == 0 || isPurging)
             } header: {
                 Text("数据")
             } footer: {
-                Text("仅删除当前账户 Google Ads 日表中早于保留期的行；产品主表与导入记录保留。清理后将自动重建周聚合。")
+                Text("产品数据页面底栏的“数据维护”菜单可清理当前账户中超过保留期的 Ads 日表；产品主表与导入记录始终保留。")
             }
 
             ProductImageDiagnosticsSection(accountID: accountID, accountName: accountName)
-        }
-        .confirmationDialog(
-            "确认清理过期数据？",
-            isPresented: $showPurgeConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("清理 \(pendingPurgeCount) 行", role: .destructive) {
-                Task { await performPurge(accountID: accountID) }
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text(
-                "将删除 \(pendingPurgeCount) 行 ads_product_daily 记录（早于保留 \(AppSettings.dataRetentionDays(accountID: accountID)) 天）。"
-            )
-        }
-        .confirmationDialog(
-            "确认重置预警标签历史？",
-            isPresented: $showResetLabelsConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("重置并重新入池", role: .destructive) {
-                Task { await performResetLabels(accountID: accountID) }
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("将删除当前账户全部标签周快照，并按当前完整报告周仅执行入池规则。留池/出池的「连续 2 次」计数将从零开始。")
-        }
-        .alert("数据清理", isPresented: $showPurgeResult) {
-            Button("好", role: .cancel) {}
-        } message: {
-            Text(purgeResultMessage ?? "")
-        }
-        .alert("预警标签", isPresented: $showResetLabelsResult) {
-            Button("好", role: .cancel) {}
-        } message: {
-            Text(resetLabelsMessage ?? "")
         }
     }
 
@@ -207,120 +140,6 @@ struct SettingsView: View {
                 dashboardSettingsNotifier.notifyChange()
             }
         )
-    }
-
-    @MainActor
-    private func preparePurgeConfirmation(accountID: String) async {
-        let retentionDays = AppSettings.dataRetentionDays(accountID: accountID)
-        guard retentionDays > 0 else { return }
-        guard let client = accountStore.activeDatabaseClient,
-              client.accountID == accountID else {
-            purgeResultMessage = "数据库未就绪"
-            showPurgeResult = true
-            return
-        }
-        isPurging = true
-        defer { isPurging = false }
-        do {
-            pendingPurgeCount = try await client.countExpiredAdsDailyRows(retentionDays: retentionDays)
-            if pendingPurgeCount == 0 {
-                purgeResultMessage = "没有需要清理的过期数据。"
-                showPurgeResult = true
-            } else {
-                showPurgeConfirmation = true
-            }
-        } catch {
-            purgeResultMessage = error.localizedDescription
-            showPurgeResult = true
-        }
-    }
-
-    @MainActor
-    private func performPurge(accountID: String) async {
-        let retentionDays = AppSettings.dataRetentionDays(accountID: accountID)
-        guard let client = accountStore.activeDatabaseClient,
-              client.accountID == accountID else {
-            purgeResultMessage = "数据库未就绪"
-            showPurgeResult = true
-            return
-        }
-        isPurging = true
-        defer { isPurging = false }
-        do {
-            let deleted = try await client.purgeExpiredAdsDaily(retentionDays: retentionDays)
-            if let latestDay = try await client.fetchLatestMetricDay() {
-                AppSettings.setLastRetentionPurgeDay(latestDay, accountID: accountID)
-            }
-            purgeResultMessage = "已删除 \(deleted) 行过期 Ads 日表数据，并已重建周聚合。"
-            showPurgeResult = true
-            dashboardSettingsNotifier.notifyChange()
-        } catch {
-            purgeResultMessage = error.localizedDescription
-            showPurgeResult = true
-        }
-    }
-
-    @MainActor
-    private func performRefreshLabels(accountID: String) async {
-        guard let client = accountStore.activeDatabaseClient,
-              client.accountID == accountID else {
-            resetLabelsMessage = "数据库未就绪"
-            showResetLabelsResult = true
-            return
-        }
-        isResettingLabels = true
-        defer { isResettingLabels = false }
-        do {
-            let outcome = try await client.recomputeWarningLabelsIfNeeded(
-                force: false,
-                refreshSameWeek: true
-            )
-            switch outcome {
-            case .computed(let weekId, let count, let note):
-                resetLabelsMessage = "已重新计算：报告周 \(weekId)，共 \(count) 个产品。\(note)"
-            case .skippedNoAdsData:
-                resetLabelsMessage = "当前无投放数据，无法计算标签。"
-            case .skippedInsufficientWeeks(let available):
-                resetLabelsMessage = "完整报告周不足（当前 \(available) 周），无法计算标签。"
-            case .skippedAlreadyComputed(let weekId):
-                resetLabelsMessage = "报告周 \(weekId) 已是最新，无需重算。"
-            }
-            showResetLabelsResult = true
-            dashboardSettingsNotifier.notifyChange()
-        } catch {
-            resetLabelsMessage = error.localizedDescription
-            showResetLabelsResult = true
-        }
-    }
-
-    @MainActor
-    private func performResetLabels(accountID: String) async {
-        guard let client = accountStore.activeDatabaseClient,
-              client.accountID == accountID else {
-            resetLabelsMessage = "数据库未就绪"
-            showResetLabelsResult = true
-            return
-        }
-        isResettingLabels = true
-        defer { isResettingLabels = false }
-        do {
-            let outcome = try await client.recomputeWarningLabelsIfNeeded(force: true)
-            switch outcome {
-            case .computed(let weekId, let count, _):
-                resetLabelsMessage = "已重置历史并完成入池：报告周 \(weekId)，共 \(count) 个产品。"
-            case .skippedNoAdsData:
-                resetLabelsMessage = "已清空历史，但当前无投放数据，无法计算标签。"
-            case .skippedInsufficientWeeks(let available):
-                resetLabelsMessage = "已清空历史，但完整报告周不足（当前 \(available) 周），无法计算标签。"
-            case .skippedAlreadyComputed:
-                resetLabelsMessage = "已重置历史。"
-            }
-            showResetLabelsResult = true
-            dashboardSettingsNotifier.notifyChange()
-        } catch {
-            resetLabelsMessage = error.localizedDescription
-            showResetLabelsResult = true
-        }
     }
 }
 
