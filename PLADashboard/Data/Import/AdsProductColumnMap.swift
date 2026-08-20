@@ -1,6 +1,18 @@
 import Foundation
 
 struct AdsProductColumnMap: Sendable {
+    static let requiredColumns = [
+        "天",
+        "产品 ID",
+        "广告系列",
+        "货币代码",
+        "费用",
+        "展示次数",
+        "点击次数",
+        "转化次数",
+        "转化价值"
+    ]
+
     let dateIndex: Int
     let itemIdIndex: Int
     let campaignIndex: Int
@@ -32,6 +44,15 @@ struct AdsProductColumnMap: Sendable {
         conversionValueIndex = try index(of: "转化价值")
     }
 
+    static func headerMatchScore(_ headers: [String]) -> Int {
+        let normalizedHeaders = Set(headers.map(ImportTextEncoding.normalizeHeaderField))
+        return requiredColumns.reduce(into: 0) { score, column in
+            if normalizedHeaders.contains(column) {
+                score += 1
+            }
+        }
+    }
+
     func value(at index: Int, in fields: [String]) -> String? {
         guard index < fields.count else { return nil }
         let trimmed = fields[index].trimmingCharacters(in: .whitespacesAndNewlines)
@@ -41,11 +62,14 @@ struct AdsProductColumnMap: Sendable {
 
 enum AdsProductColumnMapError: Error, LocalizedError {
     case missingColumn(String)
+    case headerNotFound
 
     var errorDescription: String? {
         switch self {
         case .missingColumn(let name):
             "文件缺少必需列：\(name)"
+        case .headerNotFound:
+            "未找到 Google Ads 产品数据表头。请确认文件包含“天”“产品 ID”“广告系列”等标准列。"
         }
     }
 }

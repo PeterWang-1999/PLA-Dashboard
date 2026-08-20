@@ -2,7 +2,7 @@ import Foundation
 
 actor AdsProductImporter {
     private var batchSize: Int { BenchmarkConfiguration.importBatchSize }
-    static let linesToSkip = 2
+    private static let headerScanLimit = 10
 
     private let databaseClient: DatabaseClient
 
@@ -55,10 +55,7 @@ actor AdsProductImporter {
         )
         try await databaseClient.createImportJob(job)
 
-        let separator = try DelimitedFileSniffer.detectSeparator(
-            fileURL: staging.stagedFileURL,
-            linesToSkip: Self.linesToSkip
-        )
+        let layout = try Self.detectFileLayout(fileURL: staging.stagedFileURL)
 
         await onProgress(ImportProgress(
             phase: .parsing,
@@ -72,13 +69,13 @@ actor AdsProductImporter {
 
         let estimatedTotalRows = try DelimitedFileLineCounter.estimateDataRowCount(
             fileURL: staging.stagedFileURL,
-            linesToSkip: Self.linesToSkip
+            linesToSkip: layout.linesToSkip
         )
 
         let parser = StreamingDelimitedParser(
             fileURL: staging.stagedFileURL,
-            delimiter: separator,
-            linesToSkip: Self.linesToSkip
+            delimiter: layout.separator,
+            linesToSkip: layout.linesToSkip
         )
 
         var columnMap: AdsProductColumnMap?
@@ -349,6 +346,39 @@ actor AdsProductImporter {
             ))
             throw error
         }
+    }
+
+    private static func detectFileLayout(
+        fileURL: URL
+    ) throws -> (separator: DelimitedSeparator, linesToSkip: Int) {
+        var bestCandidate: (separator: DelimitedSeparator, linesToSkip: Int, score: Int)?
+
+        for linesToSkip in 0..<headerScanLimit {
+            guard let line = try DelimitedFileSniffer.peekNonEmptyLine(
+                fileURL: fileURL,
+                skipLines: linesToSkip
+            ) else {
+                break
+            }
+
+            let separator = DelimitedFileSniffer.sniffSeparator(firstLine: line)
+            let fields = TSVFieldParser.parseFields(line, delimiter: separator.rawValue)
+            let score = AdsProductColumnMap.headerMatchScore(fields)
+
+            if score == AdsProductColumnMap.requiredColumns.count {
+                return (separator, linesToSkip)
+            }
+            if score > (bestCandidate?.score ?? 0) {
+                bestCandidate = (separator, linesToSkip, score)
+            }
+        }
+
+        // Let the column map report the exact missing field for a partial header.
+        if let bestCandidate, bestCandidate.score >= 2 {
+            return (bestCandidate.separator, bestCandidate.linesToSkip)
+        }
+
+        throw AdsProductColumnMapError.headerNotFound
     }
 
     private func flushBatch(_ batch: inout [AdsProductDailyRecord]) async throws {

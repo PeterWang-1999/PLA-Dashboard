@@ -59,4 +59,34 @@ Ador - 产品数据
         let rowCount = try await databaseClient.countAdsProductDaily(importId: result.importId)
         XCTAssertEqual(rowCount, 1)
     }
+
+    func testImportUTF16EncodedCSVWithHeaderOnFirstLine() async throws {
+        let csv = """
+天\t产品 ID\t广告系列\t货币代码\t费用\t展示次数\t点击次数\t转化次数\t转化价值
+2026/8/7\tshopify_zz_10169084772627_54387183878419\tCampaign A\tUSD\t4.28\t59\t1\t0.5\t145.5
+2026/8/7\t15297435_00005_us_en\tCampaign B\tUSD\t0.28\t28\t1\t0\t0
+"""
+        guard let utf16Body = csv.data(using: .utf16LittleEndian) else {
+            XCTFail("UTF-16 LE encoding unavailable")
+            return
+        }
+        var fileData = Data([0xFF, 0xFE])
+        fileData.append(utf16Body)
+
+        let databaseClient = try DatabaseClient.makeInMemoryForTesting()
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("csv")
+        try fileData.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let importer = AdsProductImporter(databaseClient: databaseClient)
+        let result = try await importer.importFile(sourceURL: tempURL) { _ in }
+
+        XCTAssertEqual(result.job.status, ImportJobStatus.succeeded.rawValue)
+        XCTAssertEqual(result.job.totalRows, 2)
+        XCTAssertEqual(result.job.validRows, 2)
+        let rowCount = try await databaseClient.countAdsProductDaily(importId: result.importId)
+        XCTAssertEqual(rowCount, 2)
+    }
 }
