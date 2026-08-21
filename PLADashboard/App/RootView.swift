@@ -123,6 +123,17 @@ struct RootView: View {
                     }
                 )
             }
+        case .dataDashboard:
+            NavigationStack {
+                DataDashboardView(
+                    viewModel: dashboardViewModel,
+                    accountKind: accountStore.activeAccount?.kind ?? .thirdParty,
+                    onRequestDataUpdate: {
+                        selectedNavigationItem = .imports
+                        importViewModel.presentImportPicker()
+                    }
+                )
+            }
         case .imports:
             NavigationStack {
                 ImportsView(viewModel: importViewModel)

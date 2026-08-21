@@ -24,6 +24,9 @@ final class DashboardViewModel {
     var isPaging = false
     var errorMessage: String?
     var tableSort = DashboardTableSort.default
+    var dataDashboardSnapshot = DataDashboardSnapshot.empty
+    var isLoadingDataDashboard = false
+    var dataDashboardErrorMessage: String?
 
     private var databaseClient: DatabaseClient?
     private var databaseRows: [ProductPerformanceRowModel] = []
@@ -97,6 +100,9 @@ final class DashboardViewModel {
         reportingWeekStarts = []
         latestDataDay = nil
         tableSort = .default
+        dataDashboardSnapshot = .empty
+        isLoadingDataDashboard = false
+        dataDashboardErrorMessage = nil
         databaseRows = []
         dataSource = .empty
         errorMessage = nil
@@ -214,6 +220,29 @@ final class DashboardViewModel {
     func onFiltersChanged() {
         currentPage = 1
         scheduleRefresh(mode: .full)
+    }
+
+    func refreshDataDashboard() async {
+        let generation = loadGeneration
+        guard dataSource == .database, let databaseClient else {
+            dataDashboardSnapshot = .empty
+            return
+        }
+        isLoadingDataDashboard = true
+        dataDashboardErrorMessage = nil
+        do {
+            let snapshot = try await databaseClient.fetchDataDashboard(
+                filters: makeCurrentFilters(),
+                accountKind: accountKind
+            )
+            guard generation == loadGeneration else { return }
+            dataDashboardSnapshot = snapshot
+        } catch {
+            guard generation == loadGeneration else { return }
+            dataDashboardErrorMessage = error.localizedDescription
+        }
+        guard generation == loadGeneration else { return }
+        isLoadingDataDashboard = false
     }
 
     func setTableSort(_ sort: DashboardTableSort) {

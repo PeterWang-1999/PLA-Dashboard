@@ -22,6 +22,10 @@ final class WorkspaceCapabilitiesTests: XCTestCase {
         let selfBuilt = WorkspaceCapabilities.forKind(.selfBuilt)
         XCTAssertEqual(thirdParty.sidebarNavigationItems, selfBuilt.sidebarNavigationItems)
         XCTAssertEqual(thirdParty.sidebarNavigationItems, AppNavigationItem.defaultSidebarCases)
+        XCTAssertEqual(
+            AppNavigationItem.defaultSidebarCases,
+            [.dashboard, .dataDashboard, .imports]
+        )
     }
 
     func testImportPickerCasesShimMatchesCapabilities() {
