@@ -8,6 +8,7 @@ struct AppCommands: Commands {
     @FocusedValue(\.dashboardGoToNextPage) private var dashboardGoToNextPage
     @FocusedValue(\.dashboardGoToFirstPage) private var dashboardGoToFirstPage
     @FocusedValue(\.dashboardGoToLastPage) private var dashboardGoToLastPage
+    @FocusedValue(\.openSelectedProductDetail) private var openSelectedProductDetail
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
@@ -23,6 +24,14 @@ struct AppCommands: Commands {
         }
 
         CommandMenu("看板") {
+            Button("查看产品明细") {
+                openSelectedProductDetail?()
+            }
+            .keyboardShortcut("o", modifiers: .command)
+            .disabled(openSelectedProductDetail == nil)
+
+            Divider()
+
             Button("首页") {
                 dashboardGoToFirstPage?()
             }
@@ -81,6 +90,10 @@ private struct DashboardGoToLastPageFocusedKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct OpenSelectedProductDetailFocusedKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var windowState: WindowState? {
         get { self[WindowStateFocusedKey.self] }
@@ -115,5 +128,11 @@ extension FocusedValues {
     var dashboardGoToLastPage: (() -> Void)? {
         get { self[DashboardGoToLastPageFocusedKey.self] }
         set { self[DashboardGoToLastPageFocusedKey.self] = newValue }
+    }
+
+
+    var openSelectedProductDetail: (() -> Void)? {
+        get { self[OpenSelectedProductDetailFocusedKey.self] }
+        set { self[OpenSelectedProductDetailFocusedKey.self] = newValue }
     }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProductImageView: View {
     let imageURL: URL?
+    var size: CGFloat = 40
 
     @State private var loadedImage: NSImage?
     @State private var isLoading = false
@@ -36,10 +37,10 @@ struct ProductImageView: View {
                 placeholder
             }
         }
-        .frame(width: 40, height: 40)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: max(6, size * 0.1), style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
+            RoundedRectangle(cornerRadius: max(6, size * 0.1), style: .continuous)
                 .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 0.5)
         }
         .accessibilityElement(children: .ignore)

@@ -17,6 +17,8 @@ final class DashboardViewModel {
     var totalPages = 1
     /// 当前展示数据周期；若含未完成周，会同时说明截止日与覆盖天数。
     var reportingPeriodLabel: String?
+    private(set) var reportingWeekStarts: [String] = []
+    private(set) var latestDataDay: String?
     var isLoading = false
     /// 仅翻页时的轻量加载，不整表禁用、不盖全屏转圈。
     var isPaging = false
@@ -30,6 +32,7 @@ final class DashboardViewModel {
     /// 每次账户切换递增，用于丢弃过期的异步加载结果。
     private var loadGeneration: UInt = 0
     private(set) var warningLabelEngine: WarningLabelEngine = .thirdPartyCohort
+    private(set) var accountKind: WorkspaceAccountKind = .thirdParty
 
     var rows: [ProductPerformanceRowModel] {
         switch dataSource {
@@ -72,6 +75,7 @@ final class DashboardViewModel {
         bootstrap: @escaping () async -> Void = {}
     ) {
         self.databaseClient = databaseClient
+        self.accountKind = accountKind
         self.bootstrapAction = bootstrap
         warningLabelEngine = WarningLabelEngine.forAccountKind(accountKind)
         if !alertFilterOptions.contains(selectedAlertFilter) {
@@ -90,6 +94,8 @@ final class DashboardViewModel {
         currentPage = 1
         totalPages = 1
         reportingPeriodLabel = nil
+        reportingWeekStarts = []
+        latestDataDay = nil
         tableSort = .default
         databaseRows = []
         dataSource = .empty
@@ -276,6 +282,8 @@ final class DashboardViewModel {
                 weekStarts: result.weekStarts,
                 latestDay: result.latestDataDay
             )
+            reportingWeekStarts = result.weekStarts
+            latestDataDay = result.latestDataDay
             if currentPage > totalPages {
                 currentPage = totalPages
             }
@@ -285,6 +293,8 @@ final class DashboardViewModel {
             databaseRows = []
             totalPages = 1
             reportingPeriodLabel = nil
+            reportingWeekStarts = []
+            latestDataDay = nil
         }
 
         guard generation == loadGeneration else { return }
@@ -407,6 +417,22 @@ final class DashboardViewModel {
             bundle: bundle,
             filters: makeCurrentFilters(),
             includeClicksAndConversions: includeClicksAndConversions
+        )
+    }
+
+    func fetchProductDetail(productID: String) async throws -> ProductDetailModel {
+        guard accountKind == .thirdParty else {
+            throw ProductDetailError.unsupportedAccount
+        }
+        guard let databaseClient,
+              !reportingWeekStarts.isEmpty,
+              let latestDataDay else {
+            throw ProductDetailError.missingReportingPeriod
+        }
+        return try await databaseClient.fetchProductDetail(
+            productID: productID,
+            weekStarts: reportingWeekStarts,
+            latestDataDay: latestDataDay
         )
     }
 

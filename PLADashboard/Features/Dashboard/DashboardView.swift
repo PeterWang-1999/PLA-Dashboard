@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct DashboardView: View {
     @Bindable var viewModel: DashboardViewModel
     @Bindable var windowState: WindowState
+    var accountKind: WorkspaceAccountKind = .thirdParty
     var onRequestDataUpdate: () -> Void = {}
 
     @State private var columnSortOrder = DashboardTableSort.default.columnSortOrder
@@ -16,6 +17,8 @@ struct DashboardView: View {
     @State private var exportFilename = "pla-dashboard"
     @State private var showExportError = false
     @State private var exportErrorMessage = ""
+    @State private var selectedProductIDs: Set<ProductPerformanceRowModel.ID> = []
+    @State private var presentedProduct: ProductPerformanceRowModel?
 
     var body: some View {
         dashboardContent
@@ -78,6 +81,25 @@ struct DashboardView: View {
                       !viewModel.isPaging else { return }
                 viewModel.goToLastPage()
             }
+            .focusedSceneValue(
+                \.openSelectedProductDetail,
+                openSelectedProductDetailAction
+            )
+            .sheet(item: $presentedProduct) { row in
+                ProductDetailSheet(
+                    summary: row,
+                    reportingPeriodLabel: viewModel.reportingPeriodLabel,
+                    loadDetail: { productID in
+                        try await viewModel.fetchProductDetail(productID: productID)
+                    }
+                )
+            }
+            .onChange(of: accountKind) { _, newKind in
+                if newKind != .thirdParty {
+                    selectedProductIDs.removeAll()
+                    presentedProduct = nil
+                }
+            }
             .fileExporter(
                 isPresented: $isPresentingExporter,
                 document: exportDocument,
@@ -121,7 +143,9 @@ struct DashboardView: View {
                 ProductPerformanceTable(
                     rows: viewModel.rows,
                     isSidebarVisible: windowState.isSidebarVisible,
-                    sortOrder: $columnSortOrder
+                    sortOrder: $columnSortOrder,
+                    selection: $selectedProductIDs,
+                    onOpenProduct: openProductDetail
                 )
                 .disabled(viewModel.isLoading)
                 .opacity(viewModel.isPaging ? 0.85 : 1)
@@ -139,6 +163,23 @@ struct DashboardView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private var openSelectedProductDetailAction: (() -> Void)? {
+        guard accountKind == .thirdParty,
+              let productID = selectedProductIDs.first,
+              viewModel.rows.contains(where: { $0.id == productID }) else {
+            return nil
+        }
+        return { openProductDetail(productID) }
+    }
+
+    private func openProductDetail(_ productID: ProductPerformanceRowModel.ID) {
+        guard accountKind == .thirdParty,
+              let row = viewModel.rows.first(where: { $0.id == productID }) else {
+            return
+        }
+        presentedProduct = row
     }
 
     /// 在 `safeAreaInset` 底栏之上的可用区域内垂直居中占位内容。

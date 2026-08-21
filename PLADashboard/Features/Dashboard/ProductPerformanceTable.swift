@@ -5,6 +5,8 @@ struct ProductPerformanceTable: View {
     let rows: [ProductPerformanceRowModel]
     let isSidebarVisible: Bool
     @Binding var sortOrder: [KeyPathComparator<ProductPerformanceRowModel>]
+    @Binding var selection: Set<ProductPerformanceRowModel.ID>
+    let onOpenProduct: (ProductPerformanceRowModel.ID) -> Void
 
     var body: some View {
         Group {
@@ -19,7 +21,7 @@ struct ProductPerformanceTable: View {
     }
 
     private var expandedTable: some View {
-        Table(rows, sortOrder: $sortOrder) {
+        Table(rows, selection: $selection, sortOrder: $sortOrder) {
             Group {
                 lsinColumn
                 productImageColumn
@@ -39,10 +41,11 @@ struct ProductPerformanceTable: View {
                 aosColumn
             }
         }
+        .productDetailActions(onOpenProduct: onOpenProduct)
     }
 
     private var collapsedTable: some View {
-        Table(rows, sortOrder: $sortOrder) {
+        Table(rows, selection: $selection, sortOrder: $sortOrder) {
             Group {
                 lsinColumn
                 productImageColumn
@@ -64,6 +67,7 @@ struct ProductPerformanceTable: View {
                 conversionsColumn
             }
         }
+        .productDetailActions(onOpenProduct: onOpenProduct)
     }
 
     private var lsinColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
@@ -230,5 +234,24 @@ struct ProductPerformanceTable: View {
                 return "第 \(index + 1) 周 \(value)，覆盖 \(days) 天"
             }
             .joined(separator: "，")
+    }
+}
+
+private extension View {
+    func productDetailActions(
+        onOpenProduct: @escaping (ProductPerformanceRowModel.ID) -> Void
+    ) -> some View {
+        contextMenu(forSelectionType: ProductPerformanceRowModel.ID.self) { selectedIDs in
+            Button("查看产品明细") {
+                if let productID = selectedIDs.first {
+                    onOpenProduct(productID)
+                }
+            }
+            .disabled(selectedIDs.isEmpty)
+        } primaryAction: { selectedIDs in
+            if let productID = selectedIDs.first {
+                onOpenProduct(productID)
+            }
+        }
     }
 }

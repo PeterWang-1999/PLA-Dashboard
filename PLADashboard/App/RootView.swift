@@ -116,6 +116,7 @@ struct RootView: View {
                 DashboardView(
                     viewModel: dashboardViewModel,
                     windowState: windowState,
+                    accountKind: accountStore.activeAccount?.kind ?? .thirdParty,
                     onRequestDataUpdate: {
                         selectedNavigationItem = .imports
                         importViewModel.presentImportPicker()
