@@ -135,3 +135,9 @@ xcodebuild -project PLADashboard.xcodeproj \
 ```
 
 性能基准详见 [BenchmarkReport.md](BenchmarkReport.md)，版本变更详见 [CHANGELOG.md](CHANGELOG.md)。
+
+## 许可证
+
+当前仓库中的 PLA Dashboard 开源代码采用 [Apache License 2.0](LICENSE) 授权，版权归 Ziao Wang 所有。你可以在许可证约束下使用、修改和分发代码；重新分发时需保留许可证、版权与 [NOTICE](NOTICE) 声明。
+
+第三方依赖仍分别遵循其自身的许可证。本许可证仅适用于当前仓库中明确发布的内容，不自动适用于其他私有仓库、未来闭源模块、商标、Logo 或独立商业服务。
