@@ -60,11 +60,23 @@ struct DashboardView: View {
                       !viewModel.isPaging else { return }
                 viewModel.goToPreviousPage()
             }
+            .focusedSceneValue(\.dashboardGoToFirstPage) {
+                guard viewModel.currentPage > 1,
+                      !viewModel.isLoading,
+                      !viewModel.isPaging else { return }
+                viewModel.goToFirstPage()
+            }
             .focusedSceneValue(\.dashboardGoToNextPage) {
                 guard viewModel.currentPage < viewModel.totalPages,
                       !viewModel.isLoading,
                       !viewModel.isPaging else { return }
                 viewModel.goToNextPage()
+            }
+            .focusedSceneValue(\.dashboardGoToLastPage) {
+                guard viewModel.currentPage < viewModel.totalPages,
+                      !viewModel.isLoading,
+                      !viewModel.isPaging else { return }
+                viewModel.goToLastPage()
             }
             .fileExporter(
                 isPresented: $isPresentingExporter,
@@ -155,7 +167,7 @@ struct DashboardView: View {
             }
 
             if let period = viewModel.reportingPeriodLabel, !viewModel.showsEmptyState {
-                Text(period)
+                Label(period, systemImage: "calendar.badge.clock")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .accessibilityLabel(period)
@@ -197,16 +209,27 @@ struct DashboardView: View {
 
     private var paginationControls: some View {
         HStack(spacing: 8) {
-            Button {
-                viewModel.goToPreviousPage()
-            } label: {
-                Image(systemName: "chevron.left")
+            ControlGroup {
+                Button {
+                    viewModel.goToFirstPage()
+                } label: {
+                    Image(systemName: "chevron.backward.to.line")
+                }
+                .disabled(viewModel.currentPage <= 1 || viewModel.isLoading || viewModel.isPaging)
+                .help("首页")
+                .accessibilityLabel("跳转到首页")
+                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+
+                Button {
+                    viewModel.goToPreviousPage()
+                } label: {
+                    Image(systemName: "chevron.backward")
+                }
+                .disabled(viewModel.currentPage <= 1 || viewModel.isLoading || viewModel.isPaging)
+                .help("上一页")
+                .accessibilityLabel("上一页")
+                .keyboardShortcut(.leftArrow, modifiers: .command)
             }
-            .buttonStyle(.bordered)
-            .disabled(viewModel.currentPage <= 1 || viewModel.isLoading || viewModel.isPaging)
-            .help("上一页")
-            .accessibilityLabel("上一页")
-            .keyboardShortcut(.leftArrow, modifiers: .command)
 
             Text("第 \(viewModel.currentPage) / \(viewModel.totalPages) 页")
                 .font(.footnote)
@@ -214,18 +237,29 @@ struct DashboardView: View {
                 .frame(minWidth: 100)
                 .accessibilityLabel("第 \(viewModel.currentPage) 页，共 \(viewModel.totalPages) 页")
 
-            Button {
-                viewModel.goToNextPage()
-            } label: {
-                Image(systemName: "chevron.right")
+            ControlGroup {
+                Button {
+                    viewModel.goToNextPage()
+                } label: {
+                    Image(systemName: "chevron.forward")
+                }
+                .disabled(viewModel.currentPage >= viewModel.totalPages || viewModel.isLoading || viewModel.isPaging)
+                .help("下一页")
+                .accessibilityLabel("下一页")
+                .keyboardShortcut(.rightArrow, modifiers: .command)
+
+                Button {
+                    viewModel.goToLastPage()
+                } label: {
+                    Image(systemName: "chevron.forward.to.line")
+                }
+                .disabled(viewModel.currentPage >= viewModel.totalPages || viewModel.isLoading || viewModel.isPaging)
+                .help("尾页")
+                .accessibilityLabel("跳转到尾页")
+                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
             }
-            .buttonStyle(.bordered)
-            .disabled(viewModel.currentPage >= viewModel.totalPages || viewModel.isLoading || viewModel.isPaging)
-            .help("下一页")
-            .accessibilityLabel("下一页")
-            .keyboardShortcut(.rightArrow, modifiers: .command)
         }
-        .controlSize(.large)
+        .controlSize(.regular)
     }
 
     @MainActor

@@ -6,6 +6,8 @@ struct AppCommands: Commands {
     @FocusedValue(\.refreshDashboardAggregation) private var refreshDashboardAggregation
     @FocusedValue(\.dashboardGoToPreviousPage) private var dashboardGoToPreviousPage
     @FocusedValue(\.dashboardGoToNextPage) private var dashboardGoToNextPage
+    @FocusedValue(\.dashboardGoToFirstPage) private var dashboardGoToFirstPage
+    @FocusedValue(\.dashboardGoToLastPage) private var dashboardGoToLastPage
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
@@ -21,6 +23,11 @@ struct AppCommands: Commands {
         }
 
         CommandMenu("看板") {
+            Button("首页") {
+                dashboardGoToFirstPage?()
+            }
+            .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+
             Button("上一页") {
                 dashboardGoToPreviousPage?()
             }
@@ -30,6 +37,11 @@ struct AppCommands: Commands {
                 dashboardGoToNextPage?()
             }
             .keyboardShortcut(.rightArrow, modifiers: .command)
+
+            Button("尾页") {
+                dashboardGoToLastPage?()
+            }
+            .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
         }
 
         CommandGroup(after: .sidebar) {
@@ -61,6 +73,14 @@ private struct DashboardGoToNextPageFocusedKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct DashboardGoToFirstPageFocusedKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+private struct DashboardGoToLastPageFocusedKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var windowState: WindowState? {
         get { self[WindowStateFocusedKey.self] }
@@ -85,5 +105,15 @@ extension FocusedValues {
     var dashboardGoToNextPage: (() -> Void)? {
         get { self[DashboardGoToNextPageFocusedKey.self] }
         set { self[DashboardGoToNextPageFocusedKey.self] = newValue }
+    }
+
+    var dashboardGoToFirstPage: (() -> Void)? {
+        get { self[DashboardGoToFirstPageFocusedKey.self] }
+        set { self[DashboardGoToFirstPageFocusedKey.self] = newValue }
+    }
+
+    var dashboardGoToLastPage: (() -> Void)? {
+        get { self[DashboardGoToLastPageFocusedKey.self] }
+        set { self[DashboardGoToLastPageFocusedKey.self] = newValue }
     }
 }

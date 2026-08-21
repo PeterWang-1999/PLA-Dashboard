@@ -140,4 +140,18 @@ final class WeekCalendarReportingWindowTests: XCTestCase {
             "当前报告周期：2026-W22 至 2026-W27"
         )
     }
+
+    func testDashboardDataPeriodLabelCallsOutPartialCurrentWeek() {
+        let weeks = [
+            "2026-05-24", "2026-05-31", "2026-06-07", "2026-06-14",
+            "2026-06-21", "2026-06-28", "2026-07-05",
+        ]
+        XCTAssertEqual(
+            WeekCalendar.dashboardDataPeriodLabel(
+                weekStarts: weeks,
+                latestDay: "2026-07-08"
+            ),
+            "数据周期：2026-W22 至 2026-W28 · 当周截至 2026-07-08（4/7 天）"
+        )
+    }
 }

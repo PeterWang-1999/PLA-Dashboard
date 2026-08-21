@@ -86,6 +86,7 @@ extension DatabaseClient {
                 filters: filters,
                 weekStarts: contextBundle.weekStarts,
                 metricsContext: contextBundle.metricsContext,
+                latestDay: contextBundle.latestDay,
                 page: page,
                 pageSize: pageSize,
                 snapshotLabelFilter: alertLabel
@@ -98,6 +99,7 @@ extension DatabaseClient {
                 filters: filters,
                 weekStarts: contextBundle.weekStarts,
                 metricsContext: contextBundle.metricsContext,
+                latestDay: contextBundle.latestDay,
                 page: page,
                 pageSize: pageSize
             )
@@ -107,6 +109,7 @@ extension DatabaseClient {
             filters: filters,
             weekStarts: contextBundle.weekStarts,
             metricsContext: contextBundle.metricsContext,
+            latestDay: contextBundle.latestDay,
             page: page,
             pageSize: pageSize,
             snapshotLabelFilter: nil
@@ -140,6 +143,7 @@ extension DatabaseClient {
 
     private struct DashboardMetricsContextBundle {
         let weekStarts: [String]
+        let latestDay: String
         let metricsContext: DashboardMetricsCache
     }
 
@@ -149,28 +153,39 @@ extension DatabaseClient {
             return nil
         }
 
-        let weekStarts = WeekCalendar.reportingWeekStarts(endingAt: endDate)
-        guard !weekStarts.isEmpty else { return nil }
+        let completeWeekStarts = WeekCalendar.reportingWeekStarts(endingAt: endDate)
+        guard !completeWeekStarts.isEmpty else { return nil }
+        let weekStarts = WeekCalendar.trendWeekStarts(
+            reportingWeekStarts: completeWeekStarts,
+            latestDay: latestDay
+        )
 
         let metricsContext: DashboardMetricsCache
         if let cached = cachedDashboardMetrics(for: weekStarts) {
             metricsContext = cached
         } else {
-            let overallWeeks = try fetchOverallWeeklyMetrics(weekStarts: weekStarts)
-            let cohortBenchmarks = try fetchWeeklyCohortSpendBenchmarks(weekStarts: weekStarts)
-            let overallBenchmark = overallWeeks.map(\.metrics).reduce(AggregatedMetrics()) { $0 + $1 }
+            let overallWeeks = try fetchOverallWeeklyMetrics(weekStarts: completeWeekStarts)
+            let cohortBenchmarks = try fetchWeeklyCohortSpendBenchmarks(weekStarts: completeWeekStarts)
+            let displayOverallWeeks = try fetchOverallWeeklyMetrics(weekStarts: weekStarts)
+            let overallBenchmark = displayOverallWeeks.map(\.metrics).reduce(AggregatedMetrics()) { $0 + $1 }
             let totalCostCents = overallBenchmark.costCents
+            let warningTotalCostCents = overallWeeks.map(\.metrics).reduce(AggregatedMetrics()) { $0 + $1 }.costCents
             metricsContext = DashboardMetricsCache(
                 weekStartsKey: weekStarts.cacheKey,
                 overallWeeks: overallWeeks,
                 cohortBenchmarks: cohortBenchmarks,
                 overallBenchmark: overallBenchmark,
-                totalCostCents: totalCostCents
+                totalCostCents: totalCostCents,
+                warningTotalCostCents: warningTotalCostCents
             )
             storeDashboardMetricsCache(metricsContext)
         }
 
-        return DashboardMetricsContextBundle(weekStarts: weekStarts, metricsContext: metricsContext)
+        return DashboardMetricsContextBundle(
+            weekStarts: weekStarts,
+            latestDay: latestDay,
+            metricsContext: metricsContext
+        )
     }
 
     private func fetchAllMappedRows(
@@ -259,6 +274,7 @@ extension DatabaseClient {
         filters: DashboardQueryFilters,
         weekStarts: [String],
         metricsContext: DashboardMetricsCache,
+        latestDay: String,
         page: Int,
         pageSize: Int,
         snapshotLabelFilter: ProductWarningLabel?
@@ -273,7 +289,10 @@ extension DatabaseClient {
         )
 
         guard ranked.totalCount > 0, !ranked.products.isEmpty else {
-            return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1, weekStarts: weekStarts)
+            return DashboardPageResult(
+                rows: [], totalCount: 0, totalPages: 1,
+                weekStarts: weekStarts, latestDataDay: latestDay
+            )
         }
 
         let totalPages = max(1, Int(ceil(Double(ranked.totalCount) / Double(pageSize))))
@@ -290,7 +309,8 @@ extension DatabaseClient {
             rows: pageRows,
             totalCount: ranked.totalCount,
             totalPages: totalPages,
-            weekStarts: weekStarts
+            weekStarts: weekStarts,
+            latestDataDay: latestDay
         )
     }
 
@@ -298,6 +318,7 @@ extension DatabaseClient {
         filters: DashboardQueryFilters,
         weekStarts: [String],
         metricsContext: DashboardMetricsCache,
+        latestDay: String,
         page: Int,
         pageSize: Int
     ) throws -> DashboardPageResult {
@@ -333,7 +354,10 @@ extension DatabaseClient {
         }
 
         guard !mappedRows.isEmpty else {
-            return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1, weekStarts: weekStarts)
+            return DashboardPageResult(
+                rows: [], totalCount: 0, totalPages: 1,
+                weekStarts: weekStarts, latestDataDay: latestDay
+            )
         }
 
         mappedRows.sort { lhs, rhs in
@@ -351,7 +375,8 @@ extension DatabaseClient {
             rows: pageRows,
             totalCount: totalCount,
             totalPages: totalPages,
-            weekStarts: weekStarts
+            weekStarts: weekStarts,
+            latestDataDay: latestDay
         )
     }
 
@@ -393,7 +418,7 @@ extension DatabaseClient {
                 snapshotJoinSQL = ""
             }
 
-            var countSQL = """
+            let countSQL = """
                 SELECT COUNT(*) FROM (
                   SELECT p.product_id
                   FROM products p
@@ -510,12 +535,10 @@ extension DatabaseClient {
 
         let productIds = products.map(\.productId)
         let latestDay = try fetchLatestMetricDay() ?? weekStarts.last ?? ""
-        let trendWeekStarts = WeekCalendar.trendWeekStarts(
-            reportingWeekStarts: weekStarts,
-            latestDay: latestDay
-        )
+        let trendWeekStarts = weekStarts
+        let completeWeekStarts = metricsContext.overallWeeks.map(\.weekStart)
         let trendCoverageDays = trendWeekStarts.map { weekStart in
-            weekStarts.contains(weekStart)
+            completeWeekStarts.contains(weekStart)
                 ? 7
                 : WeekCalendar.coveredDayCount(weekStart: weekStart, through: latestDay)
         }
@@ -560,13 +583,16 @@ extension DatabaseClient {
         let records = weeklyByProduct[product.productId] ?? []
         let recordByWeek = Dictionary(uniqueKeysWithValues: records.map { ($0.weekStart, $0) })
 
-        let productWeeks: [WeeklyProductMetrics] = weekStarts.map { week in
+        let completeWeekStarts = metricsContext.overallWeeks.map(\.weekStart)
+        let productWeeks: [WeeklyProductMetrics] = completeWeekStarts.map { week in
             let metrics = recordByWeek[week]?.aggregatedMetrics ?? AggregatedMetrics()
             return WeeklyProductMetrics(productId: product.productId, weekStart: week, metrics: metrics)
         }
 
-        let sixWeekTotals = productWeeks.map(\.metrics).reduce(AggregatedMetrics()) { $0 + $1 }
-        guard sixWeekTotals.costCents > 0 || sixWeekTotals.conversionValueCents > 0 else { return nil }
+        let displayPeriodTotals = trendWeekStarts
+            .map { recordByWeek[$0]?.aggregatedMetrics ?? AggregatedMetrics() }
+            .reduce(AggregatedMetrics()) { $0 + $1 }
+        guard displayPeriodTotals.costCents > 0 || displayPeriodTotals.conversionValueCents > 0 else { return nil }
 
         let warning: ProductWarningLabel?
         switch warningLabelEngine {
@@ -575,7 +601,7 @@ extension DatabaseClient {
                 productWeeks: productWeeks,
                 overallWeeks: metricsContext.overallWeeks,
                 cohortBenchmarks: metricsContext.cohortBenchmarks,
-                totalPortfolioCostCents: metricsContext.totalCostCents,
+                totalPortfolioCostCents: metricsContext.warningTotalCostCents,
                 settings: AnalyticsSettingsSnapshot.current(accountID: accountID)
             )
         case .selfBuiltSnapshot:
@@ -596,7 +622,7 @@ extension DatabaseClient {
 
         return ProductPerformanceRowMapper.map(
             product: product,
-            sixWeekTotals: sixWeekTotals,
+            displayPeriodTotals: displayPeriodTotals,
             totalCostCents: metricsContext.totalCostCents,
             overallBenchmark: metricsContext.overallBenchmark,
             weeklyCostTrend: costTrend,

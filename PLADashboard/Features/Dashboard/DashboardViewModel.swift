@@ -15,7 +15,7 @@ final class DashboardViewModel {
     var currentPage = 1
     var pageSize: Int { AppSettings.defaultPageSize }
     var totalPages = 1
-    /// 当前报告周期文案，例如 `当前报告周期：2026-W22 至 2026-W27`。
+    /// 当前展示数据周期；若含未完成周，会同时说明截止日与覆盖天数。
     var reportingPeriodLabel: String?
     var isLoading = false
     /// 仅翻页时的轻量加载，不整表禁用、不盖全屏转圈。
@@ -176,9 +176,21 @@ final class DashboardViewModel {
         scheduleRefresh(mode: .paging)
     }
 
+    func goToFirstPage() {
+        guard currentPage > 1 else { return }
+        currentPage = 1
+        scheduleRefresh(mode: .paging)
+    }
+
     func goToNextPage() {
         guard currentPage < totalPages else { return }
         currentPage += 1
+        scheduleRefresh(mode: .paging)
+    }
+
+    func goToLastPage() {
+        guard currentPage < totalPages else { return }
+        currentPage = totalPages
         scheduleRefresh(mode: .paging)
     }
 
@@ -260,7 +272,10 @@ final class DashboardViewModel {
             guard generation == loadGeneration else { return }
             databaseRows = result.rows
             totalPages = result.totalPages
-            reportingPeriodLabel = WeekCalendar.reportingPeriodLabel(weekStarts: result.weekStarts)
+            reportingPeriodLabel = WeekCalendar.dashboardDataPeriodLabel(
+                weekStarts: result.weekStarts,
+                latestDay: result.latestDataDay
+            )
             if currentPage > totalPages {
                 currentPage = totalPages
             }

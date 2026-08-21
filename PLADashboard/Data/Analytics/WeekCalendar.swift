@@ -125,6 +125,22 @@ enum WeekCalendar {
         return "当前报告周期：\(range)"
     }
 
+    /// 看板展示口径：6 个完整周，并在存在时追加当周实际截止日。
+    static func dashboardDataPeriodLabel(weekStarts: [String], latestDay: String?) -> String? {
+        guard let first = weekStarts.first.flatMap(plaWeekLabel(forWeekStartDay:)),
+              let lastStart = weekStarts.last,
+              let last = plaWeekLabel(forWeekStartDay: lastStart) else {
+            return nil
+        }
+        let range = first == last ? first : "\(first) 至 \(last)"
+        guard let latestDay else { return "数据周期：\(range)" }
+        let coveredDays = coveredDayCount(weekStart: lastStart, through: latestDay)
+        if coveredDays < 7 {
+            return "数据周期：\(range) · 当周截至 \(latestDay)（\(coveredDays)/7 天）"
+        }
+        return "数据周期：\(range) · 均为完整周"
+    }
+
     static func microsToCents(_ micros: Int) -> Int {
         micros / 10_000
     }

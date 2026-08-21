@@ -34,6 +34,18 @@ Ador - 产品数据
         XCTAssertTrue(viewModel.showsEmptyState)
     }
 
+    func testPaginationCanJumpToFirstAndLastPage() {
+        let viewModel = DashboardViewModel()
+        viewModel.totalPages = 25
+        viewModel.currentPage = 8
+
+        viewModel.goToFirstPage()
+        XCTAssertEqual(viewModel.currentPage, 1)
+
+        viewModel.goToLastPage()
+        XCTAssertEqual(viewModel.currentPage, 25)
+    }
+
     func testResetClearsFilterCatalogs() {
         let viewModel = DashboardViewModel()
         viewModel.customLabelCatalog = .loadBundled()

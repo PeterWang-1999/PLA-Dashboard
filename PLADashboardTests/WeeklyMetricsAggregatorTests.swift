@@ -183,6 +183,7 @@ final class WeeklyMetricsAggregatorTests: XCTestCase {
             2026-06-01 - 2026-06-22
             天\t产品 ID\t广告系列\t货币代码\t费用\t展示次数\t点击次数\t转化次数\t转化价值
             2026-06-20\tshopify_ZZ_10416614474003_54238242767123\tCampaign A\tUSD\t12.34\t1000\t50\t2.5\t$99.00
+            2026-06-21\tshopify_ZZ_10416614474003_54238242767123\tCampaign A\tUSD\t12.34\t1000\t50\t2.5\t$99.00
             """
         )
 
@@ -203,7 +204,20 @@ final class WeeklyMetricsAggregatorTests: XCTestCase {
             pageSize: 30
         )
         XCTAssertEqual(result.totalCount, 1)
-        XCTAssertTrue(result.rows[0].gsTrendWeeks.contains { $0 > 0 })
+        let row = result.rows[0]
+        XCTAssertEqual(result.weekStarts.count, 7)
+        XCTAssertEqual(result.latestDataDay, "2026-06-21")
+        XCTAssertEqual(row.trendCoverageDays.last, 1)
+        XCTAssertEqual(row.costTrendWeeks.last, 1_234)
+        XCTAssertEqual(row.gsTrendWeeks.last, 9_900)
+        XCTAssertEqual(row.cost, "24.68")
+        XCTAssertEqual(row.costShare, "100.00%")
+        XCTAssertEqual(row.roi, "8.02")
+        XCTAssertEqual(row.cpa, "4.94")
+        XCTAssertEqual(row.arpu, "1.98")
+        XCTAssertEqual(row.cpc, "0.25")
+        XCTAssertEqual(row.cvr, "5.00%")
+        XCTAssertEqual(row.aos, "39.60")
     }
 
     private func writeTemporaryFile(name: String, contents: String) throws -> URL {

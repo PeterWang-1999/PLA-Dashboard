@@ -17,17 +17,21 @@ struct DashboardPageResult: Sendable {
     let totalPages: Int
     /// 当前看板使用的报告周起始日（周日，由旧到新）。
     let weekStarts: [String]
+    /// 当前数据实际截止日；当最后一周未完整时用于明确提示覆盖范围。
+    let latestDataDay: String?
 
     init(
         rows: [ProductPerformanceRowModel],
         totalCount: Int,
         totalPages: Int,
-        weekStarts: [String] = []
+        weekStarts: [String] = [],
+        latestDataDay: String? = nil
     ) {
         self.rows = rows
         self.totalCount = totalCount
         self.totalPages = totalPages
         self.weekStarts = weekStarts
+        self.latestDataDay = latestDataDay
     }
 }
 
@@ -104,7 +108,7 @@ enum DashboardMetricFormatter {
 enum ProductPerformanceRowMapper {
     static func map(
         product: ProductRecord,
-        sixWeekTotals: AggregatedMetrics,
+        displayPeriodTotals: AggregatedMetrics,
         totalCostCents: Int,
         overallBenchmark: AggregatedMetrics,
         weeklyCostTrend: [Int],
@@ -120,48 +124,48 @@ enum ProductPerformanceRowMapper {
             id: product.productId,
             lsin: displayLSIN,
             imageURL: ProductImageURLResolver.resolve(product.imageUrl),
-            cost: DashboardMetricFormatter.formatCurrencyFromCents(sixWeekTotals.costCents),
+            cost: DashboardMetricFormatter.formatCurrencyFromCents(displayPeriodTotals.costCents),
             costShare: DashboardMetricFormatter.formatSharePercent(
-                costCents: sixWeekTotals.costCents,
+                costCents: displayPeriodTotals.costCents,
                 totalCostCents: totalCostCents
             ),
-            roi: DashboardMetricFormatter.formatDecimal(sixWeekTotals.roi, fractionDigits: 2),
+            roi: DashboardMetricFormatter.formatDecimal(displayPeriodTotals.roi, fractionDigits: 2),
             warningLabel: warningLabel?.rawValue ?? "—",
             warningStyle: warningStyle(for: warningLabel),
-            cpa: DashboardMetricFormatter.formatDecimal(sixWeekTotals.cpa),
+            cpa: DashboardMetricFormatter.formatDecimal(displayPeriodTotals.cpa),
             cpaDelta: DashboardMetricFormatter.formatRelativeDelta(
-                product: sixWeekTotals.cpa,
+                product: displayPeriodTotals.cpa,
                 overall: overallBenchmark.cpa
             ),
-            arpu: DashboardMetricFormatter.formatDecimal(sixWeekTotals.arpu),
+            arpu: DashboardMetricFormatter.formatDecimal(displayPeriodTotals.arpu),
             arpuDelta: DashboardMetricFormatter.formatRelativeDelta(
-                product: sixWeekTotals.arpu,
+                product: displayPeriodTotals.arpu,
                 overall: overallBenchmark.arpu
             ),
-            cpc: DashboardMetricFormatter.formatDecimal(sixWeekTotals.cpc),
+            cpc: DashboardMetricFormatter.formatDecimal(displayPeriodTotals.cpc),
             cpcDelta: DashboardMetricFormatter.formatRelativeDelta(
-                product: sixWeekTotals.cpc,
+                product: displayPeriodTotals.cpc,
                 overall: overallBenchmark.cpc
             ),
-            cvr: DashboardMetricFormatter.formatPercentValue(sixWeekTotals.cvr),
+            cvr: DashboardMetricFormatter.formatPercentValue(displayPeriodTotals.cvr),
             cvrDelta: DashboardMetricFormatter.formatRelativeDelta(
-                product: sixWeekTotals.cvr,
+                product: displayPeriodTotals.cvr,
                 overall: overallBenchmark.cvr
             ),
-            aos: DashboardMetricFormatter.formatDecimal(sixWeekTotals.aos),
+            aos: DashboardMetricFormatter.formatDecimal(displayPeriodTotals.aos),
             aosDelta: DashboardMetricFormatter.formatRelativeDelta(
-                product: sixWeekTotals.aos,
+                product: displayPeriodTotals.aos,
                 overall: overallBenchmark.aos
             ),
-            clicks: DashboardMetricFormatter.formatInteger(sixWeekTotals.clicks),
-            conversions: DashboardMetricFormatter.formatDecimal(sixWeekTotals.conversions, fractionDigits: 0),
+            clicks: DashboardMetricFormatter.formatInteger(displayPeriodTotals.clicks),
+            conversions: DashboardMetricFormatter.formatDecimal(displayPeriodTotals.conversions, fractionDigits: 0),
             costTrendWeeks: weeklyCostTrend,
             gsTrendWeeks: weeklyGSTrend,
             trendWeekStarts: trendWeekStarts,
             trendCoverageDays: trendCoverageDays,
-            sortCostCents: sixWeekTotals.costCents,
-            sortROI: sixWeekTotals.roi,
-            sortClicks: sixWeekTotals.clicks,
+            sortCostCents: displayPeriodTotals.costCents,
+            sortROI: displayPeriodTotals.roi,
+            sortClicks: displayPeriodTotals.clicks,
             sortLSIN: displayLSIN
         )
     }
