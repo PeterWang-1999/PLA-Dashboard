@@ -65,6 +65,7 @@ open /Applications/PLADashboard.app
 - 搜索：按产品 ID 查询。
 - 筛选：按预警标签、自定义标签和类目缩小范围。
 - 排序与分页：支持消费、ROI 等已接入后端排序的字段；菜单“看板”提供首页、上一页、下一页和尾页快捷操作。
+- 产品明细：三方站账户可双击产品记录打开明细浮窗，也可选中记录后按 `Command-O` 或使用右键菜单；浮窗展示原始 SKU 维度的消费、ROI、点击和转化，并支持导出与访问落地页。自建站暂不提供此功能。
 - 趋势：查看最近 6 个完整周及当前未完成周的消费/销售趋势；悬停柱形可查看周区间、合计和日均值。
 - 导出：导出当前筛选与排序条件下的 CSV，可选择是否包含点击与转化字段。
 - 刷新：使用工具栏刷新，或按 `Shift-Command-R` 重建聚合并刷新看板。
@@ -89,6 +90,7 @@ open /Applications/PLADashboard.app
 | --- | --- |
 | 导入数据 | `Shift-Command-I` |
 | 刷新聚合 | `Shift-Command-R` |
+| 查看选中产品明细（三方站） | `Command-O` |
 | 首页 / 尾页 | `Option-Command-←` / `Option-Command-→` |
 | 上一页 / 下一页 | `Command-←` / `Command-→` |
 | 切换侧边栏 | `Control-Command-S` |
