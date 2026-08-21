@@ -125,7 +125,7 @@ struct ImportsView: View {
         case .merchantCenter:
             "选择 Google Merchant Center 导出的 TSV 文件。文件将复制到应用容器并按批流式导入。"
         case .adsProduct:
-            "选择 Google Ads 产品数据导出文件（跳过前两行标题）。将写入 ads_product_daily；消费与「销售趋势」均来自 Ads 转化价值等字段。"
+            "选择 Google Ads 产品数据导出文件。应用会自动识别前 10 行内的表头；消费与「销售趋势」来自 Ads 费用、转化价值等字段。"
         case .plaDeliveryDetail:
             "选择投放产品明细导出文件（CSV 或 XLSX，第 1 行为表头）。将写入 ads_product_daily；消费与「销售趋势」来自 Conversion Value 等字段。"
         case .salesReport:
