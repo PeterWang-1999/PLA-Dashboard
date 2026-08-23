@@ -190,6 +190,8 @@ enum ProductPerformanceRowMapper {
             .lowSampleOld
         case .observation:
             .observation
+        case .missingInGMC:
+            .missingInGMC
         case nil:
             .none
         }

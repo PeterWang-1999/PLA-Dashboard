@@ -9,6 +9,8 @@ struct ProductDetailModel: Sendable {
     let skuRows: [ProductDetailSKURow]
     let periodStart: String
     let periodEnd: String
+    /// 有投放/销售数据但在 GMC 目录中不存在的孤儿产品。
+    let isMissingInGMC: Bool
 }
 
 struct ProductDetailSKURow: Identifiable, Hashable, Sendable {

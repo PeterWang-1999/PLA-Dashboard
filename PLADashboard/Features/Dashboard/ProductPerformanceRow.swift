@@ -104,6 +104,7 @@ struct WarningLabelView: View {
             .background(backgroundColor)
             .foregroundStyle(foregroundColor)
             .clipShape(Capsule())
+            .help(helpText)
             .accessibilityLabel("预警标签，\(text)")
         }
     }
@@ -128,6 +129,8 @@ struct WarningLabelView: View {
             "hourglass"
         case .observation:
             "eye"
+        case .missingInGMC:
+            "exclamationmark.triangle.fill"
         }
     }
 
@@ -151,6 +154,8 @@ struct WarningLabelView: View {
             Color.blue.opacity(0.12)
         case .observation:
             Color.secondary.opacity(0.12)
+        case .missingInGMC:
+            Color.red.opacity(0.15)
         }
     }
 
@@ -174,6 +179,17 @@ struct WarningLabelView: View {
             .blue
         case .observation:
             .secondary
+        case .missingInGMC:
+            .red
+        }
+    }
+
+    private var helpText: String {
+        switch style {
+        case .missingInGMC:
+            "产品有花费/销售数据，但在 GMC 中不存在"
+        default:
+            ""
         }
     }
 }

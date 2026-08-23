@@ -82,6 +82,7 @@ enum ImportPipelineRunner: Sendable {
                 message: "正在重建周聚合…"
             ))
             try await databaseClient.rebuildProductWeeklyMetrics()
+            try await databaseClient.reconcileOrphanProducts()
         }
 
         try Task.checkCancellation()

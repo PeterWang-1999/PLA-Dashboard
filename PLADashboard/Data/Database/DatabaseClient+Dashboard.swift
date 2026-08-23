@@ -394,11 +394,18 @@ extension DatabaseClient {
         snapshotLabelFilter: ProductWarningLabel?
     ) throws -> RankedProductsResult {
         let snapshotJoin: (weekId: String, label: String)?
+        var isMissingInGMCFilter = false
         if let snapshotLabelFilter {
-            guard let weekId = try latestLabelSnapshotWeekId() else {
-                return RankedProductsResult(products: [], totalCount: 0)
+            if snapshotLabelFilter == .missingInGMC {
+                // 「GMC 缺失」是 products 上的数据完整性标记，不走标签快照 JOIN。
+                snapshotJoin = nil
+                isMissingInGMCFilter = true
+            } else {
+                guard let weekId = try latestLabelSnapshotWeekId() else {
+                    return RankedProductsResult(products: [], totalCount: 0)
+                }
+                snapshotJoin = (weekId, snapshotLabelFilter.rawValue)
             }
-            snapshotJoin = (weekId, snapshotLabelFilter.rawValue)
         } else {
             snapshotJoin = nil
         }
@@ -417,6 +424,7 @@ extension DatabaseClient {
             } else {
                 snapshotJoinSQL = ""
             }
+            let missingInGMCSQL = isMissingInGMCFilter ? " AND p.missing_in_gmc = 1" : ""
 
             let countSQL = """
                 SELECT COUNT(*) FROM (
@@ -425,7 +433,7 @@ extension DatabaseClient {
                   INNER JOIN product_weekly_metrics m ON m.product_id = p.product_id
                   \(snapshotJoinSQL)
                   WHERE m.week_start IN (\(weekPlaceholders))
-                  \(filterClause.sql)
+                  \(filterClause.sql)\(missingInGMCSQL)
                   GROUP BY p.product_id
                   HAVING SUM(m.cost_cents) > 0 OR SUM(m.conversion_value_cents) > 0
                 );
@@ -450,7 +458,7 @@ extension DatabaseClient {
                 INNER JOIN product_weekly_metrics m ON m.product_id = p.product_id
                 \(snapshotJoinSQL)
                 WHERE m.week_start IN (\(weekPlaceholders))
-                \(filterClause.sql)
+                \(filterClause.sql)\(missingInGMCSQL)
                 GROUP BY p.product_id
                 HAVING SUM(m.cost_cents) > 0 OR SUM(m.conversion_value_cents) > 0
                 ORDER BY \(filters.sort.sqlOrderClause)
@@ -612,8 +620,11 @@ extension DatabaseClient {
             }
         }
 
+        // 孤儿产品（有投放/销售数据但无 GMC 目录记录）强制展示「GMC 缺失」标签，覆盖常规预警。
+        let effectiveWarning: ProductWarningLabel? = product.missingInGmc ? .missingInGMC : warning
+
         if let required = alertFilterLabel(for: alertFilter ?? DashboardQueryFilters.alertFilterDefaultOption),
-           warning != required {
+           effectiveWarning != required {
             return nil
         }
 
@@ -629,7 +640,7 @@ extension DatabaseClient {
             weeklyGSTrend: gsTrend,
             trendWeekStarts: trendWeekStarts,
             trendCoverageDays: trendCoverageDays,
-            warningLabel: warning
+            warningLabel: effectiveWarning
         )
     }
 

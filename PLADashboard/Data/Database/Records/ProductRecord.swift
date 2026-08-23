@@ -22,6 +22,8 @@ struct ProductRecord: Codable, FetchableRecord, PersistableRecord, Identifiable,
     var firstSeenAt: String?
     var lastSeenAt: String?
     var updatedFromImportId: String?
+    /// 有投放/销售数据但无 GMC（Merchant）目录记录，由对账步骤 `reconcileOrphanProducts` 打标。
+    var missingInGmc: Bool = false
 
     var id: String { productId }
 
@@ -42,6 +44,7 @@ struct ProductRecord: Codable, FetchableRecord, PersistableRecord, Identifiable,
         case firstSeenAt = "first_seen_at"
         case lastSeenAt = "last_seen_at"
         case updatedFromImportId = "updated_from_import_id"
+        case missingInGmc = "missing_in_gmc"
     }
 
     enum CodingKeys: String, CodingKey {
@@ -61,6 +64,7 @@ struct ProductRecord: Codable, FetchableRecord, PersistableRecord, Identifiable,
         case firstSeenAt = "first_seen_at"
         case lastSeenAt = "last_seen_at"
         case updatedFromImportId = "updated_from_import_id"
+        case missingInGmc = "missing_in_gmc"
     }
 
     var customLabels: [String?] {

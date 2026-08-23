@@ -43,6 +43,7 @@ struct ProductPerformanceRowModel: Identifiable, Hashable, Sendable {
         case potentialNew
         case lowSampleOld
         case observation
+        case missingInGMC
     }
 }
 

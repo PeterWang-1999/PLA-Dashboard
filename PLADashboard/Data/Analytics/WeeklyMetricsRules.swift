@@ -78,12 +78,16 @@ enum ProductWarningLabel: String, Sendable, CaseIterable {
     case lowSampleOld = "低样本老品"
     case observation = "普通/观察"
 
+    // 数据完整性标记：有投放/销售数据但无 GMC 目录记录
+    case missingInGMC = "GMC 缺失"
+
     static let thirdPartyFilterCases: [ProductWarningLabel] = [
         .highSpendHighEfficiency,
         .highSpendLowEfficiency,
         .lowSpend,
         .highSpend,
         .lowEfficiency,
+        .missingInGMC,
     ]
 
     static let selfBuiltFilterCases: [ProductWarningLabel] = [
@@ -92,6 +96,7 @@ enum ProductWarningLabel: String, Sendable, CaseIterable {
         .lowSampleOld,
         .lowEfficiency,
         .observation,
+        .missingInGMC,
     ]
 }
 

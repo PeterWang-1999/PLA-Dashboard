@@ -474,6 +474,49 @@ extension DatabaseClient {
         invalidateDashboardCache()
     }
 
+    /// 孤儿产品对账（幂等，顺序无关）：
+    /// ① 为「有投放/销售数据但无 products 行」的产品建占位行并标记 GMC 缺失；
+    /// ② 标记所有「无 merchant_items 行」的投放产品为 GMC 缺失；
+    /// ③ 清除已回归目录产品的标记（自愈）。
+    func reconcileOrphanProducts() throws {
+        try dbQueue.write { db in
+            try db.execute(sql: """
+                INSERT INTO products (product_id, missing_in_gmc)
+                SELECT m.product_id, 1
+                FROM product_weekly_metrics m
+                WHERE (m.cost_cents > 0 OR m.conversion_value_cents > 0)
+                  AND NOT EXISTS (SELECT 1 FROM products p WHERE p.product_id = m.product_id)
+                GROUP BY m.product_id;
+                """)
+
+            try db.execute(sql: """
+                UPDATE products
+                SET missing_in_gmc = 1
+                WHERE product_id IN (
+                  SELECT m.product_id
+                  FROM product_weekly_metrics m
+                  WHERE (m.cost_cents > 0 OR m.conversion_value_cents > 0)
+                  GROUP BY m.product_id
+                )
+                AND product_id NOT IN (
+                  SELECT DISTINCT product_id FROM merchant_items
+                  WHERE product_id IS NOT NULL AND TRIM(product_id) != ''
+                );
+                """)
+
+            try db.execute(sql: """
+                UPDATE products
+                SET missing_in_gmc = 0
+                WHERE missing_in_gmc = 1
+                  AND product_id IN (
+                    SELECT DISTINCT product_id FROM merchant_items
+                    WHERE product_id IS NOT NULL AND TRIM(product_id) != ''
+                  );
+                """)
+        }
+        invalidateDashboardCache()
+    }
+
     // MARK: - Import errors
 
     func insertImportErrorsBatch(_ errors: [ImportRowErrorRecord]) throws {

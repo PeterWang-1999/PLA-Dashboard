@@ -48,6 +48,10 @@ struct AppDatabaseMigrator {
             try Migration_v8_ProductPlaCMS3.migrate(db)
         }
 
+        migrator.registerMigration("v9_missing_in_gmc") { db in
+            try Migration_v9_MissingInGMC.migrate(db)
+        }
+
         try migrator.migrate(dbQueue)
     }
 }

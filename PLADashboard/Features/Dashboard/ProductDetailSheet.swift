@@ -52,12 +52,30 @@ struct ProductDetailSheet: View {
 
     private func detailContent(_ detail: ProductDetailModel) -> some View {
         VStack(alignment: .leading, spacing: 20) {
+            if detail.isMissingInGMC {
+                missingInGMCBanner
+            }
             header(detail)
             hero(detail)
             Divider()
             labels(detail)
             footer(detail)
         }
+    }
+
+    private var missingInGMCBanner: some View {
+        Label {
+            Text("产品有花费/销售数据，但在 GMC 中不存在")
+                .font(.body.weight(.semibold))
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill")
+        }
+        .foregroundStyle(.red)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityLabel("异常提示：产品有花费/销售数据，但在 GMC 中不存在")
     }
 
     private func header(_ detail: ProductDetailModel) -> some View {

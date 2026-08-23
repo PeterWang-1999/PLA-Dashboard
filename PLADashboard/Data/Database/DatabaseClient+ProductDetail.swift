@@ -80,7 +80,8 @@ extension DatabaseClient {
                 customLabels: product.customLabels,
                 skuRows: skuRows,
                 periodStart: periodStart,
-                periodEnd: latestDataDay
+                periodEnd: latestDataDay,
+                isMissingInGMC: product.missingInGmc
             )
         }
     }
