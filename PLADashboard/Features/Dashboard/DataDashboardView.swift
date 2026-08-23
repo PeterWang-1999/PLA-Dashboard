@@ -261,11 +261,19 @@ private struct DataDashboardMetricCard: View {
     }
 }
 
-private struct MorphingComboTrendChart: View {
+private struct MorphingComboTrendChart: View, Animatable {
     let weekly: [DataDashboardTrendPoint]
     let daily: [DataDashboardTrendPoint]
     /// 0 = 周维度，1 = 日维度。
-    let progress: Double
+    var progress: Double
+
+    /// 让 `progress` 参与 SwiftUI 动画事务：`withAnimation` 切换周/日时，系统逐帧插值
+    /// `animatableData` 并重绘整个图表，使 `Path` 绘制的 ROI 曲线与柱状体一起平滑过渡。
+    /// `Path` 本身没有可动画数据，若不参与则曲线会在切换瞬间直接跳到终态。
+    var animatableData: Double {
+        get { progress }
+        set { progress = newValue }
+    }
 
     private struct MorphPoint: Identifiable {
         let id: Int
