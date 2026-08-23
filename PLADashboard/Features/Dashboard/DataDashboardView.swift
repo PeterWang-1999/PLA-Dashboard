@@ -444,20 +444,19 @@ private struct MorphingComboTrendChart: View {
 
     private func roiLine(plotW: CGFloat, plotH: CGFloat) -> some View {
         let roiMax = max(currentMaxROI, 0.0001)
-        // 只连接已滑入绘图区的点，避免周维度时折线在右侧留出一段水平尾巴。
+        // 只连接已滑入绘图区的点，避免周维度时曲线在右侧留出一段水平尾巴。
         let visible = points.filter { $0.x <= Double(slotCount) - 0.5 }
         func yPos(_ value: Double) -> CGFloat {
             CGFloat(1 - value / roiMax) * plotH
         }
 
+        let locations = visible.map {
+            CGPoint(x: xPosition($0.x, plotW: plotW), y: yPos($0.roi))
+        }
+
         return ZStack {
-            Path { path in
-                for (index, point) in visible.enumerated() {
-                    let location = CGPoint(x: xPosition(point.x, plotW: plotW), y: yPos(point.roi))
-                    if index == 0 { path.move(to: location) } else { path.addLine(to: location) }
-                }
-            }
-            .stroke(Color.green, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+            smoothPath(locations)
+                .stroke(Color.green, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
             ForEach(visible) { point in
                 Circle()
@@ -466,6 +465,39 @@ private struct MorphingComboTrendChart: View {
                     .position(x: xPosition(point.x, plotW: plotW), y: yPos(point.roi))
             }
         }
+    }
+
+    /// Catmull-Rom 样条：把离散 ROI 点连成平滑曲线，取代折线的硬切拐角（两端夹紧）。
+    private func smoothPath(_ pts: [CGPoint]) -> Path {
+        var path = Path()
+        guard let first = pts.first else { return path }
+        guard pts.count > 2 else {
+            path.move(to: first)
+            for p in pts.dropFirst() { path.addLine(to: p) }
+            return path
+        }
+        path.move(to: first)
+        let control = [first] + pts + [pts[pts.count - 1]]
+        let subdivisions = 20
+        for i in 0..<(pts.count - 1) {
+            let p0 = control[i]
+            let p1 = control[i + 1]
+            let p2 = control[i + 2]
+            let p3 = control[i + 3]
+            for step in 1...subdivisions {
+                let t = CGFloat(step) / CGFloat(subdivisions)
+                let t2 = t * t
+                let t3 = t2 * t
+                let x = 0.5 * (2 * p1.x + (-p0.x + p2.x) * t
+                    + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2
+                    + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3)
+                let y = 0.5 * (2 * p1.y + (-p0.y + p2.y) * t
+                    + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2
+                    + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        return path
     }
 
     private func xAxisLabels(plotW: CGFloat) -> some View {
