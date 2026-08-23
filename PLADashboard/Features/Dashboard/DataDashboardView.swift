@@ -143,6 +143,22 @@ private struct SectionHeader: View {
     }
 }
 
+private extension View {
+    /// 卡片式表面：以系统控件背景色填充，并叠加一条分隔线描边，
+    /// 保证在日间/夜间两种外观下卡片边界都清晰可见。
+    func cardSurface(cornerRadius: CGFloat) -> some View {
+        self
+            .background(
+                Color(nsColor: .controlBackgroundColor),
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+            }
+    }
+}
+
 private struct DataDashboardMetricCard: View {
     let metric: DataDashboardMetric
 
@@ -168,7 +184,7 @@ private struct DataDashboardMetricCard: View {
             .font(.subheadline.weight(.medium))
         }
         .padding(18)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
         .accessibilityElement(children: .combine)
     }
 
@@ -298,7 +314,7 @@ private struct CampaignPerformanceList: View {
             }
         }
         .padding(.horizontal, 14)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .cardSurface(cornerRadius: 14)
         .accessibilityElement(children: .contain)
     }
 }
@@ -352,7 +368,7 @@ private struct TopProductCard: View {
             }
         }
         .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .cardSurface(cornerRadius: 14)
         .accessibilityElement(children: .combine)
     }
 }
