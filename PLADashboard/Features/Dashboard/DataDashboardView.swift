@@ -86,12 +86,9 @@ struct DataDashboardView: View {
     }
 
     private var metricSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(title: "核心指标", detail: "随工具栏筛选同步")
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 12)], spacing: 12) {
-                ForEach(snapshot.metrics) { metric in
-                    DataDashboardMetricCard(metric: metric)
-                }
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 240), spacing: 12)], spacing: 12) {
+            ForEach(snapshot.metrics) { metric in
+                DataDashboardMetricCard(metric: metric)
             }
         }
     }
@@ -163,29 +160,47 @@ private struct DataDashboardMetricCard: View {
     let metric: DataDashboardMetric
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(metric.title).font(.headline).foregroundStyle(.secondary)
-                Spacer()
-                Text(metric.reference).font(.subheadline).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(metric.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                Text(metric.reference)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
             Text(metric.value)
-                .font(.system(.largeTitle, design: .rounded, weight: .semibold))
+                .font(.system(.largeTitle, weight: .semibold))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
-            HStack {
-                Text(metric.comparisonLabel).foregroundStyle(.secondary)
-                Spacer()
+            HStack(spacing: 6) {
+                if metric.comparisonDirection != .neutral {
+                    Image(systemName: comparisonSymbol)
+                        .accessibilityHidden(true)
+                }
                 Text(metric.comparison)
-                    .foregroundStyle(comparisonColor)
                     .monospacedDigit()
+                Text(metric.comparisonLabel)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
             }
-            .font(.subheadline.weight(.medium))
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(comparisonColor)
         }
-        .padding(18)
-        .cardSurface(cornerRadius: 18)
+        .padding(16)
+        .cardSurface(cornerRadius: 16)
         .accessibilityElement(children: .combine)
+    }
+
+    private var comparisonSymbol: String {
+        switch metric.comparisonDirection {
+        case .positive: "arrowtriangle.up.fill"
+        case .negative: "arrowtriangle.down.fill"
+        case .neutral: "minus"
+        }
     }
 
     private var comparisonColor: Color {
