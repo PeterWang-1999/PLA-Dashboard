@@ -1,10 +1,17 @@
 import SwiftUI
 import Charts
 
+private extension Color {
+    /// Apple 官网日间模式的浅灰背景色 #F5F5F7。
+    static let appleLightBackground = Color(red: 245.0 / 255.0, green: 245.0 / 255.0, blue: 247.0 / 255.0)
+}
+
 struct DataDashboardView: View {
     @Bindable var viewModel: DashboardViewModel
     let accountKind: WorkspaceAccountKind
     var onRequestDataUpdate: () -> Void = {}
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Group {
@@ -47,6 +54,11 @@ struct DataDashboardView: View {
 
     private var snapshot: DataDashboardSnapshot { viewModel.dataDashboardSnapshot }
 
+    /// 页面背景：日间使用 Apple 官网浅灰 #F5F5F7，夜间沿用系统窗口背景。
+    private var pageBackground: Color {
+        colorScheme == .dark ? Color(nsColor: .windowBackgroundColor) : .appleLightBackground
+    }
+
     private var dashboardContent: some View {
         ScrollView(.vertical) {
             LazyVStack(alignment: .leading, spacing: 28) {
@@ -60,6 +72,7 @@ struct DataDashboardView: View {
             .frame(maxWidth: 1_440, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .top)
         }
+        .background(pageBackground)
         .overlay(alignment: .topTrailing) {
             if viewModel.isLoadingDataDashboard {
                 ProgressView()
@@ -141,8 +154,8 @@ private struct SectionHeader: View {
 }
 
 private extension View {
-    /// 卡片式表面：以系统控件背景色填充，并叠加一条分隔线描边，
-    /// 保证在日间/夜间两种外观下卡片边界都清晰可见。
+    /// 卡片式表面：以系统控件背景色填充，叠加分隔线描边与柔和投影，
+    /// 保证在日间/夜间两种外观下卡片边界与层级都清晰可见。
     func cardSurface(cornerRadius: CGFloat) -> some View {
         self
             .background(
@@ -153,6 +166,7 @@ private extension View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
             }
+            .shadow(color: .black.opacity(0.06), radius: 12, x: 0, y: 2)
     }
 }
 
@@ -173,6 +187,7 @@ private struct DataDashboardMetricCard: View {
             }
             Text(metric.value)
                 .font(.system(.largeTitle, weight: .semibold))
+                .tracking(-0.5)
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -184,6 +199,7 @@ private struct DataDashboardMetricCard: View {
                 Text(metric.comparison)
                     .monospacedDigit()
                 Text(metric.comparisonLabel)
+                    .fontWeight(.regular)
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
             }
