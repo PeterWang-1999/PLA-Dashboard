@@ -846,7 +846,7 @@ private struct CampaignPerformanceList: View {
             ForEach(rows) { row in
                 GridRow {
                     Text(row.campaign).lineLimit(1).help(row.campaign)
-                    Text(row.metrics.costCents, format: .currency(code: "USD").precision(.fractionLength(2)))
+                    Text(Double(row.metrics.costCents) / 100, format: .currency(code: "USD").precision(.fractionLength(2)))
                     Text(row.metrics.roi, format: .number.precision(.fractionLength(2)))
                     Text(row.metrics.cpc, format: .currency(code: "USD").precision(.fractionLength(2)))
                     Text(row.metrics.cvr, format: .percent.precision(.fractionLength(2)))
@@ -1056,8 +1056,8 @@ private struct TopProductCard: View {
                 }
                 Text(product.productID).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 3) {
-                    GridRow { Text("消费").foregroundStyle(.secondary); Text(product.metrics.costCents, format: .currency(code: "USD")) }
-                    GridRow { Text("销售").foregroundStyle(.secondary); Text(product.metrics.conversionValueCents, format: .currency(code: "USD")) }
+                    GridRow { Text("消费").foregroundStyle(.secondary); Text(Double(product.metrics.costCents) / 100, format: .currency(code: "USD")) }
+                    GridRow { Text("销售").foregroundStyle(.secondary); Text(Double(product.metrics.conversionValueCents) / 100, format: .currency(code: "USD")) }
                     GridRow { Text("ROI").foregroundStyle(.secondary); Text(product.metrics.roi, format: .number.precision(.fractionLength(2))) }
                 }
                 .font(.caption)
