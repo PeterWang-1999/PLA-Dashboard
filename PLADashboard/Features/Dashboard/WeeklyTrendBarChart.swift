@@ -167,7 +167,7 @@ struct WeeklyTrendBarChart: View {
 
 /// SwiftUI 的 popover 固定带箭头；这个窄桥接仅负责承载不激活、忽略鼠标事件的跟随浮层。
 @MainActor
-private final class TrendHoverPanelController {
+final class TrendHoverPanelController {
     static let shared = TrendHoverPanelController()
 
     private let panel: NSPanel

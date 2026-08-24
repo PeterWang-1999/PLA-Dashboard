@@ -38,6 +38,9 @@ struct DataDashboardTrendPoint: Identifiable, Sendable {
     let costCents: Int
     let salesCents: Int
     let roi: Double
+    let cvr: Double
+    let cpc: Double
+    let aos: Double
 
     var id: String { period }
 }

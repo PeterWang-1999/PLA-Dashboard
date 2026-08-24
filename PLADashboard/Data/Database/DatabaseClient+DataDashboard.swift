@@ -43,7 +43,10 @@ extension DatabaseClient {
                     displayLabel: WeekCalendar.plaWeekLabel(forWeekStartDay: $0.weekStart) ?? $0.weekStart,
                     costCents: $0.metrics.costCents,
                     salesCents: $0.metrics.conversionValueCents,
-                    roi: $0.metrics.roi
+                    roi: $0.metrics.roi,
+                    cvr: $0.metrics.cvr,
+                    cpc: $0.metrics.cpc,
+                    aos: $0.metrics.aos
                 )
             },
             dailyTrend: daily,
@@ -224,7 +227,10 @@ extension DatabaseClient {
                 displayLabel: String(day.suffix(5)).replacingOccurrences(of: "-", with: "/"),
                 costCents: metrics.costCents,
                 salesCents: metrics.conversionValueCents,
-                roi: metrics.roi
+                roi: metrics.roi,
+                cvr: metrics.cvr,
+                cpc: metrics.cpc,
+                aos: metrics.aos
             )
         }
     }
