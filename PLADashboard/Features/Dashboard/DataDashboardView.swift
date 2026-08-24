@@ -22,6 +22,11 @@ struct DataDashboardView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var trendGranularity: TrendGranularity = .weekly
     @State private var trendProgress: Double = 0
+    /// 工具栏筛选变化时驱动「旧 → 新」弹性过渡的进度（0 = 旧数据，1 = 新数据）。
+    @State private var filterProgress: Double = 1
+    /// 筛选前捕获的旧趋势，作为插值起点。
+    @State private var fromWeekly: [DataDashboardTrendPoint] = []
+    @State private var fromDaily: [DataDashboardTrendPoint] = []
 
     var body: some View {
         Group {
@@ -60,6 +65,26 @@ struct DataDashboardView: View {
         .onChange(of: viewModel.selectedAlertFilter) { _, _ in viewModel.onFiltersChanged() }
         .onChange(of: viewModel.selectedCustomLabelFilter) { _, _ in viewModel.onFiltersChanged() }
         .onChange(of: viewModel.selectedCategoryFilter) { _, _ in viewModel.onFiltersChanged() }
+        .onChange(of: viewModel.isLoadingDataDashboard) { _, isLoading in
+            if isLoading {
+                // 刷新开始：把当前已展示的数据冻结为插值起点，避免新数据到达时瞬时跳变。
+                fromWeekly = snapshot.weeklyTrend
+                fromDaily = snapshot.dailyTrend
+                filterProgress = 0
+            } else {
+                // 刷新完成：从旧数据弹性过渡到新快照；首次加载无基线则直接呈现。
+                guard !fromWeekly.isEmpty || !fromDaily.isEmpty else {
+                    filterProgress = 1
+                    return
+                }
+                let animation: Animation = reduceMotion
+                    ? .easeInOut(duration: 0.2)
+                    : .spring(response: 0.45, dampingFraction: 0.82)
+                withAnimation(animation) {
+                    filterProgress = 1
+                }
+            }
+        }
     }
 
     private var snapshot: DataDashboardSnapshot { viewModel.dataDashboardSnapshot }
@@ -140,10 +165,13 @@ struct DataDashboardView: View {
                     }
                 }
             }
-            MorphingComboTrendChart(
-                weekly: snapshot.weeklyTrend,
-                daily: snapshot.dailyTrend,
-                progress: trendProgress
+            FilterMorphingTrendChart(
+                fromWeekly: fromWeekly,
+                fromDaily: fromDaily,
+                toWeekly: snapshot.weeklyTrend,
+                toDaily: snapshot.dailyTrend,
+                granularityProgress: trendProgress,
+                filterProgress: filterProgress
             )
         }
     }
@@ -259,6 +287,62 @@ private struct DataDashboardMetricCard: View {
         case .negative: .red
         case .neutral: .secondary
         }
+    }
+}
+
+/// 把旧、新两组趋势按 `progress`（0 = 旧，1 = 新）逐点插值。
+/// 周/日维度周期固定，仅数值随筛选变化，因此可按元素一一对应地过渡。
+private func interpolatedTrend(
+    from: [DataDashboardTrendPoint],
+    to: [DataDashboardTrendPoint],
+    progress: Double
+) -> [DataDashboardTrendPoint] {
+    guard from.count == to.count else { return to }
+    if progress <= 0 { return from }
+    if progress >= 1 { return to }
+    return zip(from, to).map { old, new in
+        DataDashboardTrendPoint(
+            period: new.period,
+            displayLabel: new.displayLabel,
+            costCents: interpolateCents(old.costCents, new.costCents, progress),
+            salesCents: interpolateCents(old.salesCents, new.salesCents, progress),
+            roi: old.roi + (new.roi - old.roi) * progress,
+            cvr: old.cvr + (new.cvr - old.cvr) * progress,
+            cpc: old.cpc + (new.cpc - old.cpc) * progress,
+            aos: old.aos + (new.aos - old.aos) * progress
+        )
+    }
+}
+
+private func interpolateCents(_ from: Int, _ to: Int, _ progress: Double) -> Int {
+    from + Int((Double(to - from) * progress).rounded())
+}
+
+/// 工具栏筛选（预警标签/自定义标签/类目）变化时，让趋势图以与周/日切换相同的
+/// 弹性动画从旧数据过渡到新数据。通过 `Animatable` 让 `filterProgress` 逐帧插值，
+/// 再调用 `interpolatedTrend` 生成中间帧数据，交给 `MorphingComboTrendChart` 渲染。
+/// 周/日维度进度由内层图表自身的 `Animatable` 负责，二者互不干扰。
+private struct FilterMorphingTrendChart: View, Animatable {
+    let fromWeekly: [DataDashboardTrendPoint]
+    let fromDaily: [DataDashboardTrendPoint]
+    let toWeekly: [DataDashboardTrendPoint]
+    let toDaily: [DataDashboardTrendPoint]
+    /// 周/日维度进度，直接透传给内层图表。
+    let granularityProgress: Double
+    /// 0 = 旧（筛选前）数据，1 = 新（筛选后）数据。
+    var filterProgress: Double
+
+    var animatableData: Double {
+        get { filterProgress }
+        set { filterProgress = newValue }
+    }
+
+    var body: some View {
+        MorphingComboTrendChart(
+            weekly: interpolatedTrend(from: fromWeekly, to: toWeekly, progress: filterProgress),
+            daily: interpolatedTrend(from: fromDaily, to: toDaily, progress: filterProgress),
+            progress: granularityProgress
+        )
     }
 }
 
