@@ -79,10 +79,10 @@ struct StreamingXLSXRowParser: Sendable {
                     let bridge = XLSXSheetXMLBridge(sharedStrings: sharedStrings)
                     var headerEmitted = false
                     var dataRowNumber = 0
-                    var handlerError: Error?
+                    let handlerBridge = XLSXAsyncEventHandlerBridge(handler: handler)
 
                     bridge.onRow = { fields in
-                        if handlerError != nil { return }
+                        if handlerBridge.error != nil { return }
 
                         let event: Event
                         if !headerEmitted {
@@ -93,21 +93,12 @@ struct StreamingXLSXRowParser: Sendable {
                             event = .row(rowNumber: dataRowNumber, fields: fields)
                         }
 
-                        let gate = DispatchSemaphore(value: 0)
-                        Task {
-                            do {
-                                try await handler(event)
-                            } catch {
-                                handlerError = error
-                            }
-                            gate.signal()
-                        }
-                        gate.wait()
+                        handlerBridge.handle(event)
                     }
 
                     try bridge.parse(fileURL: sheetURL)
 
-                    if let handlerError {
+                    if let handlerError = handlerBridge.error {
                         continuation.resume(throwing: handlerError)
                     } else if !headerEmitted {
                         continuation.resume(throwing: ParserError.worksheetMissing)
@@ -139,6 +130,35 @@ struct StreamingXLSXRowParser: Sendable {
 
         let loader = XLSXSharedStringsLoader()
         return try loader.load(fileURL: stringsURL)
+    }
+}
+
+/// XMLParser 的同步回调与异步行处理之间的背压桥接。
+/// 内部可变错误状态始终由 `lock` 保护。
+private final class XLSXAsyncEventHandlerBridge: @unchecked Sendable {
+    private let handler: @Sendable (StreamingXLSXRowParser.Event) async throws -> Void
+    private let lock = NSLock()
+    private var storedError: Error?
+
+    init(handler: @escaping @Sendable (StreamingXLSXRowParser.Event) async throws -> Void) {
+        self.handler = handler
+    }
+
+    var error: Error? {
+        lock.withLock { storedError }
+    }
+
+    func handle(_ event: StreamingXLSXRowParser.Event) {
+        let gate = DispatchSemaphore(value: 0)
+        Task { [self] in
+            do {
+                try await handler(event)
+            } catch {
+                lock.withLock { storedError = error }
+            }
+            gate.signal()
+        }
+        gate.wait()
     }
 }
 

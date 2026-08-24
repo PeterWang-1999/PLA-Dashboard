@@ -8,8 +8,19 @@ enum WorkspacePaths {
     static let databaseFileName = "pla_dashboard.sqlite"
     static let legacyBackupDirectoryName = "legacy"
 
+    private static let testRootOverrideLock = NSLock()
+    /// 只能经过上方锁访问；`nonisolated(unsafe)` 用于表达编译器无法证明的同步不变式。
+    nonisolated(unsafe) private static var testRootOverrideStorage: URL?
+
     /// 单元测试注入根目录，避免写入真实 Application Support。
-    static var testRootOverride: URL?
+    static var testRootOverride: URL? {
+        get {
+            testRootOverrideLock.withLock { testRootOverrideStorage }
+        }
+        set {
+            testRootOverrideLock.withLock { testRootOverrideStorage = newValue }
+        }
+    }
 
     static func applicationSupportRoot() throws -> URL {
         if let testRootOverride {

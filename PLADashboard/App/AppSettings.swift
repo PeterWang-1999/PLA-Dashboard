@@ -14,8 +14,10 @@ enum AppSettings {
     static let scopedDataRetentionDaysSuffix = "data.retentionDays"
     static let scopedLastRetentionPurgeDaySuffix = "data.lastRetentionPurgeDay"
 
-    @AppStorage(defaultPageSizeKey) static var defaultPageSize = 30
-    @AppStorage(sidebarVisibleKey) static var sidebarVisible = true
+    static var defaultPageSize: Int {
+        let value = UserDefaults.standard.integer(forKey: defaultPageSizeKey)
+        return value > 0 ? value : 30
+    }
 
     static func scopedKey(accountID: String, suffix: String) -> String {
         "accounts.\(accountID).\(suffix)"

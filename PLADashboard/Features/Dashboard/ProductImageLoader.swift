@@ -23,7 +23,7 @@ actor ProductImageLoader {
     func loadImageData(from url: URL, reloadToken: Int = 0) async throws -> Data {
         let cacheKey = cacheKey(for: url, reloadToken: reloadToken)
 
-        if reloadToken == 0, let cached = memoryCache.object(forKey: cacheKey) {
+        if reloadToken == 0, let cached = memoryCache.object(forKey: cacheKey as NSString) {
             return cached as Data
         }
 
@@ -35,7 +35,7 @@ actor ProductImageLoader {
     private func fetchImageData(
         from url: URL,
         reloadToken: Int,
-        cacheKey: NSString
+        cacheKey: String
     ) async throws -> Data {
         var lastError: Error = URLError(.badServerResponse)
         let bypassCache = reloadToken > 0
@@ -67,7 +67,7 @@ actor ProductImageLoader {
                     throw URLError(.zeroByteResource)
                 }
 
-                memoryCache.setObject(data as NSData, forKey: cacheKey)
+                memoryCache.setObject(data as NSData, forKey: cacheKey as NSString)
                 return data
             } catch is CancellationError {
                 throw CancellationError()
@@ -92,11 +92,11 @@ actor ProductImageLoader {
         request.setValue("image/jpeg,image/png,image/*;q=0.8", forHTTPHeaderField: "Accept")
     }
 
-    private func cacheKey(for url: URL, reloadToken: Int) -> NSString {
+    private func cacheKey(for url: URL, reloadToken: Int) -> String {
         if reloadToken == 0 {
-            return url.absoluteString as NSString
+            return url.absoluteString
         }
-        return "\(url.absoluteString)|r\(reloadToken)" as NSString
+        return "\(url.absoluteString)|r\(reloadToken)"
     }
 
     private static func isRetriableStatus(_ statusCode: Int) -> Bool {

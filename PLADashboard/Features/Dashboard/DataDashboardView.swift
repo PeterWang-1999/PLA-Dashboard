@@ -20,6 +20,7 @@ struct DataDashboardView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @State private var trendGranularity: TrendGranularity = .weekly
     @State private var trendProgress: Double = 0
     /// 工具栏筛选变化时驱动「旧 → 新」弹性过渡的进度（0 = 旧数据，1 = 新数据）。
@@ -113,7 +114,12 @@ struct DataDashboardView: View {
                 ProgressView()
                     .controlSize(.small)
                     .padding(8)
-                    .background(.regularMaterial, in: Capsule())
+                    .background(
+                        reduceTransparency
+                            ? AnyShapeStyle(Color(nsColor: .controlBackgroundColor))
+                            : AnyShapeStyle(.regularMaterial),
+                        in: Capsule()
+                    )
                     .padding(12)
                     .accessibilityLabel("正在刷新数据看板")
             }
@@ -347,6 +353,7 @@ private struct FilterMorphingTrendChart: View, Animatable {
 }
 
 private struct MorphingComboTrendChart: View, Animatable {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let weekly: [DataDashboardTrendPoint]
     let daily: [DataDashboardTrendPoint]
     /// 0 = 周维度，1 = 日维度。
@@ -726,7 +733,12 @@ private struct MorphingComboTrendChart: View, Animatable {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(
+            reduceTransparency
+                ? AnyShapeStyle(Color(nsColor: .controlBackgroundColor))
+                : AnyShapeStyle(.regularMaterial),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(.separator.opacity(0.65), lineWidth: 0.5)
@@ -852,6 +864,7 @@ private struct CampaignPerformanceList: View {
 }
 
 private struct CategoryBubbleChart: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     let points: [DataDashboardCategoryPoint]
     @State private var hoveredCategoryID: String?
 
@@ -980,7 +993,12 @@ private struct CategoryBubbleChart: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(
+            reduceTransparency
+                ? AnyShapeStyle(Color(nsColor: .controlBackgroundColor))
+                : AnyShapeStyle(.regularMaterial),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(.separator.opacity(0.65), lineWidth: 0.5)

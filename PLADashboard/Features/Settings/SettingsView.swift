@@ -106,8 +106,6 @@ struct SettingsView: View {
             } footer: {
                 Text("产品数据页面底栏的“数据维护”菜单可清理当前账户中超过保留期的 Ads 日表；产品主表与导入记录始终保留。")
             }
-
-            ProductImageDiagnosticsSection(accountID: accountID, accountName: accountName)
         }
     }
 

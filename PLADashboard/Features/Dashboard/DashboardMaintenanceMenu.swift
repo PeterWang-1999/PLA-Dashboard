@@ -14,6 +14,10 @@ struct DashboardMaintenanceMenu: View {
     @State private var isUpdatingLabels = false
     @State private var labelsResultMessage: String?
     @State private var showLabelsResult = false
+    @State private var isRunningProductDiagnostics = false
+    @State private var productDiagnosticsMessage: String?
+    @State private var showProductDiagnosticsResult = false
+    @State private var showReconcileConfirmation = false
 
     var body: some View {
         Menu {
@@ -36,6 +40,18 @@ struct DashboardMaintenanceMenu: View {
                     Task { await preparePurgeConfirmation() }
                 }
                 .disabled(retentionDays == 0 || isPurging)
+            }
+
+            Section("产品图") {
+                Button("诊断产品图数据…") {
+                    Task { await runProductDiagnostics() }
+                }
+                .disabled(isRunningProductDiagnostics)
+
+                Button("合并 S 前缀产品记录…") {
+                    showReconcileConfirmation = true
+                }
+                .disabled(isRunningProductDiagnostics)
             }
         } label: {
             Label("数据维护", systemImage: "wrench.and.screwdriver")
@@ -67,6 +83,18 @@ struct DashboardMaintenanceMenu: View {
         } message: {
             Text("将删除当前账户全部标签周快照，并按当前完整报告周仅执行入池规则。留池/出池的“连续 2 次”计数将从零开始。")
         }
+        .confirmationDialog(
+            "确认合并 S 前缀产品记录？",
+            isPresented: $showReconcileConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("合并记录") {
+                Task { await reconcilePrefixedProducts() }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将在当前账户中合并带 S 前缀与不带前缀的同一产品记录，并刷新看板数据。")
+        }
         .alert("数据清理", isPresented: $showPurgeResult) {
             Button("好", role: .cancel) {}
         } message: {
@@ -77,6 +105,11 @@ struct DashboardMaintenanceMenu: View {
         } message: {
             Text(labelsResultMessage ?? "")
         }
+        .alert("产品图诊断", isPresented: $showProductDiagnosticsResult) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(productDiagnosticsMessage ?? "")
+        }
     }
 
     private var accountID: String? {
@@ -85,6 +118,10 @@ struct DashboardMaintenanceMenu: View {
 
     private var isSelfBuiltAccount: Bool {
         accountStore.activeAccount?.kind == .selfBuilt
+    }
+
+    private var accountName: String {
+        accountStore.activeAccount?.name ?? accountID ?? "当前账户"
     }
 
     private var retentionDays: Int {
@@ -195,6 +232,42 @@ struct DashboardMaintenanceMenu: View {
         }
     }
 
+    @MainActor
+    private func runProductDiagnostics() async {
+        guard let client = activeDatabaseClient else {
+            showProductDiagnosticsFailure("数据库未就绪")
+            return
+        }
+        isRunningProductDiagnostics = true
+        defer { isRunningProductDiagnostics = false }
+        do {
+            let report = try await client.buildProductImageDiagnosticsReport(accountName: accountName)
+            productDiagnosticsMessage = report.formattedText
+            showProductDiagnosticsResult = true
+        } catch {
+            showProductDiagnosticsFailure(error.localizedDescription)
+        }
+    }
+
+    @MainActor
+    private func reconcilePrefixedProducts() async {
+        guard let client = activeDatabaseClient else {
+            showProductDiagnosticsFailure("数据库未就绪")
+            return
+        }
+        isRunningProductDiagnostics = true
+        defer { isRunningProductDiagnostics = false }
+        do {
+            try await client.reconcileLsinPrefixedProductIDs()
+            let report = try await client.buildProductImageDiagnosticsReport(accountName: accountName)
+            productDiagnosticsMessage = "已合并 S 前缀产品记录。\n\n\(report.formattedText)"
+            showProductDiagnosticsResult = true
+            dashboardSettingsNotifier.notifyChange()
+        } catch {
+            showProductDiagnosticsFailure(error.localizedDescription)
+        }
+    }
+
     private var activeDatabaseClient: DatabaseClient? {
         guard let accountID,
               let client = accountStore.activeDatabaseClient,
@@ -212,5 +285,10 @@ struct DashboardMaintenanceMenu: View {
     private func showLabelsFailure(_ message: String) {
         labelsResultMessage = message
         showLabelsResult = true
+    }
+
+    private func showProductDiagnosticsFailure(_ message: String) {
+        productDiagnosticsMessage = message
+        showProductDiagnosticsResult = true
     }
 }

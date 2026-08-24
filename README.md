@@ -4,15 +4,15 @@ PLA Dashboard 是面向 Google Shopping 产品投放分析的 macOS 本地应用
 
 ## 下载与系统要求
 
-- 最新版本：`1.1 (2)`
+- 最新版本：`1.2 (3)`
 - 系统要求：macOS 14.4 或更高版本
 - 处理器：Apple Silicon 与 Intel Mac（Universal 2）
 - 下载地址：[GitHub Releases](https://github.com/PeterWang-1999/PLA-Dashboard/releases/latest)
 
 发布页提供两种安装包：
 
-- `PLADashboard-macOS-Universal-v1.1.dmg`：推荐，打开后将 `PLADashboard.app` 拖到“应用程序”。
-- `PLADashboard-macOS-Universal-v1.1.zip`：解压后将 `PLADashboard.app` 拖到“应用程序”。
+- `PLADashboard-macOS-Universal-v1.2.dmg`：推荐，打开后将 `PLADashboard.app` 拖到“应用程序”。
+- `PLADashboard-macOS-Universal-v1.2.zip`：解压后将 `PLADashboard.app` 拖到“应用程序”。
 
 ## 安装与首次打开
 

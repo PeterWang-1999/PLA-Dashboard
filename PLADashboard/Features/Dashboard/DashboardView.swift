@@ -259,7 +259,6 @@ struct DashboardView: View {
                 .disabled(viewModel.currentPage <= 1 || viewModel.isLoading || viewModel.isPaging)
                 .help("首页")
                 .accessibilityLabel("跳转到首页")
-                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
 
                 Button {
                     viewModel.goToPreviousPage()
@@ -269,7 +268,6 @@ struct DashboardView: View {
                 .disabled(viewModel.currentPage <= 1 || viewModel.isLoading || viewModel.isPaging)
                 .help("上一页")
                 .accessibilityLabel("上一页")
-                .keyboardShortcut(.leftArrow, modifiers: .command)
             }
 
             Text("第 \(viewModel.currentPage) / \(viewModel.totalPages) 页")
@@ -287,7 +285,6 @@ struct DashboardView: View {
                 .disabled(viewModel.currentPage >= viewModel.totalPages || viewModel.isLoading || viewModel.isPaging)
                 .help("下一页")
                 .accessibilityLabel("下一页")
-                .keyboardShortcut(.rightArrow, modifiers: .command)
 
                 Button {
                     viewModel.goToLastPage()
@@ -297,7 +294,6 @@ struct DashboardView: View {
                 .disabled(viewModel.currentPage >= viewModel.totalPages || viewModel.isLoading || viewModel.isPaging)
                 .help("尾页")
                 .accessibilityLabel("跳转到尾页")
-                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
             }
         }
         .controlSize(.regular)

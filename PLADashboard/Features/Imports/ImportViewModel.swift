@@ -119,22 +119,20 @@ final class ImportViewModel {
         let importCompleted = onImportCompleted
         let securityScopedAccess = url.startAccessingSecurityScopedResource()
 
-        importTask = Task.detached(priority: .userInitiated) { [weak self] in
+        importTask = Task(priority: .userInitiated) { [weak self] in
             defer {
                 if securityScopedAccess {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
 
-            await MainActor.run {
-                guard let self else { return }
-                self.isImporting = true
-                self.errorMessage = nil
-                self.latestResult = nil
-                self.latestErrors = []
-                self.isLoadingImportErrors = false
-                self.progress = nil
-            }
+            guard let self else { return }
+            self.isImporting = true
+            self.errorMessage = nil
+            self.latestResult = nil
+            self.latestErrors = []
+            self.isLoadingImportErrors = false
+            self.progress = nil
 
             do {
                 let result = try await ImportPipelineRunner.importFile(
@@ -144,26 +142,21 @@ final class ImportViewModel {
                     databaseClient: databaseClient,
                     accountKind: accountKind,
                     onProgress: { update in
-                        await MainActor.run { [weak self] in
-                            self?.progress = update
-                        }
+                        await self.updateProgress(update)
                     }
                 )
 
                 try Task.checkCancellation()
 
                 let shouldLoadErrors = result.job.invalidRows > 0 || result.job.warningRows > 0
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    self.latestResult = ImportResult(
-                        importId: result.importId,
-                        stagedFileURL: result.stagedFileURL,
-                        job: result.job,
-                        errors: []
-                    )
-                    self.latestErrors = []
-                    self.isLoadingImportErrors = shouldLoadErrors
-                }
+                self.latestResult = ImportResult(
+                    importId: result.importId,
+                    stagedFileURL: result.stagedFileURL,
+                    job: result.job,
+                    errors: []
+                )
+                self.latestErrors = []
+                self.isLoadingImportErrors = shouldLoadErrors
 
                 try await ImportPipelineRunner.finishImport(
                     sourceKind: sourceKind,
@@ -171,9 +164,7 @@ final class ImportViewModel {
                     databaseClient: databaseClient,
                     accountKind: accountKind,
                     onProgress: { update in
-                        await MainActor.run { [weak self] in
-                            self?.progress = update
-                        }
+                        await self.updateProgress(update)
                     },
                     reloadFilterCatalogs: {
                         if let reloadFilterCatalogs {
@@ -189,23 +180,17 @@ final class ImportViewModel {
 
                 try Task.checkCancellation()
 
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    self.latestErrors = result.errors
-                    self.isLoadingImportErrors = false
-                    self.isImporting = false
-                    self.progress = nil
-                }
-                await self?.loadHistory()
+                self.latestErrors = result.errors
+                self.isLoadingImportErrors = false
+                self.isImporting = false
+                self.progress = nil
+                await self.loadHistory()
             } catch is CancellationError {
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    self.isImporting = false
-                    self.isLoadingImportErrors = false
-                    self.progress = nil
-                    self.errorMessage = nil
-                }
-                await self?.loadHistory()
+                self.isImporting = false
+                self.isLoadingImportErrors = false
+                self.progress = nil
+                self.errorMessage = nil
+                await self.loadHistory()
             } catch let pipelineError as ImportPipelineError {
                 if case .duplicateFile = pipelineError, sourceKind == .merchantCenter {
                     let importer = MerchantCenterImporter(
@@ -220,24 +205,22 @@ final class ImportViewModel {
                         await importCompleted()
                     }
                 }
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    self.errorMessage = ImportUserFacingError.message(for: pipelineError)
-                    self.isImporting = false
-                    self.isLoadingImportErrors = false
-                    self.progress = nil
-                }
-                await self?.loadHistory()
+                self.errorMessage = ImportUserFacingError.message(for: pipelineError)
+                self.isImporting = false
+                self.isLoadingImportErrors = false
+                self.progress = nil
+                await self.loadHistory()
             } catch {
-                await MainActor.run { [weak self] in
-                    guard let self else { return }
-                    self.errorMessage = ImportUserFacingError.message(for: error)
-                    self.isImporting = false
-                    self.isLoadingImportErrors = false
-                    self.progress = nil
-                }
-                await self?.loadHistory()
+                self.errorMessage = ImportUserFacingError.message(for: error)
+                self.isImporting = false
+                self.isLoadingImportErrors = false
+                self.progress = nil
+                await self.loadHistory()
             }
         }
+    }
+
+    private func updateProgress(_ update: ImportProgress) {
+        progress = update
     }
 }
