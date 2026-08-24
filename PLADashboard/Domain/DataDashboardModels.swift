@@ -55,6 +55,11 @@ struct DataDashboardCampaignRow: Identifiable, Sendable {
 struct DataDashboardCategoryPoint: Identifiable, Sendable {
     let category: String
     let metrics: AggregatedMetrics
+    let currentWeekMetrics: AggregatedMetrics
+    let previousWeekMetrics: AggregatedMetrics
+    let spendShare: Double
+    let salesShare: Double
+    let portfolioROI: Double
 
     var id: String { category }
 }

@@ -27,7 +27,11 @@ extension DatabaseClient {
                 through: latestDay
             )
             : []
-        let categories = try fetchDashboardCategories(productIDs: productIDs, weekStarts: weekStarts)
+        let categories = try fetchDashboardCategories(
+            productIDs: productIDs,
+            weekStarts: weekStarts,
+            portfolioMetrics: totals
+        )
         let products = try fetchDashboardTopProducts(rows: bundle.rows, weeklyRecords: weeklyRecords)
 
         return DataDashboardSnapshot(
@@ -278,8 +282,12 @@ extension DatabaseClient {
             .prefix(20).map { $0 }
     }
 
-    private func fetchDashboardCategories(productIDs: [String], weekStarts: [String]) throws -> [DataDashboardCategoryPoint] {
-        var merged: [String: AggregatedMetrics] = [:]
+    private func fetchDashboardCategories(
+        productIDs: [String],
+        weekStarts: [String],
+        portfolioMetrics: AggregatedMetrics
+    ) throws -> [DataDashboardCategoryPoint] {
+        var merged: [String: [String: AggregatedMetrics]] = [:]
         for chunk in productIDs.chunked(maxCount: 500) {
             try dbQueue.read { db in
                 var arguments = StatementArguments()
@@ -287,27 +295,46 @@ extension DatabaseClient {
                 for weekStart in weekStarts { arguments += [weekStart] }
                 let rows = try Row.fetchAll(db, sql: """
                     SELECT COALESCE(NULLIF(TRIM(p.pla_cms3), ''), NULLIF(TRIM(p.google_product_category), ''), '未分类') AS category,
+                           m.week_start,
                            SUM(m.cost_cents) AS cost_cents, SUM(m.clicks) AS clicks,
                            SUM(m.conversions) AS conversions, SUM(m.conversion_value_cents) AS sales_cents
                     FROM product_weekly_metrics m
                     INNER JOIN products p ON p.product_id = m.product_id
                     WHERE m.product_id IN (\(chunk.placeholders))
                       AND m.week_start IN (\(weekStarts.placeholders))
-                    GROUP BY category;
+                    GROUP BY category, m.week_start;
                     """, arguments: arguments)
                 for row in rows {
                     guard let raw: String = row["category"] else { continue }
+                    guard let weekStart: String = row["week_start"] else { continue }
                     let category = raw.components(separatedBy: ">").last?.trimmingCharacters(in: .whitespaces) ?? raw
-                    merged[category, default: AggregatedMetrics()] = merged[category, default: AggregatedMetrics()] + AggregatedMetrics(
+                    let metrics = AggregatedMetrics(
                         costCents: row["cost_cents"] ?? 0,
                         clicks: row["clicks"] ?? 0,
                         conversions: row["conversions"] ?? 0,
                         conversionValueCents: row["sales_cents"] ?? 0
                     )
+                    merged[category, default: [:]][weekStart, default: AggregatedMetrics()] =
+                        merged[category, default: [:]][weekStart, default: AggregatedMetrics()] + metrics
                 }
             }
         }
-        return merged.map(DataDashboardCategoryPoint.init(category:metrics:))
+        let currentWeek = weekStarts.last
+        let previousWeek = weekStarts.dropLast().last
+        return merged.map { category, byWeek in
+            let metrics = weekStarts.compactMap { byWeek[$0] }.reduce(AggregatedMetrics(), +)
+            return DataDashboardCategoryPoint(
+                category: category,
+                metrics: metrics,
+                currentWeekMetrics: currentWeek.flatMap { byWeek[$0] } ?? AggregatedMetrics(),
+                previousWeekMetrics: previousWeek.flatMap { byWeek[$0] } ?? AggregatedMetrics(),
+                spendShare: portfolioMetrics.costCents > 0
+                    ? Double(metrics.costCents) / Double(portfolioMetrics.costCents) : 0,
+                salesShare: portfolioMetrics.conversionValueCents > 0
+                    ? Double(metrics.conversionValueCents) / Double(portfolioMetrics.conversionValueCents) : 0,
+                portfolioROI: portfolioMetrics.roi
+            )
+        }
             .sorted { $0.metrics.costCents > $1.metrics.costCents }
             .prefix(15).map { $0 }
     }
