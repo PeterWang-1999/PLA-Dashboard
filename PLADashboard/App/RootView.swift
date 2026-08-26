@@ -35,7 +35,6 @@ struct RootView: View {
             sidebar
         } detail: {
             detailContent
-                .focusedSceneValue(\.windowState, windowState)
                 .focusedSceneValue(\.triggerImportPicker) {
                     selectedNavigationItem = .imports
                     importViewModel.presentImportPicker()

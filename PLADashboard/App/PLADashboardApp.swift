@@ -36,13 +36,15 @@ struct PLADashboardApp: App {
         }
         .commands {
             AppCommands()
+            SidebarCommands()
         }
+        .defaultSize(width: 1033, height: 620)
+        .windowResizability(.contentMinSize)
+
         Settings {
             SettingsView()
                 .environment(accountStore)
                 .environment(dashboardSettingsNotifier)
         }
-        .defaultSize(width: 1033, height: 620)
-        .windowResizability(.contentMinSize)
     }
 }

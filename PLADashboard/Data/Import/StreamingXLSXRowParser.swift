@@ -7,6 +7,11 @@ struct StreamingXLSXRowParser: Sendable {
         case row(rowNumber: Int, fields: [String])
     }
 
+    private enum StreamEvent: Sendable {
+        case estimate(Int)
+        case parsed(Event)
+    }
+
     enum ParserError: Error, LocalizedError {
         case worksheetMissing
         case parseFailed(String)
@@ -29,18 +34,30 @@ struct StreamingXLSXRowParser: Sendable {
         self.fileURL = fileURL
     }
 
-    /// 解压工作表后逐行回调；解析线程在每行处理完成前阻塞，形成背压。
+    /// 解压工作表后逐行回调。XML 解析作为单一生产任务运行，异步消费端按顺序处理事件。
     /// - Parameter onEstimate: 解压完成后、解析开始前回调数据行预估（不含表头）。
     func forEachEvent(
         onEstimate: (@Sendable (Int) async -> Void)? = nil,
         handler: @escaping @Sendable (Event) async throws -> Void
     ) async throws {
-        let fileURL = self.fileURL
-        let worksheetEntryPath = self.worksheetEntryPath
-        let sharedStringsEntryPath = self.sharedStringsEntryPath
+        for try await event in makeEventStream() {
+            try Task.checkCancellation()
+            switch event {
+            case .estimate(let estimate):
+                await onEstimate?(estimate)
+            case .parsed(let parsedEvent):
+                try await handler(parsedEvent)
+            }
+        }
+    }
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            DispatchQueue.global(qos: .userInitiated).async {
+    private func makeEventStream() -> AsyncThrowingStream<StreamEvent, Error> {
+        let fileURL = fileURL
+        let worksheetEntryPath = worksheetEntryPath
+        let sharedStringsEntryPath = sharedStringsEntryPath
+
+        return AsyncThrowingStream { continuation in
+            let producer = Task.detached(priority: .userInitiated) {
                 let tempDirectory = FileManager.default.temporaryDirectory
                     .appendingPathComponent("pla-xlsx-\(UUID().uuidString)", isDirectory: true)
 
@@ -63,51 +80,42 @@ struct StreamingXLSXRowParser: Sendable {
                         from: fileURL,
                         to: sheetURL
                     )
+                    try Task.checkCancellation()
 
-                    if let onEstimate {
-                        let estimate = try XLSXSheetRowCounter.estimateDataRowCount(
-                            sheetXMLURL: sheetURL
-                        )
-                        let estimateGate = DispatchSemaphore(value: 0)
-                        Task {
-                            await onEstimate(estimate)
-                            estimateGate.signal()
-                        }
-                        estimateGate.wait()
-                    }
+                    let estimate = try XLSXSheetRowCounter.estimateDataRowCount(
+                        sheetXMLURL: sheetURL
+                    )
+                    continuation.yield(.estimate(estimate))
 
                     let bridge = XLSXSheetXMLBridge(sharedStrings: sharedStrings)
+                    bridge.shouldCancel = { Task.isCancelled }
                     var headerEmitted = false
                     var dataRowNumber = 0
-                    let handlerBridge = XLSXAsyncEventHandlerBridge(handler: handler)
 
                     bridge.onRow = { fields in
-                        if handlerBridge.error != nil { return }
-
-                        let event: Event
+                        guard !Task.isCancelled else { return }
                         if !headerEmitted {
                             headerEmitted = true
-                            event = .header(fields)
+                            continuation.yield(.parsed(.header(fields)))
                         } else {
                             dataRowNumber += 1
-                            event = .row(rowNumber: dataRowNumber, fields: fields)
+                            continuation.yield(.parsed(.row(rowNumber: dataRowNumber, fields: fields)))
                         }
-
-                        handlerBridge.handle(event)
                     }
 
                     try bridge.parse(fileURL: sheetURL)
-
-                    if let handlerError = handlerBridge.error {
-                        continuation.resume(throwing: handlerError)
-                    } else if !headerEmitted {
-                        continuation.resume(throwing: ParserError.worksheetMissing)
-                    } else {
-                        continuation.resume()
+                    try Task.checkCancellation()
+                    guard headerEmitted else {
+                        throw ParserError.worksheetMissing
                     }
+                    continuation.finish()
                 } catch {
-                    continuation.resume(throwing: error)
+                    continuation.finish(throwing: error)
                 }
+            }
+
+            continuation.onTermination = { @Sendable _ in
+                producer.cancel()
             }
         }
     }
@@ -130,35 +138,6 @@ struct StreamingXLSXRowParser: Sendable {
 
         let loader = XLSXSharedStringsLoader()
         return try loader.load(fileURL: stringsURL)
-    }
-}
-
-/// XMLParser 的同步回调与异步行处理之间的背压桥接。
-/// 内部可变错误状态始终由 `lock` 保护。
-private final class XLSXAsyncEventHandlerBridge: @unchecked Sendable {
-    private let handler: @Sendable (StreamingXLSXRowParser.Event) async throws -> Void
-    private let lock = NSLock()
-    private var storedError: Error?
-
-    init(handler: @escaping @Sendable (StreamingXLSXRowParser.Event) async throws -> Void) {
-        self.handler = handler
-    }
-
-    var error: Error? {
-        lock.withLock { storedError }
-    }
-
-    func handle(_ event: StreamingXLSXRowParser.Event) {
-        let gate = DispatchSemaphore(value: 0)
-        Task { [self] in
-            do {
-                try await handler(event)
-            } catch {
-                lock.withLock { storedError = error }
-            }
-            gate.signal()
-        }
-        gate.wait()
     }
 }
 
@@ -238,6 +217,7 @@ final class XLSXSharedStringsLoader: NSObject, XMLParserDelegate {
 
 final class XLSXSheetXMLBridge: NSObject, XMLParserDelegate {
     var onRow: (([String]) -> Void)?
+    var shouldCancel: (() -> Bool)?
 
     private let sharedStrings: [String]
     private var currentCellRef: String?
@@ -278,6 +258,10 @@ final class XLSXSheetXMLBridge: NSObject, XMLParserDelegate {
         qualifiedName qName: String?,
         attributes attributeDict: [String: String] = [:]
     ) {
+        if shouldCancel?() == true {
+            parser.abortParsing()
+            return
+        }
         switch elementName {
         case "row":
             currentRowCells = [:]

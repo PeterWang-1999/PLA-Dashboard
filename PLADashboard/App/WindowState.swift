@@ -11,11 +11,6 @@ final class WindowState {
         self.columnVisibility = isSidebarVisible ? .all : .detailOnly
     }
 
-    func toggleSidebar() {
-        isSidebarVisible.toggle()
-        columnVisibility = isSidebarVisible ? .all : .detailOnly
-    }
-
     func syncFromSceneStorage(_ stored: Bool) {
         isSidebarVisible = stored
         columnVisibility = stored ? .all : .detailOnly

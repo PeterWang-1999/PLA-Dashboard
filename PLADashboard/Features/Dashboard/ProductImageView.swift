@@ -15,6 +15,7 @@ struct ProductImageView: View {
                 Image(nsImage: loadedImage)
                     .resizable()
                     .scaledToFill()
+                    .accessibilityLabel("产品图片")
             } else if isLoading {
                 Image(systemName: "photo")
                     .font(.body)
@@ -25,6 +26,7 @@ struct ProductImageView: View {
                         ProgressView()
                             .controlSize(.mini)
                     }
+                    .accessibilityLabel("正在加载产品图片")
             } else if loadFailed {
                 failurePlaceholder
             } else if imageURL != nil {
@@ -33,6 +35,7 @@ struct ProductImageView: View {
                     .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.quaternarySystemFill))
+                    .accessibilityLabel("产品图片")
             } else {
                 placeholder
             }
@@ -43,8 +46,6 @@ struct ProductImageView: View {
             RoundedRectangle(cornerRadius: max(6, size * 0.1), style: .continuous)
                 .strokeBorder(Color.secondary.opacity(0.2), lineWidth: 0.5)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityLabelText)
         .task(id: loadTaskID) {
             await loadImageIfNeeded()
         }
@@ -53,16 +54,6 @@ struct ProductImageView: View {
     private var loadTaskID: String {
         guard let imageURL else { return "nil" }
         return "\(imageURL.absoluteString)|\(reloadToken)"
-    }
-
-    private var accessibilityLabelText: String {
-        if loadFailed {
-            return "产品图片加载失败"
-        }
-        if loadedImage != nil {
-            return "产品图片"
-        }
-        return imageURL == nil ? "无产品图片" : "产品图片"
     }
 
     private var failurePlaceholder: some View {
@@ -78,12 +69,12 @@ struct ProductImageView: View {
             .buttonStyle(.plain)
             .font(.caption2)
             .foregroundStyle(.secondary)
+            .accessibilityLabel("重试加载产品图片")
+            .accessibilityHint("重新下载此产品的图片")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.quaternarySystemFill))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("产品图片加载失败")
-        .accessibilityHint("连按两次以重试")
+        .accessibilityElement(children: .contain)
     }
 
     private var placeholder: some View {
@@ -92,6 +83,7 @@ struct ProductImageView: View {
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(.quaternarySystemFill))
+            .accessibilityLabel("无产品图片")
     }
 
     @MainActor

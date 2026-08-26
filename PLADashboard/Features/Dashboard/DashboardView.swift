@@ -57,30 +57,10 @@ struct DashboardView: View {
             .onChange(of: viewModel.tableSort) { _, _ in
                 columnSortOrder = viewModel.columnSortOrder
             }
-            .focusedSceneValue(\.dashboardGoToPreviousPage) {
-                guard viewModel.currentPage > 1,
-                      !viewModel.isLoading,
-                      !viewModel.isPaging else { return }
-                viewModel.goToPreviousPage()
-            }
-            .focusedSceneValue(\.dashboardGoToFirstPage) {
-                guard viewModel.currentPage > 1,
-                      !viewModel.isLoading,
-                      !viewModel.isPaging else { return }
-                viewModel.goToFirstPage()
-            }
-            .focusedSceneValue(\.dashboardGoToNextPage) {
-                guard viewModel.currentPage < viewModel.totalPages,
-                      !viewModel.isLoading,
-                      !viewModel.isPaging else { return }
-                viewModel.goToNextPage()
-            }
-            .focusedSceneValue(\.dashboardGoToLastPage) {
-                guard viewModel.currentPage < viewModel.totalPages,
-                      !viewModel.isLoading,
-                      !viewModel.isPaging else { return }
-                viewModel.goToLastPage()
-            }
+            .focusedSceneValue(\.dashboardGoToPreviousPage, previousPageAction)
+            .focusedSceneValue(\.dashboardGoToFirstPage, firstPageAction)
+            .focusedSceneValue(\.dashboardGoToNextPage, nextPageAction)
+            .focusedSceneValue(\.dashboardGoToLastPage, lastPageAction)
             .focusedSceneValue(
                 \.openSelectedProductDetail,
                 openSelectedProductDetailAction
@@ -172,6 +152,30 @@ struct DashboardView: View {
             return nil
         }
         return { openProductDetail(productID) }
+    }
+
+    private var canPageBackward: Bool {
+        viewModel.currentPage > 1 && !viewModel.isLoading && !viewModel.isPaging
+    }
+
+    private var canPageForward: Bool {
+        viewModel.currentPage < viewModel.totalPages && !viewModel.isLoading && !viewModel.isPaging
+    }
+
+    private var previousPageAction: (() -> Void)? {
+        canPageBackward ? { viewModel.goToPreviousPage() } : nil
+    }
+
+    private var firstPageAction: (() -> Void)? {
+        canPageBackward ? { viewModel.goToFirstPage() } : nil
+    }
+
+    private var nextPageAction: (() -> Void)? {
+        canPageForward ? { viewModel.goToNextPage() } : nil
+    }
+
+    private var lastPageAction: (() -> Void)? {
+        canPageForward ? { viewModel.goToLastPage() } : nil
     }
 
     private func openProductDetail(_ productID: ProductPerformanceRowModel.ID) {

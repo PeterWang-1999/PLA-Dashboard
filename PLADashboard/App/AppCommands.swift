@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct AppCommands: Commands {
-    @FocusedValue(\.windowState) private var windowState
     @FocusedValue(\.triggerImportPicker) private var triggerImportPicker
     @FocusedValue(\.refreshDashboardAggregation) private var refreshDashboardAggregation
     @FocusedValue(\.dashboardGoToPreviousPage) private var dashboardGoToPreviousPage
@@ -36,34 +35,27 @@ struct AppCommands: Commands {
                 dashboardGoToFirstPage?()
             }
             .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+            .disabled(dashboardGoToFirstPage == nil)
 
             Button("上一页") {
                 dashboardGoToPreviousPage?()
             }
             .keyboardShortcut(.leftArrow, modifiers: .command)
+            .disabled(dashboardGoToPreviousPage == nil)
 
             Button("下一页") {
                 dashboardGoToNextPage?()
             }
             .keyboardShortcut(.rightArrow, modifiers: .command)
+            .disabled(dashboardGoToNextPage == nil)
 
             Button("尾页") {
                 dashboardGoToLastPage?()
             }
             .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
-        }
-
-        CommandGroup(after: .sidebar) {
-            Button("切换侧边栏") {
-                windowState?.toggleSidebar()
-            }
-            .keyboardShortcut("s", modifiers: [.command, .control])
+            .disabled(dashboardGoToLastPage == nil)
         }
     }
-}
-
-private struct WindowStateFocusedKey: FocusedValueKey {
-    typealias Value = WindowState
 }
 
 private struct TriggerImportPickerFocusedKey: FocusedValueKey {
@@ -95,11 +87,6 @@ private struct OpenSelectedProductDetailFocusedKey: FocusedValueKey {
 }
 
 extension FocusedValues {
-    var windowState: WindowState? {
-        get { self[WindowStateFocusedKey.self] }
-        set { self[WindowStateFocusedKey.self] = newValue }
-    }
-
     var triggerImportPicker: (() -> Void)? {
         get { self[TriggerImportPickerFocusedKey.self] }
         set { self[TriggerImportPickerFocusedKey.self] = newValue }

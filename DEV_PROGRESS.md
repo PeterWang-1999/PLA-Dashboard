@@ -10,6 +10,44 @@
 
 ## 变更记录
 
+### 2026-08-26 — 拆分数据看板并改进原生交互与 XLSX 取消
+
+**内容**
+
+- 将数据看板中的通用指标卡、广告系列/产品卡片、类目气泡图和组合趋势图拆分为独立文件，页面保留数据编排与筛选动画状态。
+- 移除固定浅色页面底色，统一使用 macOS 系统窗口与控件语义色。
+- 使用系统 `SidebarCommands` 提供侧边栏菜单命令；分页命令按当前可执行状态返回 focused action，避免边界页和加载期间仍可点击。
+- `StreamingXLSXRowParser` 改为 `AsyncThrowingStream` 生产/消费模型，XML 解析任务可在外部任务取消时及时终止。
+- 产品图片分别为加载、成功、缺失、失败和重试按钮提供辅助功能说明。
+
+**涉及文件**
+
+- `PLADashboard/App/AppCommands.swift`
+- `PLADashboard/App/PLADashboardApp.swift`
+- `PLADashboard/App/RootView.swift`
+- `PLADashboard/App/WindowState.swift`
+- `PLADashboard/Data/Import/StreamingXLSXRowParser.swift`
+- `PLADashboard/Features/Dashboard/DashboardView.swift`
+- `PLADashboard/Features/Dashboard/DataDashboardView.swift`
+- `PLADashboard/Features/Dashboard/DataDashboardComponents.swift`
+- `PLADashboard/Features/Dashboard/DataDashboardTrendChart.swift`
+- `PLADashboard/Features/Dashboard/CategoryBubbleChart.swift`
+- `PLADashboard/Features/Dashboard/ProductImageView.swift`
+- `README.md`
+- `CHANGELOG.md`
+- `DEV_PROGRESS.md`
+
+**验证结果**
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer xcodebuild … test \
+  -only-testing:PLADashboardTests/PlaDeliveryDetailImporterTests \
+  -only-testing:PLADashboardTests/XLSXSheetRowCounterTests \
+  -only-testing:PLADashboardTests/DashboardViewModelAccountSwitchTests \
+  -only-testing:PLADashboardTests/WorkspaceCapabilitiesTests
+# TEST SUCCEEDED（22 项）
+```
+
 ### 2026-07-13 — 优化看板翻页性能
 
 **内容**
