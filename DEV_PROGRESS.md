@@ -10,6 +10,32 @@
 
 ## 变更记录
 
+### 2026-08-27 — 支持字母数字混合的 Merchant 变体 ID
+
+**内容**
+
+- Merchant / Google Ads 标准商品 ID 的变体段由“仅数字”扩展为“不区分大小写的字母数字组合”。
+- `13548439_0000G_US_en`、`13216300_0000X_US_en` 等格式以高置信度归一为下划线前的主产品 ID，不再触发低置信度导入警告。
+- 新增规范化单元测试和 Merchant Center TSV 端到端导入测试，校验有效行、警告数及数据库产品 ID。
+
+**涉及文件**
+
+- `PLADashboard/Data/Import/ProductIDNormalizer.swift`
+- `PLADashboardTests/ProductIDNormalizerTests.swift`
+- `PLADashboardTests/MerchantCenterImporterTests.swift`
+- `README.md`
+- `CHANGELOG.md`
+- `DEV_PROGRESS.md`
+
+**验证结果**
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer xcodebuild … test \
+  -only-testing:PLADashboardTests/ProductIDNormalizerTests \
+  -only-testing:PLADashboardTests/MerchantCenterImporterTests
+# TEST SUCCEEDED（16 项）
+```
+
 ### 2026-08-26 — 拆分数据看板并改进原生交互与 XLSX 取消
 
 **内容**

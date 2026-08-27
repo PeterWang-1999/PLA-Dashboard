@@ -33,9 +33,9 @@ enum ProductIDNormalizer {
         options: [.caseInsensitive]
     )
 
-    /// Merchant / Google Ads 常见 item ID：`19556772_00006_us_en`
+    /// Merchant / Google Ads 常见 item ID：`19556772_00006_us_en` / `13548439_0000G_US_en`
     private static let merchantItemPattern = try! NSRegularExpression(
-        pattern: #"^([0-9]+)_[0-9]+_[a-z]{2}_[a-z]{2}$"#,
+        pattern: #"^([0-9]+)_[0-9a-z]+_[a-z]{2}_[a-z]{2}$"#,
         options: [.caseInsensitive]
     )
 

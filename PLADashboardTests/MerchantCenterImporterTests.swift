@@ -61,6 +61,24 @@ Invalid Row\t\thttps://example.com/missing\thttps://example.com/missing.jpg\t\t\
         )
     }
 
+    func testImportAlphanumericVariantIDWithoutWarning() async throws {
+        let tsv = """
+标题\t序号\tcanonical link\t图片链接
+Sample Dress\t13548439_0000G_US_en\thttps://example.com/dress\thttps://example.com/dress.jpg
+"""
+        let databaseClient = try DatabaseClient.makeInMemoryForTesting()
+        let tempURL = try writeTemporaryTSV(tsv)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        let importer = MerchantCenterImporter(databaseClient: databaseClient, accountKind: .thirdParty)
+        let result = try await importer.importFile(sourceURL: tempURL) { _ in }
+
+        XCTAssertEqual(result.job.validRows, 1)
+        XCTAssertEqual(result.job.warningRows, 0)
+        let productIDs = try await databaseClient.fetchDistinctProductIds(importId: result.importId)
+        XCTAssertEqual(productIDs, ["13548439"])
+    }
+
     func testColumnMapAcceptsEnglishAliases() throws {
         let headers = [
             "title", "id", "link", "image link",
