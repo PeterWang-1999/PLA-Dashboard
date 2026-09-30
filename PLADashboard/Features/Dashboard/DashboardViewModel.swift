@@ -30,8 +30,27 @@ final class DashboardViewModel {
 
     private var databaseClient: DatabaseClient?
     private var databaseRows: [ProductPerformanceRowModel] = []
-    private var searchTask: Task<Void, Never>?
     private var refreshTask: Task<Void, Never>?
+    private var retryTask: Task<Void, Never>?
+    private var tableRequestID: UInt = 0
+    private var chartRequestID: UInt = 0
+    @ObservationIgnored private let pageLoader: PageLoader
+    @ObservationIgnored private let chartLoader: ChartLoader
+
+    typealias PageLoader = @Sendable (DatabaseClient, DashboardQueryFilters, Int, Int) async throws -> DashboardPageResult
+    typealias ChartLoader = @Sendable (DatabaseClient, DashboardQueryFilters, WorkspaceAccountKind) async throws -> DataDashboardSnapshot
+
+    init(
+        pageLoader: @escaping PageLoader = { client, filters, page, size in
+            try await client.fetchDashboardPage(filters: filters, page: page, pageSize: size)
+        },
+        chartLoader: @escaping ChartLoader = { client, filters, kind in
+            try await client.fetchDataDashboard(filters: filters, accountKind: kind)
+        }
+    ) {
+        self.pageLoader = pageLoader
+        self.chartLoader = chartLoader
+    }
     /// 每次账户切换递增，用于丢弃过期的异步加载结果。
     private var loadGeneration: UInt = 0
     private(set) var warningLabelEngine: WarningLabelEngine = .thirdPartyCohort
@@ -88,8 +107,10 @@ final class DashboardViewModel {
 
     func resetForAccountSwitch() {
         loadGeneration &+= 1
-        searchTask?.cancel()
-        refreshTask?.cancel()
+        invalidateTableRequest()
+        retryTask?.cancel()
+        retryTask = nil
+        chartRequestID &+= 1
         searchText = ""
         selectedAlertFilter = Self.alertFilterDefaultOption
         selectedCustomLabelFilter = .all
@@ -116,16 +137,17 @@ final class DashboardViewModel {
     }
 
     func retryAfterError() {
-        refreshTask?.cancel()
+        retryTask?.cancel()
+        guard dataSource == .empty, let bootstrapAction else {
+            scheduleRefresh()
+            return
+        }
+        let requestID = invalidateTableRequest()
         let generation = loadGeneration
-        refreshTask = Task { @MainActor in
-            guard generation == loadGeneration else { return }
+        retryTask = Task { @MainActor in
+            guard !Task.isCancelled, generation == loadGeneration, requestID == tableRequestID else { return }
             errorMessage = nil
-            if dataSource == .empty, let bootstrapAction {
-                await bootstrapAction()
-            } else {
-                await refreshData()
-            }
+            await bootstrapAction()
         }
     }
 
@@ -208,13 +230,7 @@ final class DashboardViewModel {
 
     func onSearchTextChanged() {
         currentPage = 1
-        searchTask?.cancel()
-        let generation = loadGeneration
-        searchTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled, generation == loadGeneration else { return }
-            await refreshData(mode: .full)
-        }
+        scheduleRefresh(mode: .full, debounce: .milliseconds(250))
     }
 
     func onFiltersChanged() {
@@ -223,7 +239,17 @@ final class DashboardViewModel {
     }
 
     func refreshDataDashboard() async {
+        guard !Task.isCancelled else { return }
+        chartRequestID &+= 1
+        let requestID = chartRequestID
         let generation = loadGeneration
+        let filters = makeCurrentFilters()
+        let kind = accountKind
+        defer {
+            if generation == loadGeneration, requestID == chartRequestID {
+                isLoadingDataDashboard = false
+            }
+        }
         guard dataSource == .database, let databaseClient else {
             dataDashboardSnapshot = .empty
             return
@@ -231,18 +257,17 @@ final class DashboardViewModel {
         isLoadingDataDashboard = true
         dataDashboardErrorMessage = nil
         do {
-            let snapshot = try await databaseClient.fetchDataDashboard(
-                filters: makeCurrentFilters(),
-                accountKind: accountKind
-            )
-            guard generation == loadGeneration else { return }
+            let snapshot = try await chartLoader(databaseClient, filters, kind)
+            guard !Task.isCancelled, generation == loadGeneration, requestID == chartRequestID,
+                  filters == makeCurrentFilters(), kind == accountKind else { return }
             dataDashboardSnapshot = snapshot
+        } catch is CancellationError {
+            return
         } catch {
-            guard generation == loadGeneration else { return }
+            guard !Task.isCancelled, generation == loadGeneration, requestID == chartRequestID,
+                  filters == makeCurrentFilters(), kind == accountKind else { return }
             dataDashboardErrorMessage = error.localizedDescription
         }
-        guard generation == loadGeneration else { return }
-        isLoadingDataDashboard = false
     }
 
     func setTableSort(_ sort: DashboardTableSort) {
@@ -269,18 +294,45 @@ final class DashboardViewModel {
         case paging
     }
 
-    func scheduleRefresh(mode: RefreshMode = .full) {
+    @discardableResult
+    private func invalidateTableRequest() -> UInt {
         refreshTask?.cancel()
+        refreshTask = nil
+        tableRequestID &+= 1
+        isLoading = false
+        isPaging = false
+        return tableRequestID
+    }
+
+    func scheduleRefresh(mode: RefreshMode = .full, debounce: Duration = .zero) {
+        let requestID = invalidateTableRequest()
         let generation = loadGeneration
         refreshTask = Task { @MainActor in
-            guard generation == loadGeneration else { return }
-            await refreshData(mode: mode)
+            do {
+                if debounce > .zero { try await Task.sleep(for: debounce) }
+            } catch { return }
+            await refreshData(mode: mode, requestID: requestID, generation: generation)
         }
     }
 
     func refreshData(mode: RefreshMode = .full) async {
-        let generation = loadGeneration
+        guard !Task.isCancelled else { return }
+        let requestID = invalidateTableRequest()
+        await refreshData(mode: mode, requestID: requestID, generation: loadGeneration)
+    }
+
+    private func refreshData(mode: RefreshMode, requestID: UInt, generation: UInt) async {
+        guard !Task.isCancelled, generation == loadGeneration, requestID == tableRequestID else { return }
         guard dataSource == .database, let databaseClient else { return }
+        let filters = makeCurrentFilters()
+        let requestedPage = currentPage
+        let requestedSize = pageSize
+        defer {
+            if generation == loadGeneration, requestID == tableRequestID {
+                isLoading = false
+                isPaging = false
+            }
+        }
         switch mode {
         case .full:
             isLoading = true
@@ -291,20 +343,10 @@ final class DashboardViewModel {
         errorMessage = nil
 
         do {
-            let filters = DashboardQueryFilters(
-                searchText: searchText,
-                alertFilter: selectedAlertFilter,
-                customLabelFilter: selectedCustomLabelFilter,
-                categoryFilter: selectedCategoryFilter,
-                sort: tableSort,
-                warningLabelEngine: warningLabelEngine
-            )
-            let result = try await databaseClient.fetchDashboardPage(
-                filters: filters,
-                page: currentPage,
-                pageSize: pageSize
-            )
-            guard generation == loadGeneration else { return }
+            let result = try await pageLoader(databaseClient, filters, requestedPage, requestedSize)
+            guard !Task.isCancelled, generation == loadGeneration, requestID == tableRequestID,
+                  filters == makeCurrentFilters(), requestedPage == currentPage,
+                  requestedSize == pageSize else { return }
             databaseRows = result.rows
             totalPages = result.totalPages
             reportingPeriodLabel = WeekCalendar.dashboardDataPeriodLabel(
@@ -316,8 +358,12 @@ final class DashboardViewModel {
             if currentPage > totalPages {
                 currentPage = totalPages
             }
+        } catch is CancellationError {
+            return
         } catch {
-            guard generation == loadGeneration else { return }
+            guard !Task.isCancelled, generation == loadGeneration, requestID == tableRequestID,
+                  filters == makeCurrentFilters(), requestedPage == currentPage,
+                  requestedSize == pageSize else { return }
             errorMessage = error.localizedDescription
             databaseRows = []
             totalPages = 1
@@ -325,10 +371,6 @@ final class DashboardViewModel {
             reportingWeekStarts = []
             latestDataDay = nil
         }
-
-        guard generation == loadGeneration else { return }
-        isLoading = false
-        isPaging = false
     }
 
     func rebuildMetricsAndRefresh() async {

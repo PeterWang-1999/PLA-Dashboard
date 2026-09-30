@@ -6,6 +6,7 @@ extension DatabaseClient {
         filters: DashboardQueryFilters,
         accountKind: WorkspaceAccountKind
     ) throws -> DataDashboardSnapshot {
+        try Task.checkCancellation()
         let bundle = try fetchDashboardAllRows(filters: filters)
         guard !bundle.rows.isEmpty else { return .empty }
 

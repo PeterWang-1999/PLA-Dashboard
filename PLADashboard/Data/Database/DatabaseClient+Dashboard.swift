@@ -70,6 +70,7 @@ extension DatabaseClient {
         page: Int,
         pageSize: Int
     ) throws -> DashboardPageResult {
+        try Task.checkCancellation()
         let signpost = PerformanceSignposts.beginDashboardFetchPage()
         defer { PerformanceSignposts.endDashboardFetchPage(signpost) }
 
@@ -119,6 +120,7 @@ extension DatabaseClient {
     static let dashboardExportRowLimit = 50_000
 
     func fetchDashboardAllRows(filters: DashboardQueryFilters) throws -> DashboardExportBundle {
+        try Task.checkCancellation()
         let contextBundle = try loadDashboardMetricsContext()
         guard let contextBundle else {
             return DashboardExportBundle(rows: [], weekStarts: [], totalCount: 0)
@@ -222,6 +224,7 @@ extension DatabaseClient {
             var mappedRows: [ProductPerformanceRowModel] = []
 
             while true {
+                try Task.checkCancellation()
                 let ranked = try fetchRankedProducts(
                     filters: filters,
                     weekStarts: weekStarts,
@@ -328,6 +331,7 @@ extension DatabaseClient {
         let snapshotLabels = try snapshotLabelsIfNeeded(for: filters.warningLabelEngine)
 
         while true {
+            try Task.checkCancellation()
             let ranked = try fetchRankedProducts(
                 filters: filters,
                 weekStarts: weekStarts,
