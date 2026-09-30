@@ -20,17 +20,24 @@ final class ImportViewModel {
     private var databaseClient: DatabaseClient?
     private var accountKind: WorkspaceAccountKind = .thirdParty
     private var importTask: Task<Void, Never>?
+    private var accountStore: AccountStore?
+    private var configuredWorkspaceRevision: UInt = 0
+    private var loadGeneration: UInt = 0
+    private var activeOperationID: UUID?
     private var onReloadFilterCatalogs: (@Sendable () async -> Void)?
     private var onImportCompleted: (@Sendable () async -> Void)?
 
     func configure(
         databaseClient: DatabaseClient,
+        accountStore: AccountStore,
         capabilities: WorkspaceCapabilities,
         accountKind: WorkspaceAccountKind,
         onReloadFilterCatalogs: @escaping @Sendable () async -> Void,
         onImportCompleted: @escaping @Sendable () async -> Void
     ) {
         self.databaseClient = databaseClient
+        self.accountStore = accountStore
+        configuredWorkspaceRevision = accountStore.workspaceRevision
         self.accountKind = accountKind
         self.onReloadFilterCatalogs = onReloadFilterCatalogs
         self.onImportCompleted = onImportCompleted
@@ -45,6 +52,8 @@ final class ImportViewModel {
     }
 
     func resetForAccountSwitch() {
+        loadGeneration &+= 1
+        activeOperationID = nil
         importTask?.cancel()
         importTask = nil
         latestResult = nil
@@ -78,10 +87,14 @@ final class ImportViewModel {
     }
 
     func loadHistory() async {
+        let generation = loadGeneration
         guard let databaseClient else { return }
         do {
-            importJobs = try await databaseClient.fetchImportJobs()
+            let jobs = try await databaseClient.fetchImportJobs()
+            guard generation == loadGeneration else { return }
+            importJobs = jobs
         } catch {
+            guard generation == loadGeneration else { return }
             errorMessage = error.localizedDescription
         }
     }
@@ -107,12 +120,28 @@ final class ImportViewModel {
     }
 
     private func startImport(at url: URL, fileName: String? = nil) {
-        guard let databaseClient else {
+        guard let databaseClient, let accountStore else {
             errorMessage = "数据库未就绪"
             return
         }
 
-        importTask?.cancel()
+        let operationID: UUID
+        do {
+            operationID = try accountStore.beginImport(
+                accountID: databaseClient.accountID,
+                workspaceRevision: configuredWorkspaceRevision
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+            return
+        }
+        activeOperationID = operationID
+        isImporting = true
+        errorMessage = nil
+        latestResult = nil
+        latestErrors = []
+        isLoadingImportErrors = false
+        progress = nil
         let sourceKind = selectedSourceKind
         let accountKind = accountKind
         let reloadFilterCatalogs = onReloadFilterCatalogs
@@ -121,18 +150,22 @@ final class ImportViewModel {
 
         importTask = Task(priority: .userInitiated) { [weak self] in
             defer {
+                accountStore.endImport(operationID)
                 if securityScopedAccess {
                     url.stopAccessingSecurityScopedResource()
                 }
             }
 
             guard let self else { return }
-            self.isImporting = true
-            self.errorMessage = nil
-            self.latestResult = nil
-            self.latestErrors = []
-            self.isLoadingImportErrors = false
-            self.progress = nil
+            defer {
+                if self.activeOperationID == operationID {
+                    self.activeOperationID = nil
+                    self.importTask = nil
+                    self.isImporting = false
+                    self.isLoadingImportErrors = false
+                    self.progress = nil
+                }
+            }
 
             do {
                 let result = try await ImportPipelineRunner.importFile(
@@ -142,11 +175,12 @@ final class ImportViewModel {
                     databaseClient: databaseClient,
                     accountKind: accountKind,
                     onProgress: { update in
-                        await self.updateProgress(update)
+                        await self.updateProgress(update, operationID: operationID)
                     }
                 )
 
                 try Task.checkCancellation()
+                guard self.isCurrentOperation(operationID) else { return }
 
                 let shouldLoadErrors = result.job.invalidRows > 0 || result.job.warningRows > 0
                 self.latestResult = ImportResult(
@@ -164,14 +198,16 @@ final class ImportViewModel {
                     databaseClient: databaseClient,
                     accountKind: accountKind,
                     onProgress: { update in
-                        await self.updateProgress(update)
+                        await self.updateProgress(update, operationID: operationID)
                     },
                     reloadFilterCatalogs: {
+                        guard await self.isCurrentOperation(operationID), !Task.isCancelled else { return }
                         if let reloadFilterCatalogs {
                             await reloadFilterCatalogs()
                         }
                     },
                     refreshDashboard: {
+                        guard await self.isCurrentOperation(operationID), !Task.isCancelled else { return }
                         if let importCompleted {
                             await importCompleted()
                         }
@@ -179,48 +215,50 @@ final class ImportViewModel {
                 )
 
                 try Task.checkCancellation()
+                guard self.isCurrentOperation(operationID) else { return }
 
                 self.latestErrors = result.errors
-                self.isLoadingImportErrors = false
-                self.isImporting = false
-                self.progress = nil
                 await self.loadHistory()
             } catch is CancellationError {
-                self.isImporting = false
-                self.isLoadingImportErrors = false
-                self.progress = nil
+                guard self.isCurrentOperation(operationID) else { return }
                 self.errorMessage = nil
                 await self.loadHistory()
             } catch let pipelineError as ImportPipelineError {
+                guard self.isCurrentOperation(operationID) else { return }
                 if case .duplicateFile = pipelineError, sourceKind == .merchantCenter {
                     let importer = MerchantCenterImporter(
                         databaseClient: databaseClient,
                         accountKind: accountKind
                     )
                     _ = try? await importer.refreshProductCategories(sourceURL: url)
+                    guard self.isCurrentOperation(operationID), !Task.isCancelled else { return }
                     if let reloadFilterCatalogs {
                         await reloadFilterCatalogs()
                     }
+                    guard self.isCurrentOperation(operationID), !Task.isCancelled else { return }
                     if let importCompleted {
                         await importCompleted()
                     }
                 }
+                guard self.isCurrentOperation(operationID), !Task.isCancelled else { return }
                 self.errorMessage = ImportUserFacingError.message(for: pipelineError)
-                self.isImporting = false
-                self.isLoadingImportErrors = false
-                self.progress = nil
                 await self.loadHistory()
             } catch {
+                guard self.isCurrentOperation(operationID) else { return }
                 self.errorMessage = ImportUserFacingError.message(for: error)
-                self.isImporting = false
-                self.isLoadingImportErrors = false
-                self.progress = nil
                 await self.loadHistory()
             }
         }
     }
 
-    private func updateProgress(_ update: ImportProgress) {
+    private func isCurrentOperation(_ id: UUID) -> Bool {
+        activeOperationID == id
+            && accountStore?.workspaceRevision == configuredWorkspaceRevision
+            && accountStore?.activeAccountID == databaseClient?.accountID
+    }
+
+    private func updateProgress(_ update: ImportProgress, operationID: UUID) {
+        guard isCurrentOperation(operationID), !Task.isCancelled else { return }
         progress = update
     }
 }

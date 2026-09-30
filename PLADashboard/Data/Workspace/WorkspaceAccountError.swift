@@ -7,6 +7,7 @@ enum WorkspaceAccountError: Error, LocalizedError {
     case incompleteMigration(String)
     case accountNotFound(String)
     case importInProgress
+    case workspaceChanged
 
     var errorDescription: String? {
         switch self {
@@ -21,7 +22,9 @@ enum WorkspaceAccountError: Error, LocalizedError {
         case .accountNotFound(let id):
             "账户不存在：\(id)"
         case .importInProgress:
-            "导入进行中，无法切换账户"
+            "导入进行中，请等待完成或取消后再操作"
+        case .workspaceChanged:
+            "账户正在切换或工作区已更新，请稍后重试"
         }
     }
 }

@@ -101,6 +101,102 @@ Sample Dress\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/dres
         }
     }
 
+    func testSharedImportBlocksSwitchWithoutWindowLocalFlag() async throws {
+        let store = AccountStore()
+        await store.bootstrap()
+        let accountID = try XCTUnwrap(store.activeAccountID)
+        let accountB = try store.createAccount(name: "账户 B")
+        let revision = store.workspaceRevision
+        let operationID = try store.beginImport(accountID: accountID, workspaceRevision: revision)
+
+        do {
+            try await store.switchAccount(to: accountB.id)
+            XCTFail("另一窗口未传入本地导入状态，也必须阻止切换")
+        } catch {
+            guard case WorkspaceAccountError.importInProgress = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+        XCTAssertEqual(store.activeAccountID, accountID)
+        XCTAssertEqual(store.workspaceRevision, revision)
+        XCTAssertEqual(try WorkspaceAccountPersistence.load()?.activeAccountID, accountID)
+
+        store.endImport(operationID)
+        try await store.switchAccount(to: accountB.id)
+        XCTAssertEqual(store.activeAccountID, accountB.id)
+    }
+
+    func testSecondImportAndStaleCompletionCannotReleaseActiveImport() async throws {
+        let store = AccountStore()
+        await store.bootstrap()
+        let accountID = try XCTUnwrap(store.activeAccountID)
+        let revision = store.workspaceRevision
+        let first = try store.beginImport(accountID: accountID, workspaceRevision: revision)
+        XCTAssertThrowsError(try store.beginImport(accountID: accountID, workspaceRevision: revision))
+        store.endImport(first)
+
+        let second = try store.beginImport(accountID: accountID, workspaceRevision: revision)
+        store.endImport(first)
+        XCTAssertTrue(store.isImportInProgress)
+        store.endImport(second)
+        XCTAssertFalse(store.isImportInProgress)
+    }
+
+    func testImportViewModelsShareReservationAndReleaseAfterFailure() async throws {
+        let store = AccountStore()
+        await store.bootstrap()
+        let client = try XCTUnwrap(store.activeDatabaseClient)
+        let firstWindow = ImportViewModel()
+        let secondWindow = ImportViewModel()
+        for model in [firstWindow, secondWindow] {
+            model.configure(
+                databaseClient: client,
+                accountStore: store,
+                capabilities: WorkspaceCapabilities.forKind(.thirdParty),
+                accountKind: .thirdParty,
+                onReloadFilterCatalogs: {},
+                onImportCompleted: {}
+            )
+        }
+        let missingFile = workspaceRoot.appendingPathComponent("missing.tsv")
+        firstWindow.handleImportedURLs([missingFile])
+        // 任务尚未运行，保护也必须已经生效。
+        XCTAssertTrue(store.isImportInProgress)
+        XCTAssertTrue(firstWindow.isImporting)
+        secondWindow.handleImportedURLs([missingFile])
+        XCTAssertFalse(secondWindow.isImporting)
+        XCTAssertNotNil(secondWindow.errorMessage)
+
+        for _ in 0..<200 where store.isImportInProgress {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(store.isImportInProgress)
+        XCTAssertFalse(firstWindow.isImporting)
+        XCTAssertNotNil(firstWindow.errorMessage)
+    }
+
+    func testImportRejectsStaleWorkspaceAndInFlightAccountSwitch() async throws {
+        let store = AccountStore()
+        await store.bootstrap()
+        let originalID = try XCTUnwrap(store.activeAccountID)
+        let originalRevision = store.workspaceRevision
+        let accountB = try store.createAccount(name: "账户 B")
+
+        let switchTask = Task { try await store.switchAccount(to: accountB.id) }
+        // 让切换进入首个 await；此时导入不能占用即将切换的工作区。
+        for _ in 0..<100 where !store.isSwitchingAccount && store.activeAccountID == originalID {
+            await Task.yield()
+        }
+        XCTAssertThrowsError(try store.beginImport(
+            accountID: originalID, workspaceRevision: originalRevision
+        ))
+        try await switchTask.value
+        XCTAssertThrowsError(try store.beginImport(
+            accountID: originalID, workspaceRevision: originalRevision
+        ))
+        XCTAssertFalse(store.isImportInProgress)
+    }
+
     func testSwitchAccountIsolation() async throws {
         let store = AccountStore()
         await store.bootstrap()

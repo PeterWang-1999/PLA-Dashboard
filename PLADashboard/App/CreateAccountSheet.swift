@@ -82,7 +82,7 @@ struct CreateAccountSheet: View {
 
         do {
             let account = try accountStore.createAccount(name: trimmedName, kind: selectedKind)
-            if !isImportInProgress {
+            if !isImportInProgress && !accountStore.isImportInProgress {
                 try await accountStore.switchAccount(to: account.id, isImportInProgress: false)
             }
             dismiss()

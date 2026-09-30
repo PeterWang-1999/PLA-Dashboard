@@ -98,7 +98,7 @@ struct RootView: View {
             Divider()
 
             AccountSwitcherView(
-                isImportInProgress: importViewModel.isImporting,
+                isImportInProgress: accountStore.isImportInProgress,
                 onSwitchBlocked: { showImportBlockingAlert = true }
             )
             .padding(.horizontal, 12)
@@ -172,6 +172,7 @@ struct RootView: View {
         }
         importViewModel.configure(
             databaseClient: databaseClient,
+            accountStore: accountStore,
             capabilities: capabilities,
             accountKind: accountStore.activeAccount?.kind ?? .thirdParty,
             onReloadFilterCatalogs: {

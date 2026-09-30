@@ -15,6 +15,28 @@ final class AccountStore {
     private(set) var activeDatabaseClient: DatabaseClient?
     /// 账户工作区就绪令牌；仅在 manifest 与 database client 同步后递增，供 SwiftUI `.task(id:)` 触发加载。
     private(set) var workspaceRevision: UInt = 0
+    private(set) var isSwitchingAccount = false
+    private var activeImportID: UUID?
+
+    var isImportInProgress: Bool { activeImportID != nil }
+
+    /// 在启动异步任务前占用工作区，所有窗口共享此保护。
+    func beginImport(accountID: String, workspaceRevision: UInt) throws -> UUID {
+        guard phase == .ready, !isSwitchingAccount,
+              activeAccountID == accountID,
+              self.workspaceRevision == workspaceRevision else {
+            throw WorkspaceAccountError.workspaceChanged
+        }
+        guard activeImportID == nil else { throw WorkspaceAccountError.importInProgress }
+        let id = UUID()
+        activeImportID = id
+        return id
+    }
+
+    func endImport(_ id: UUID) {
+        guard activeImportID == id else { return }
+        activeImportID = nil
+    }
 
     var accounts: [WorkspaceAccount] {
         manifest?.accounts ?? []
@@ -60,10 +82,13 @@ final class AccountStore {
         guard phase == .ready else {
             throw WorkspaceAccountError.invalidManifest("账户尚未就绪")
         }
-        if isImportInProgress {
+        if isImportInProgress || self.isImportInProgress {
             throw WorkspaceAccountError.importInProgress
         }
+        guard !isSwitchingAccount else { throw WorkspaceAccountError.workspaceChanged }
         guard activeAccountID != accountID else { return }
+        isSwitchingAccount = true
+        defer { isSwitchingAccount = false }
 
         let client = try DatabaseClient.make(accountID: accountID)
         try await client.migrateIfNeeded()
