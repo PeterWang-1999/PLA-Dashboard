@@ -119,6 +119,33 @@ extension DatabaseClient {
 
     static let dashboardExportRowLimit = 50_000
 
+    /// 图表只需要筛选后的产品身份和报告窗口，不受 CSV 导出条数限制。
+    func fetchDataDashboardProductSelection(
+        filters: DashboardQueryFilters
+    ) throws -> (productIDs: [String], weekStarts: [String]) {
+        try Task.checkCancellation()
+        guard let context = try loadDashboardMetricsContext() else { return ([], []) }
+        let alertLabel = alertFilterLabel(for: filters.alertFilter)
+        if alertLabel != nil, filters.warningLabelEngine == .thirdPartyCohort {
+            // 动态预警继续使用原规则计算，避免图表与产品表筛选口径不同。
+            let rows = try fetchAllMappedRows(
+                filters: filters,
+                weekStarts: context.weekStarts,
+                metricsContext: context.metricsContext
+            )
+            return (rows.map(\.id), context.weekStarts)
+        }
+        let ranked = try fetchRankedProducts(
+            filters: filters,
+            weekStarts: context.weekStarts,
+            limit: nil,
+            offset: 0,
+            includeTotalCount: false,
+            snapshotLabelFilter: filters.warningLabelEngine == .selfBuiltSnapshot ? alertLabel : nil
+        )
+        return (ranked.products.map(\.productId), context.weekStarts)
+    }
+
     func fetchDashboardAllRows(filters: DashboardQueryFilters) throws -> DashboardExportBundle {
         try Task.checkCancellation()
         let contextBundle = try loadDashboardMetricsContext()

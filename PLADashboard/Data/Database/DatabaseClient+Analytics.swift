@@ -167,19 +167,26 @@ extension DatabaseClient {
         weekStarts: [String]
     ) throws -> [ProductWeeklyMetricsRecord] {
         guard !productIds.isEmpty, !weekStarts.isEmpty else { return [] }
+        let uniqueIDs = Array(Set(productIds))
         return try dbQueue.read { db in
-            let idPlaceholders = Array(repeating: "?", count: productIds.count).joined(separator: ", ")
             let weekPlaceholders = Array(repeating: "?", count: weekStarts.count).joined(separator: ", ")
-            let sql = """
+            var records: [ProductWeeklyMetricsRecord] = []
+            for start in stride(from: 0, to: uniqueIDs.count, by: 500) {
+                try Task.checkCancellation()
+                let chunk = uniqueIDs[start..<min(start + 500, uniqueIDs.count)]
+                let idPlaceholders = Array(repeating: "?", count: chunk.count).joined(separator: ", ")
+                let sql = """
                 SELECT *
                 FROM product_weekly_metrics
                 WHERE product_id IN (\(idPlaceholders))
                   AND week_start IN (\(weekPlaceholders));
                 """
-            var arguments = StatementArguments()
-            for id in productIds { arguments += [id] }
-            for week in weekStarts { arguments += [week] }
-            return try ProductWeeklyMetricsRecord.fetchAll(db, sql: sql, arguments: arguments)
+                var arguments = StatementArguments()
+                for id in chunk { arguments += [id] }
+                for week in weekStarts { arguments += [week] }
+                records.append(contentsOf: try ProductWeeklyMetricsRecord.fetchAll(db, sql: sql, arguments: arguments))
+            }
+            return records
         }
     }
 

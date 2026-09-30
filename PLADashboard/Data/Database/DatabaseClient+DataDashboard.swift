@@ -7,11 +7,11 @@ extension DatabaseClient {
         accountKind: WorkspaceAccountKind
     ) throws -> DataDashboardSnapshot {
         try Task.checkCancellation()
-        let bundle = try fetchDashboardAllRows(filters: filters)
-        guard !bundle.rows.isEmpty else { return .empty }
+        let selection = try fetchDataDashboardProductSelection(filters: filters)
+        guard !selection.productIDs.isEmpty else { return .empty }
 
-        let productIDs = bundle.rows.map(\.id)
-        let weekStarts = bundle.weekStarts
+        let productIDs = selection.productIDs
+        let weekStarts = selection.weekStarts
         let weeklyRecords = try fetchWeeklyMetrics(productIds: productIDs, weekStarts: weekStarts)
         let weekly = aggregateWeekly(records: weeklyRecords, weekStarts: weekStarts)
         let overallWeekly = try fetchOverallWeeklyMetrics(weekStarts: weekStarts)
@@ -33,7 +33,7 @@ extension DatabaseClient {
             weekStarts: weekStarts,
             portfolioMetrics: totals
         )
-        let products = try fetchDashboardTopProducts(rows: bundle.rows, weeklyRecords: weeklyRecords)
+        let products = try fetchDashboardTopProducts(productIDs: productIDs, weeklyRecords: weeklyRecords)
 
         return DataDashboardSnapshot(
             metrics: makeDashboardMetrics(
@@ -191,6 +191,7 @@ extension DatabaseClient {
         var byDay: [String: AggregatedMetrics] = [:]
 
         for chunk in productIDs.chunked(maxCount: 500) {
+            try Task.checkCancellation()
             try dbQueue.read { db in
                 let placeholders = chunk.placeholders
                 var arguments: StatementArguments = [ImportJobStatus.succeeded.rawValue, startDay, latestDay]
@@ -248,6 +249,7 @@ extension DatabaseClient {
         guard let startDay, let latestDay else { return [] }
         var merged: [String: AggregatedMetrics] = [:]
         for chunk in productIDs.chunked(maxCount: 500) {
+            try Task.checkCancellation()
             try dbQueue.read { db in
                 var arguments: StatementArguments = [ImportJobStatus.succeeded.rawValue, startDay, latestDay]
                 for productID in chunk { arguments += [productID] }
@@ -290,6 +292,7 @@ extension DatabaseClient {
     ) throws -> [DataDashboardCategoryPoint] {
         var merged: [String: [String: AggregatedMetrics]] = [:]
         for chunk in productIDs.chunked(maxCount: 500) {
+            try Task.checkCancellation()
             try dbQueue.read { db in
                 var arguments = StatementArguments()
                 for productID in chunk { arguments += [productID] }
@@ -341,11 +344,18 @@ extension DatabaseClient {
     }
 
     private func fetchDashboardTopProducts(
-        rows: [ProductPerformanceRowModel],
+        productIDs: [String],
         weeklyRecords: [ProductWeeklyMetricsRecord]
     ) throws -> [DataDashboardProduct] {
-        let topRows = rows.sorted { $0.sortCostCents > $1.sortCostCents }.prefix(10)
-        let ids = topRows.map(\.id)
+        let metricsByID = Dictionary(grouping: weeklyRecords, by: \.productId).mapValues {
+            $0.map(\.aggregatedMetrics).reduce(AggregatedMetrics(), +)
+        }
+        // 保留同花费产品在原筛选排序中的相对次序。
+        let ids = productIDs.enumerated().sorted { lhs, rhs in
+            let leftCost = metricsByID[lhs.element]?.costCents ?? 0
+            let rightCost = metricsByID[rhs.element]?.costCents ?? 0
+            return leftCost == rightCost ? lhs.offset < rhs.offset : leftCost > rightCost
+        }.prefix(10).map(\.element)
         let products = try dbQueue.read { db in
             var arguments = StatementArguments()
             for productID in ids { arguments += [productID] }
@@ -356,16 +366,13 @@ extension DatabaseClient {
             )
         }
         let productByID = Dictionary(uniqueKeysWithValues: products.map { ($0.productId, $0) })
-        let metricsByID = Dictionary(grouping: weeklyRecords, by: \.productId).mapValues {
-            $0.map(\.aggregatedMetrics).reduce(AggregatedMetrics(), +)
-        }
-        return topRows.map { row in
-            let product = productByID[row.id]
+        return ids.map { id in
+            let product = productByID[id]
             return DataDashboardProduct(
-                productID: row.id,
-                title: product?.title?.nilIfBlank ?? row.lsin,
+                productID: id,
+                title: product?.title?.nilIfBlank ?? product?.lsin ?? id,
                 imageURL: product?.imageUrl.flatMap(URL.init(string:)),
-                metrics: metricsByID[row.id] ?? AggregatedMetrics()
+                metrics: metricsByID[id] ?? AggregatedMetrics()
             )
         }
     }
