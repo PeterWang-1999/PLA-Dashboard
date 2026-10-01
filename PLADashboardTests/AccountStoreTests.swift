@@ -105,7 +105,7 @@ Sample Dress\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/dres
         let store = AccountStore()
         await store.bootstrap()
         let accountID = try XCTUnwrap(store.activeAccountID)
-        let accountB = try store.createAccount(name: "账户 B")
+        let accountB = try await store.createAccount(name: "账户 B")
         let revision = store.workspaceRevision
         let operationID = try store.beginImport(accountID: accountID, workspaceRevision: revision)
 
@@ -180,7 +180,7 @@ Sample Dress\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/dres
         await store.bootstrap()
         let originalID = try XCTUnwrap(store.activeAccountID)
         let originalRevision = store.workspaceRevision
-        let accountB = try store.createAccount(name: "账户 B")
+        let accountB = try await store.createAccount(name: "账户 B")
 
         let switchTask = Task { try await store.switchAccount(to: accountB.id) }
         // 让切换进入首个 await；此时导入不能占用即将切换的工作区。
@@ -231,7 +231,7 @@ Sample Dress\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/dres
         await store.bootstrap()
 
         let initialCount = store.accounts.count
-        let account = try store.createAccount(name: "新建店铺", kind: .thirdParty)
+        let account = try await store.createAccount(name: "新建店铺", kind: .thirdParty)
 
         XCTAssertEqual(store.accounts.count, initialCount + 1)
         XCTAssertEqual(account.name, "新建店铺")
@@ -242,10 +242,12 @@ Sample Dress\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/dres
     func testCreateAccountRequiresReadyPhase() async throws {
         let store = AccountStore()
 
-        XCTAssertThrowsError(try store.createAccount(name: "测试", kind: .thirdParty)) { error in
+        do {
+            _ = try await store.createAccount(name: "测试", kind: .thirdParty)
+            XCTFail("Expected invalidManifest")
+        } catch {
             guard case WorkspaceAccountError.invalidManifest = error else {
-                XCTFail("Unexpected error: \(error)")
-                return
+                return XCTFail("Unexpected error: \(error)")
             }
         }
     }
@@ -268,7 +270,7 @@ Sample Dress\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/dres
         let productsA = try await clientA.fetchProducts(ids: ["10416614474003"])
         XCTAssertEqual(productsA.count, 1)
 
-        let accountB = try store.createAccount(name: "隔离账户", kind: .thirdParty)
+        let accountB = try await store.createAccount(name: "隔离账户", kind: .thirdParty)
         try await store.switchAccount(to: accountB.id)
 
         let clientB = try XCTUnwrap(store.activeDatabaseClient)
@@ -289,7 +291,7 @@ Sample Dress\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/dres
         let store = AccountStore()
         await store.bootstrap()
 
-        let account = try store.createAccount(name: "自建店", kind: .selfBuilt)
+        let account = try await store.createAccount(name: "自建店", kind: .selfBuilt)
         try await store.switchAccount(to: account.id)
 
         let capabilities = try XCTUnwrap(store.activeCapabilities)

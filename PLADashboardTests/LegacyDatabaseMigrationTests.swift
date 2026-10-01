@@ -1,5 +1,4 @@
 import XCTest
-import GRDB
 @testable import PLADashboard
 
 final class LegacyDatabaseMigrationTests: XCTestCase {
@@ -40,33 +39,26 @@ final class LegacyDatabaseMigrationTests: XCTestCase {
     }
 
     private static func seedLegacyDatabase(at legacyDatabaseURL: URL) async throws {
-        var config = Configuration()
-        config.prepareDatabase { db in
-            try db.execute(sql: "PRAGMA journal_mode = WAL;")
-        }
-        let queue = try DatabaseQueue(path: legacyDatabaseURL.path, configuration: config)
-        try AppDatabaseMigrator.migrate(queue)
+        let client = try DatabaseClient.make(at: legacyDatabaseURL, accountID: "legacy-fixture")
         let importedAt = ISO8601DateFormatter().string(from: Date())
-        try await queue.write { db in
-            let product = ProductRecord(
-                productId: "legacy-product-1",
-                title: "Legacy",
-                canonicalLink: nil,
-                imageUrl: nil,
-                customLabel0: nil,
-                customLabel1: nil,
-                customLabel2: nil,
-                customLabel3: nil,
-                customLabel4: nil,
-                lsin: nil,
-                googleProductCategory: nil,
-                firstListedAt: nil,
-                firstSeenAt: importedAt,
-                lastSeenAt: importedAt,
-                updatedFromImportId: "legacy-import"
-            )
-            try product.insert(db)
-        }
+        let product = ProductRecord(
+            productId: "legacy-product-1",
+            title: "Legacy",
+            canonicalLink: nil,
+            imageUrl: nil,
+            customLabel0: nil,
+            customLabel1: nil,
+            customLabel2: nil,
+            customLabel3: nil,
+            customLabel4: nil,
+            lsin: nil,
+            googleProductCategory: nil,
+            firstListedAt: nil,
+            firstSeenAt: importedAt,
+            lastSeenAt: importedAt,
+            updatedFromImportId: "legacy-import"
+        )
+        try await client.upsertProductsBatch([product], importId: "legacy-import", importedAt: importedAt)
     }
 
     func testDoesNotMigrateTwice() throws {

@@ -5,19 +5,25 @@ actor DatabaseClient {
     nonisolated let accountID: String
     let dbQueue: DatabaseQueue
     private var dashboardMetricsCache: DashboardMetricsCache?
+    private var migrationsChecked: Bool
     /// 自建站最新一周标签快照缓存，避免每次翻页全表重读。
     private var cachedLabelDecisions: (weekId: String, labels: [String: String])?
 
     static let databaseDirectoryName = WorkspacePaths.applicationDirectoryName
     static let databaseFileName = WorkspacePaths.databaseFileName
 
-    init(accountID: String, dbQueue: DatabaseQueue) {
+    init(accountID: String, dbQueue: DatabaseQueue, migrationsChecked: Bool = false) {
         self.accountID = accountID
         self.dbQueue = dbQueue
+        self.migrationsChecked = migrationsChecked
     }
 
     static func make(accountID: String) throws -> DatabaseClient {
         let databaseURL = try WorkspacePaths.databaseURL(accountID: accountID)
+        return try make(at: databaseURL, accountID: accountID)
+    }
+
+    static func make(at databaseURL: URL, accountID: String) throws -> DatabaseClient {
         var config = Configuration()
         config.prepareDatabase { db in
             try db.execute(sql: "PRAGMA foreign_keys = ON;")
@@ -26,7 +32,7 @@ actor DatabaseClient {
 
         let queue = try DatabaseQueue(path: databaseURL.path, configuration: config)
         try AppDatabaseMigrator.migrate(queue)
-        return DatabaseClient(accountID: accountID, dbQueue: queue)
+        return DatabaseClient(accountID: accountID, dbQueue: queue, migrationsChecked: true)
     }
 
     static func make() throws -> DatabaseClient {
@@ -35,18 +41,20 @@ actor DatabaseClient {
     }
 
     /// 内存数据库，供单元测试使用。
-    static func makeInMemoryForTesting() throws -> DatabaseClient {
+    static func makeInMemoryForTesting(accountID: String = "in-memory-test") throws -> DatabaseClient {
         var config = Configuration()
         config.prepareDatabase { db in
             try db.execute(sql: "PRAGMA foreign_keys = ON;")
         }
         let queue = try DatabaseQueue(configuration: config)
         try AppDatabaseMigrator.migrate(queue)
-        return DatabaseClient(accountID: "in-memory-test", dbQueue: queue)
+        return DatabaseClient(accountID: accountID, dbQueue: queue, migrationsChecked: true)
     }
 
     func migrateIfNeeded() throws {
+        guard !migrationsChecked else { return }
         try AppDatabaseMigrator.migrate(dbQueue)
+        migrationsChecked = true
     }
 
     func currentSchemaVersion() throws -> Int {

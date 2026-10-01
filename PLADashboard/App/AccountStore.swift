@@ -17,6 +17,13 @@ final class AccountStore {
     private(set) var workspaceRevision: UInt = 0
     private(set) var isSwitchingAccount = false
     private var activeImportID: UUID?
+    private var isBootstrapping = false
+    private var isCreatingAccount = false
+    private let workspaceService: WorkspaceAccountService
+
+    init(workspaceService: WorkspaceAccountService = WorkspaceAccountService()) {
+        self.workspaceService = workspaceService
+    }
 
     var isImportInProgress: Bool { activeImportID != nil }
 
@@ -56,19 +63,15 @@ final class AccountStore {
     }
 
     func bootstrap() async {
+        // 多窗口同时出现加载页时，只初始化一次共享工作区。
+        guard !isBootstrapping, phase != .ready else { return }
+        isBootstrapping = true
+        defer { isBootstrapping = false }
         phase = .loading
         do {
-            let loadedManifest = try WorkspaceAccountPersistence.loadOrCreateManifest()
-            AccountSettingsMigration.migrateLegacyGlobalSettingsIfNeeded(for: loadedManifest.activeAccountID)
-            let client = try DatabaseClient.make(accountID: loadedManifest.activeAccountID)
-            try await client.migrateIfNeeded()
-            try await Self.purgeLegacyGoogleAdsIfNeeded(
-                client: client,
-                accountID: loadedManifest.activeAccountID,
-                accounts: loadedManifest.accounts
-            )
-            manifest = loadedManifest
-            activeDatabaseClient = client
+            let prepared = try await workspaceService.bootstrap()
+            manifest = prepared.manifest
+            activeDatabaseClient = prepared.client
             workspaceRevision &+= 1
             phase = .ready
         } catch {
@@ -85,48 +88,29 @@ final class AccountStore {
         if isImportInProgress || self.isImportInProgress {
             throw WorkspaceAccountError.importInProgress
         }
-        guard !isSwitchingAccount else { throw WorkspaceAccountError.workspaceChanged }
+        guard !isSwitchingAccount, !isCreatingAccount else { throw WorkspaceAccountError.workspaceChanged }
         guard activeAccountID != accountID else { return }
         isSwitchingAccount = true
         defer { isSwitchingAccount = false }
 
-        let client = try DatabaseClient.make(accountID: accountID)
-        try await client.migrateIfNeeded()
-        let updatedManifest = try WorkspaceAccountPersistence.updateActiveAccountID(accountID)
-        try await Self.purgeLegacyGoogleAdsIfNeeded(
-            client: client,
-            accountID: accountID,
-            accounts: updatedManifest.accounts
-        )
-        manifest = updatedManifest
-        activeDatabaseClient = client
+        let prepared = try await workspaceService.switchAccount(to: accountID)
+        manifest = prepared.manifest
+        activeDatabaseClient = prepared.client
         workspaceRevision &+= 1
     }
 
     func createAccount(
         name: String,
         kind: WorkspaceAccountKind = .thirdParty
-    ) throws -> WorkspaceAccount {
+    ) async throws -> WorkspaceAccount {
         guard phase == .ready else {
             throw WorkspaceAccountError.invalidManifest("账户尚未就绪")
         }
-        let account = try WorkspaceAccountPersistence.createAccount(name: name, kind: kind)
-        manifest = try WorkspaceAccountPersistence.load()
-        return account
-    }
-
-    /// 自建站账户打开时清除遗留 Google Ads 导入（幂等）。
-    private static func purgeLegacyGoogleAdsIfNeeded(
-        client: DatabaseClient,
-        accountID: String,
-        accounts: [WorkspaceAccount]
-    ) async throws {
-        guard accounts.contains(where: { $0.id == accountID && $0.kind == .selfBuilt }) else {
-            return
-        }
-        let didDelete = try await client.purgeLegacyGoogleAdsImports()
-        if didDelete {
-            try await client.rebuildProductWeeklyMetrics()
-        }
+        guard !isSwitchingAccount, !isCreatingAccount else { throw WorkspaceAccountError.workspaceChanged }
+        isCreatingAccount = true
+        defer { isCreatingAccount = false }
+        let created = try await workspaceService.createAccount(name: name, kind: kind)
+        manifest = created.manifest
+        return created.account
     }
 }

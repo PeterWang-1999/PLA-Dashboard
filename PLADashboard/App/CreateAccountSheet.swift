@@ -81,7 +81,7 @@ struct CreateAccountSheet: View {
         defer { isCreating = false }
 
         do {
-            let account = try accountStore.createAccount(name: trimmedName, kind: selectedKind)
+            let account = try await accountStore.createAccount(name: trimmedName, kind: selectedKind)
             if !isImportInProgress && !accountStore.isImportInProgress {
                 try await accountStore.switchAccount(to: account.id, isImportInProgress: false)
             }

@@ -51,7 +51,7 @@
 
 ## 第 3 阶段：数据看板容量与导出限制解耦
 
-状态：用户本地验证通过，已授权提交及推送。
+状态：用户本地验证通过；提交 `0cbb256` 已推送至 origin/main，远端 SHA 已核实。
 
 - 图表通过独立产品集合查询加载数据，不再调用带 50,000 行限制的 CSV 导出接口；CSV 的限制保留。
 - 无动态预警筛选时，只获取产品身份后加载周指标，不先为全部产品生成金额/比例字符串、标签和表格行。三方站动态预警筛选继续复用现有计算，确保规则一致。
@@ -69,6 +69,28 @@
 3. 若有超过 50,000 个有效产品的账户，确认数据看板能加载完整合计；超限 CSV 导出仍提示限制。无需为了验证修改生产数据，自动化测试已覆盖边界。
 4. 切到无数据账户，确认空态正常；快速改筛选后确认取消与最新结果保护正常。
 
-未提交范围：DatabaseClient+Analytics.swift、DatabaseClient+Dashboard.swift、DatabaseClient+DataDashboard.swift、DataDashboardCapacityTests.swift、本文。既有工作区额外文件保持原样。
+提交范围：DatabaseClient+Analytics.swift、DatabaseClient+Dashboard.swift、DatabaseClient+DataDashboard.swift、DataDashboardCapacityTests.swift、本文。既有工作区额外文件保持原样。
 
-下一阶段候选：将启动/账户切换的数据库打开与迁移移出主线程。尚未开始。
+## 第 4 阶段：启动与账户磁盘操作移出主线程
+
+状态：实现及自动化验证完成，等待用户本地构建验证；尚未提交。
+
+- 新增 WorkspaceAccountService actor，在主线程之外完成账户配置读写、旧工作区迁移、数据库打开及 schema 迁移；新建账户也改为异步。
+- AccountStore 在后台准备完成后统一发布账户配置与数据库 client；切换失败保留原账户，包括磁盘中的选择。
+- 多窗口启动只初始化一次共享工作区；启动失败允许重试。账户创建与切换互斥，继续保留全窗口导入保护。
+- 工厂已完成迁移的 DatabaseClient 跳过后续重复迁移检查；直接初始化的 client 仍在首次 migrateIfNeeded 时执行迁移。
+- 旧迁移/清理测试夹具通过应用数据库工厂和既有写入/计数接口造数，避免直接操作 GRDB 时触发线程断言。
+
+验证：macOS Debug 构建与 37 个定向测试全部通过（后台服务 4、账户 16、看板账户切换 10、账户设置 4、旧数据库迁移 3）。新增测试通过阻塞后台打开，确认 MainActor 仍能继续执行，并覆盖重复初始化、切换失败保留磁盘/内存状态、失败重试与并发创建保护。日志：`/private/tmp/pla-phase4-final-20260930.log`。`git diff --check` 通过。尚未测量真实启动耗时或前后加速比例；主要改善初始化/迁移期间的界面响应。
+
+本地验证步骤：
+
+1. Xcode 构建运行，关闭后重新启动，确认已有账户和数据正常加载。
+2. 打开两个窗口，在账户间切换，检查两窗口数据及当前账户同步，没有持续转圈或旧数据回跳。
+3. 新建账户并切换，确认空态正常；切回原账户数据仍在，退出重启后账户选择保留。
+4. 导入过程中在另一窗口尝试切账户，应继续被拦截；导入完成或取消后能够切换。
+5. 用数据较大的账户观察启动/切换期间窗口是否仍能响应操作；无需为验证修改生产数据或人为破坏数据库。
+
+待提交范围：AccountStore.swift、CreateAccountSheet.swift、DatabaseClient.swift、WorkspaceAccountService.swift、AccountStoreTests.swift、DashboardViewModelAccountSwitchTests.swift、LegacyDatabaseMigrationTests.swift、SettingsPerAccountTests.swift、WorkspaceAccountServiceTests.swift、本文。既有 project.pbxproj、dist、.cursor 和审查报告变动保持原样。
+
+下一阶段候选：导出元数据一致性与保存失败反馈，待本轮本地验证通过并提交后开始。

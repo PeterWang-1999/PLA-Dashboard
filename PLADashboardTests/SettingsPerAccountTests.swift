@@ -1,5 +1,4 @@
 import XCTest
-import GRDB
 @testable import PLADashboard
 
 final class SettingsPerAccountTests: XCTestCase {
@@ -95,24 +94,24 @@ final class SettingsPerAccountTests: XCTestCase {
         let clientA = try makeInMemoryClient(accountID: accountA)
         let clientB = try makeInMemoryClient(accountID: accountB)
 
-        try await seedAdsDaily(client: clientA)
-        try await seedAdsDaily(client: clientB)
+        let importA = try await seedAdsDaily(client: clientA)
+        let importB = try await seedAdsDaily(client: clientB)
 
         AppSettings.setDataRetentionDays(30, accountID: accountA)
         AppSettings.setDataRetentionDays(0, accountID: accountB)
         AppSettings.setLastRetentionPurgeDay(nil, accountID: accountA)
         AppSettings.setLastRetentionPurgeDay(nil, accountID: accountB)
 
-        let countBeforeA = try await clientA.adsDailyRowCount()
-        let countBeforeB = try await clientB.adsDailyRowCount()
+        let countBeforeA = try await clientA.countAdsProductDaily(importId: importA)
+        let countBeforeB = try await clientB.countAdsProductDaily(importId: importB)
         XCTAssertEqual(countBeforeA, 2)
         XCTAssertEqual(countBeforeB, 2)
 
         try await clientA.runScheduledRetentionPurgeIfNeeded()
         try await clientB.runScheduledRetentionPurgeIfNeeded()
 
-        let countAfterA = try await clientA.adsDailyRowCount()
-        let countAfterB = try await clientB.adsDailyRowCount()
+        let countAfterA = try await clientA.countAdsProductDaily(importId: importA)
+        let countAfterB = try await clientB.countAdsProductDaily(importId: importB)
         XCTAssertEqual(countAfterA, 1)
         XCTAssertEqual(countAfterB, 2)
     }
@@ -140,16 +139,10 @@ final class SettingsPerAccountTests: XCTestCase {
     }
 
     private func makeInMemoryClient(accountID: String) throws -> DatabaseClient {
-        var config = Configuration()
-        config.prepareDatabase { db in
-            try db.execute(sql: "PRAGMA foreign_keys = ON;")
-        }
-        let queue = try DatabaseQueue(configuration: config)
-        try AppDatabaseMigrator.migrate(queue)
-        return DatabaseClient(accountID: accountID, dbQueue: queue)
+        try DatabaseClient.makeInMemoryForTesting(accountID: accountID)
     }
 
-    private func seedAdsDaily(client: DatabaseClient) async throws {
+    private func seedAdsDaily(client: DatabaseClient) async throws -> String {
         let adsURL = try writeTemporaryFile(
             name: "scoped_retention_\(UUID().uuidString).csv",
             contents: """
@@ -162,21 +155,14 @@ final class SettingsPerAccountTests: XCTestCase {
         )
         defer { try? FileManager.default.removeItem(at: adsURL) }
 
-        _ = try await AdsProductImporter(databaseClient: client)
+        let result = try await AdsProductImporter(databaseClient: client)
             .importFile(sourceURL: adsURL) { _ in }
+        return result.importId
     }
 
     private func writeTemporaryFile(name: String, contents: String) throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
         try contents.write(to: url, atomically: true, encoding: .utf8)
         return url
-    }
-}
-
-private extension DatabaseClient {
-    func adsDailyRowCount() async throws -> Int {
-        try await dbQueue.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ads_product_daily;") ?? 0
-        }
     }
 }

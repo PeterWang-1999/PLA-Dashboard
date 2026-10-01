@@ -73,7 +73,7 @@ Ador - 产品数据
         try await importAdsData(into: clientA)
         try await clientA.rebuildProductWeeklyMetrics()
 
-        let accountB = try store.createAccount(name: "SHO", kind: .thirdParty)
+        let accountB = try await store.createAccount(name: "SHO", kind: .thirdParty)
         let clientB = try DatabaseClient.make(accountID: accountB.id)
         try await importMerchantData(
             into: clientB,
@@ -136,7 +136,7 @@ Ador - 产品数据
         let populatedClient = try XCTUnwrap(store.activeDatabaseClient)
         try await importSampleData(into: populatedClient)
 
-        let emptyAccount = try store.createAccount(name: "空账户", kind: .thirdParty)
+        let emptyAccount = try await store.createAccount(name: "空账户", kind: .thirdParty)
         let emptyClient = try DatabaseClient.make(accountID: emptyAccount.id)
 
         let viewModel = DashboardViewModel()
@@ -157,7 +157,7 @@ Ador - 产品数据
         let populatedClient = try XCTUnwrap(store.activeDatabaseClient)
         try await importSampleData(into: populatedClient)
 
-        let emptyAccount = try store.createAccount(name: "空账户", kind: .thirdParty)
+        let emptyAccount = try await store.createAccount(name: "空账户", kind: .thirdParty)
         let emptyClient = try DatabaseClient.make(accountID: emptyAccount.id)
 
         let viewModel = DashboardViewModel()
@@ -185,7 +185,7 @@ Ador - 产品数据
         await reloadWorkspace(into: viewModel, from: store)
         XCTAssertFalse(viewModel.showsEmptyState)
 
-        let emptyAccount = try store.createAccount(name: "空账户", kind: .thirdParty)
+        let emptyAccount = try await store.createAccount(name: "空账户", kind: .thirdParty)
         try await store.switchAccount(to: emptyAccount.id)
         await reloadWorkspace(into: viewModel, from: store)
         XCTAssertTrue(viewModel.showsEmptyState)
