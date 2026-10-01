@@ -95,7 +95,7 @@
 
 ## 第 5 阶段：导出快照一致性与保存失败反馈
 
-状态：实现及自动化验证完成，等待用户本地验证；尚未提交。
+状态：用户本地验证通过；提交 `fc9ee64` 已推送至 origin/main，远端 SHA 已核实。
 
 - 查询与 CSV 头部使用同一份导出筛选快照；报告周使用查询返回的 bundle，不再在 await 后读取已变化的界面条件。
 - 账户切换/后续导出使旧请求失效；旧成功、旧失败和取消都不会再弹出过期保存面板或错误，旧请求不会清除新请求的加载状态。
@@ -112,4 +112,32 @@
 4. 若有安全的受限目录可用，尝试保存失败，确认出现“无法导出”提示，无需修改系统权限或填满磁盘。
 5. 导出较大筛选结果时观察界面响应；尚未测量真实加速比例。
 
-待提交范围：DashboardViewModel.swift、DashboardView.swift、DashboardExportDocument.swift、ProductDetailSheet.swift、DashboardExportConcurrencyTests.swift、本文。既有其他工作区变动保持原样。
+提交范围：DashboardViewModel.swift、DashboardView.swift、DashboardExportDocument.swift、ProductDetailSheet.swift、DashboardExportConcurrencyTests.swift、本文。既有其他工作区变动保持原样。
+
+
+## 第 6 阶段：只刷新可见页面与共享数据更新
+
+状态：实现、Debug 回归与 Release 基线验证完成，等待用户本地验证，尚未提交。
+
+- RootView 将当前导航页面交给 DashboardViewModel，搜索/筛选/设置刷新统一分派给可见页面。移除 DataDashboardView 独立图表 task，避免同一筛选同时拉取隐藏产品表。
+- 图表与产品表共用防抖调度入口，保留独立请求版本；导航变化、账户变化、设置变化及数据变更使旧请求失效。页面离开后迟到的结果不能覆盖当前内容。
+- 账户初始化直接加载当前可见页面；停留在导入页时仅准备工作区，不查询隐藏产品表/图表，返回时加载最新筛选。
+- AccountStore 发布共享 dataRevision，导入完成和手动重建成功后通知所有窗口。RootView 按 workspace/data 组合任务更新目录、当前页面及导入历史，不再本窗口额外直接刷新一次。
+- 设置变更取消并合并旧刷新，图表首次准备显示加载态，初始化失败可重试。
+- 保持 SQL、指标计算、标签规则、导出上限及图表展示口径。本阶段移除冗余查询，不改缓存和聚合算法。
+
+验证：macOS Debug 构建与 50 项测试通过（新增可见页面 8、刷新并发 10、账户切换 10、账户 16、导出并发 6），xcresult 核实 0 失败/0 跳过。覆盖图表首屏就绪、图表筛选/设置不查询隐藏表、导入页延迟加载、离开图表拒绝迟到结果、重建仅广播及共享通知的账户校验。日志：`/private/tmp/pla-phase6-final-20261001.log`。
+
+Release 基线使用同一内存库的 500 产品、10,000 投放明细，比较原先产品表+图表工作量与仅图表。预热 1 轮、交替先后次序，每组 11 样本；清空应用指标缓存但保留 SQLite/系统缓存。仅测数据库工作量，不含造数、SwiftUI 首屏、图片、渲染及搜索防抖，不代表应用整体速度。第一次 Release 测试未开启 testability 导致测试目标无法导入 app 模块；后续仅测试命令设置 ENABLE_TESTABILITY=YES 并关闭覆盖率，不修改项目发布配置。
+
+Release 基线测试通过，计时由 XCTest 附件导出核实：产品表+图表 p50/p95 为 75.936/81.298ms，仅图表为 72.285/155.220ms。中位数略降，但尾部耗时未改善，不能声称整体加速；详情见 PERFORMANCE_BASELINE_PHASE6.md。最终日志：`/private/tmp/pla-phase6-release-report-20261001.log`。`git diff --check` 通过。
+
+本地验证步骤：
+
+1. 数据看板连续输入搜索、切类目/标签/预警，核对最终结果，观察加载与窗口响应。
+2. 停留数据看板时打开 Settings 修改预警参数，图表应刷新；首次加载、空账户及错误重试也应正常。
+3. 两个窗口打开同一账户：A 留在数据看板，B 导入数据；A 应自动更新，切到产品数据页应看到新数据。
+4. 在导入页完成导入，再返回产品数据/数据看板，确认条件、数据、报告周期正确。
+5. 从菜单触发重建，其他窗口也应更新；快速切页面与账户不出现旧结果回跳或持续转圈。
+
+待提交范围：AccountStore.swift、RootView.swift、DashboardViewModel.swift、DataDashboardView.swift、DashboardVisiblePageTests.swift、VisiblePageQueryBaselineTests.swift、本文与基线报告。既有 project.pbxproj、dist、.cursor 与审查报告变动不纳入。

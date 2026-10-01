@@ -23,13 +23,16 @@ struct DataDashboardView: View {
 
     var body: some View {
         Group {
-            if let message = viewModel.dataDashboardErrorMessage {
+            if viewModel.isLoading, viewModel.dataSource == .empty {
+                ProgressView("正在准备数据看板…")
+            } else if let message = viewModel.dataDashboardErrorMessage
+                ?? (viewModel.dataSource == .empty ? viewModel.errorMessage : nil) {
                 ContentUnavailableView {
                     Label("无法加载数据看板", systemImage: "exclamationmark.triangle")
                 } description: {
                     Text(message)
                 } actions: {
-                    Button("重试") { Task { await viewModel.refreshDataDashboard() } }
+                    Button("重试") { viewModel.retryAfterError() }
                         .buttonStyle(.borderedProminent)
                 }
             } else if viewModel.dataDashboardSnapshot.metrics.isEmpty,
@@ -49,11 +52,6 @@ struct DataDashboardView: View {
         .navigationTitle("数据看板")
         .toolbar { DashboardToolbarContent(viewModel: viewModel) }
         .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "输入产品 ID 查询")
-        .task(id: viewModel.makeCurrentFilters()) {
-            try? await Task.sleep(for: .milliseconds(180))
-            guard !Task.isCancelled else { return }
-            await viewModel.refreshDataDashboard()
-        }
         .onChange(of: viewModel.searchText) { _, _ in viewModel.onSearchTextChanged() }
         .onChange(of: viewModel.selectedAlertFilter) { _, _ in viewModel.onFiltersChanged() }
         .onChange(of: viewModel.selectedCustomLabelFilter) { _, _ in viewModel.onFiltersChanged() }

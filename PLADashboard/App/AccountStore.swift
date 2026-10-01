@@ -15,6 +15,13 @@ final class AccountStore {
     private(set) var activeDatabaseClient: DatabaseClient?
     /// 账户工作区就绪令牌；仅在 manifest 与 database client 同步后递增，供 SwiftUI `.task(id:)` 触发加载。
     private(set) var workspaceRevision: UInt = 0
+    /// 所有窗口共享当前账户的已完成数据变更。
+    private(set) var dataRevision: UInt = 0
+
+    func notifyDataChanged(accountID: String) {
+        guard phase == .ready, activeAccountID == accountID else { return }
+        dataRevision &+= 1
+    }
     private(set) var isSwitchingAccount = false
     private var activeImportID: UUID?
     private var isBootstrapping = false

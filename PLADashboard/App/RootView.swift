@@ -7,10 +7,16 @@ struct RootView: View {
     @SceneStorage("dashboard.sidebarVisible") private var sidebarVisibleStorage = true
 
     @State private var windowState = WindowState()
-    @State private var dashboardViewModel = DashboardViewModel()
+    @State private var dashboardViewModel = DashboardViewModel(followsVisiblePage: true)
     @State private var importViewModel = ImportViewModel()
     @State private var selectedNavigationItem: AppNavigationItem? = .dashboard
     @State private var showImportBlockingAlert = false
+    @State private var loadedWorkspaceRevision: UInt?
+
+    private struct ContentRevision: Hashable {
+        let workspace: UInt
+        let data: UInt
+    }
 
     private static var importAllowedContentTypes: [UTType] {
         var types: [UTType] = [
@@ -41,7 +47,10 @@ struct RootView: View {
                 }
                 .focusedSceneValue(\.refreshDashboardAggregation) {
                     Task { @MainActor in
-                        await dashboardViewModel.rebuildMetricsAndRefresh()
+                        guard let accountID = accountStore.activeAccountID else { return }
+                        await dashboardViewModel.rebuildMetricsAndRefresh {
+                            accountStore.notifyDataChanged(accountID: accountID)
+                        }
                     }
                 }
         }
@@ -60,13 +69,28 @@ struct RootView: View {
         }
         .onAppear {
             windowState.syncFromSceneStorage(sidebarVisibleStorage)
+            dashboardViewModel.setVisiblePage(selectedNavigationItem ?? .dashboard)
         }
         .onChange(of: windowState.columnVisibility) { _, visibility in
             windowState.isSidebarVisible = visibility != .detailOnly
             sidebarVisibleStorage = windowState.isSidebarVisible
         }
-        .task(id: workspaceRevision) {
-            await reloadWorkspaceContent()
+        .onChange(of: selectedNavigationItem) { _, page in
+            dashboardViewModel.setVisiblePage(page ?? .dashboard)
+        }
+        .onDisappear { dashboardViewModel.cancelVisibleRefresh() }
+        .task(id: ContentRevision(workspace: workspaceRevision, data: accountStore.dataRevision)) {
+            if loadedWorkspaceRevision != workspaceRevision {
+                await reloadWorkspaceContent()
+                guard !Task.isCancelled, workspaceRevision == accountStore.workspaceRevision else { return }
+                loadedWorkspaceRevision = workspaceRevision
+            } else {
+                dashboardViewModel.cancelVisibleRefresh()
+                await dashboardViewModel.reloadFilterCatalogsFromDatabase()
+                guard !Task.isCancelled, workspaceRevision == accountStore.workspaceRevision else { return }
+                await dashboardViewModel.handleImportCompleted()
+                await importViewModel.loadHistory()
+            }
         }
         .onChange(of: settingsRevision) { _, _ in
             dashboardViewModel.handleSettingsDidChange()
@@ -147,6 +171,7 @@ struct RootView: View {
             return
         }
 
+        dashboardViewModel.setVisiblePage(selectedNavigationItem ?? .dashboard)
         dashboardViewModel.resetForAccountSwitch()
         importViewModel.resetForAccountSwitch()
         configureViewModels(databaseClient: databaseClient)
@@ -176,10 +201,12 @@ struct RootView: View {
             capabilities: capabilities,
             accountKind: accountStore.activeAccount?.kind ?? .thirdParty,
             onReloadFilterCatalogs: {
-                await dashboardViewModel.reloadFilterCatalogsFromDatabase()
+                // 统一由共享 dataRevision 驱动各窗口刷新，避免本窗口重复查询。
             },
             onImportCompleted: {
-                await dashboardViewModel.handleImportCompleted()
+                await MainActor.run {
+                    accountStore.notifyDataChanged(accountID: databaseClient.accountID)
+                }
             }
         )
     }
