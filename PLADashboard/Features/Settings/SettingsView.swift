@@ -29,13 +29,12 @@ struct SettingsView: View {
     @ViewBuilder
     private func accountScopedForm(accountID: String) -> some View {
         let accountName = accountStore.activeAccount?.name ?? accountID
-        let isSelfBuilt = accountStore.activeAccount?.kind == .selfBuilt
 
         Form {
             Section {
                 LabeledContent("当前账户", value: accountName)
             } footer: {
-                Text("以下预警与数据保留设置仅对当前账户生效。")
+                Text("以下数据保留设置仅对当前账户生效。")
             }
 
             Section {
@@ -55,41 +54,6 @@ struct SettingsView: View {
                 Text("每页行数为全局设置，更改后将在下次刷新看板时生效。")
             }
 
-            if !isSelfBuilt {
-                Section {
-                    LabeledContent("高消高效 ROI 倍数") {
-                        HStack(spacing: 8) {
-                            Slider(
-                                value: highEfficiencyROIMultiplierBinding(accountID: accountID),
-                                in: 1.0...3.0,
-                                step: 0.1
-                            )
-                            Text(String(
-                                format: "%.1f×",
-                                AppSettings.highEfficiencyROIMultiplier(accountID: accountID)
-                            ))
-                            .monospacedDigit()
-                            .frame(width: 44, alignment: .trailing)
-                        }
-                    }
-
-                    Picker(
-                        "低效最低点击",
-                        selection: lowEfficiencyMinClicksBinding(accountID: accountID)
-                    ) {
-                        Text("200").tag(200)
-                        Text("250").tag(250)
-                        Text("300").tag(300)
-                        Text("400").tag(400)
-                    }
-                    .pickerStyle(.radioGroup)
-                } header: {
-                    Text("预警分析")
-                } footer: {
-                    Text("调整高效倍数与低效点击门槛后，看板将自动刷新预警标签。")
-                }
-            }
-
             Section {
                 Picker(
                     "Ads 日表保留",
@@ -107,26 +71,6 @@ struct SettingsView: View {
                 Text("产品数据页面底栏的“数据维护”菜单可清理当前账户中超过保留期的 Ads 日表；产品主表与导入记录始终保留。")
             }
         }
-    }
-
-    private func highEfficiencyROIMultiplierBinding(accountID: String) -> Binding<Double> {
-        Binding(
-            get: { AppSettings.highEfficiencyROIMultiplier(accountID: accountID) },
-            set: { newValue in
-                AppSettings.setHighEfficiencyROIMultiplier(newValue, accountID: accountID)
-                dashboardSettingsNotifier.notifyChange()
-            }
-        )
-    }
-
-    private func lowEfficiencyMinClicksBinding(accountID: String) -> Binding<Int> {
-        Binding(
-            get: { AppSettings.lowEfficiencyMinClicks(accountID: accountID) },
-            set: { newValue in
-                AppSettings.setLowEfficiencyMinClicks(newValue, accountID: accountID)
-                dashboardSettingsNotifier.notifyChange()
-            }
-        )
     }
 
     private func dataRetentionDaysBinding(accountID: String) -> Binding<Int> {

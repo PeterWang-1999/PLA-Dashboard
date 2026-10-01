@@ -20,17 +20,9 @@ final class SettingsPerAccountTests: XCTestCase {
         let accountA = "account-a-\(UUID().uuidString)"
         let accountB = "account-b-\(UUID().uuidString)"
 
-        AppSettings.setHighEfficiencyROIMultiplier(2.2, accountID: accountA, userDefaults: userDefaults)
-        AppSettings.setHighEfficiencyROIMultiplier(1.3, accountID: accountB, userDefaults: userDefaults)
-        AppSettings.setLowEfficiencyMinClicks(400, accountID: accountA, userDefaults: userDefaults)
-        AppSettings.setLowEfficiencyMinClicks(200, accountID: accountB, userDefaults: userDefaults)
         AppSettings.setDataRetentionDays(60, accountID: accountA, userDefaults: userDefaults)
         AppSettings.setDataRetentionDays(180, accountID: accountB, userDefaults: userDefaults)
 
-        XCTAssertEqual(AppSettings.highEfficiencyROIMultiplier(accountID: accountA, userDefaults: userDefaults), 2.2)
-        XCTAssertEqual(AppSettings.highEfficiencyROIMultiplier(accountID: accountB, userDefaults: userDefaults), 1.3)
-        XCTAssertEqual(AppSettings.lowEfficiencyMinClicks(accountID: accountA, userDefaults: userDefaults), 400)
-        XCTAssertEqual(AppSettings.lowEfficiencyMinClicks(accountID: accountB, userDefaults: userDefaults), 200)
         XCTAssertEqual(AppSettings.dataRetentionDays(accountID: accountA, userDefaults: userDefaults), 60)
         XCTAssertEqual(AppSettings.dataRetentionDays(accountID: accountB, userDefaults: userDefaults), 180)
     }
@@ -39,8 +31,6 @@ final class SettingsPerAccountTests: XCTestCase {
         let defaultAccountID = "legacy-default-\(UUID().uuidString)"
         let otherAccountID = "legacy-other-\(UUID().uuidString)"
 
-        userDefaults.set(2.0, forKey: AppSettings.legacyHighEfficiencyROIMultiplierKey)
-        userDefaults.set(250, forKey: AppSettings.legacyLowEfficiencyMinClicksKey)
         userDefaults.set(90, forKey: AppSettings.legacyDataRetentionDaysKey)
         userDefaults.set("2026-06-20", forKey: AppSettings.legacyLastRetentionPurgeDayKey)
 
@@ -49,14 +39,6 @@ final class SettingsPerAccountTests: XCTestCase {
             userDefaults: userDefaults
         )
 
-        XCTAssertEqual(
-            AppSettings.highEfficiencyROIMultiplier(accountID: defaultAccountID, userDefaults: userDefaults),
-            2.0
-        )
-        XCTAssertEqual(
-            AppSettings.lowEfficiencyMinClicks(accountID: defaultAccountID, userDefaults: userDefaults),
-            250
-        )
         XCTAssertEqual(
             AppSettings.dataRetentionDays(accountID: defaultAccountID, userDefaults: userDefaults),
             90
@@ -75,10 +57,6 @@ final class SettingsPerAccountTests: XCTestCase {
             userDefaults: userDefaults
         )
         XCTAssertFalse(AppSettings.hasScopedSettings(accountID: otherAccountID, userDefaults: userDefaults))
-        XCTAssertEqual(
-            AppSettings.highEfficiencyROIMultiplier(accountID: otherAccountID, userDefaults: userDefaults),
-            AnalyticsConfiguration.highEfficiencyROIMultiplier
-        )
     }
 
     func testRetentionPurgeUsesScopedSettings() async throws {
@@ -114,28 +92,6 @@ final class SettingsPerAccountTests: XCTestCase {
         let countAfterB = try await clientB.countAdsProductDaily(importId: importB)
         XCTAssertEqual(countAfterA, 1)
         XCTAssertEqual(countAfterB, 2)
-    }
-
-    func testAnalyticsSnapshotUsesAccountID() {
-        let accountID = "snapshot-\(UUID().uuidString)"
-        defer {
-            AppSettings.setHighEfficiencyROIMultiplier(
-                AnalyticsConfiguration.highEfficiencyROIMultiplier,
-                accountID: accountID
-            )
-            AppSettings.setLowEfficiencyMinClicks(
-                AnalyticsConfiguration.lowEfficiencyMinClicks,
-                accountID: accountID
-            )
-        }
-
-        AppSettings.setHighEfficiencyROIMultiplier(1.9, accountID: accountID)
-        AppSettings.setLowEfficiencyMinClicks(350, accountID: accountID)
-
-        let snapshot = AnalyticsSettingsSnapshot.current(accountID: accountID)
-
-        XCTAssertEqual(snapshot.highEfficiencyROIMultiplier, 1.9)
-        XCTAssertEqual(snapshot.lowEfficiencyMinClicks, 350)
     }
 
     private func makeInMemoryClient(accountID: String) throws -> DatabaseClient {

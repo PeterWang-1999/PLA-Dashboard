@@ -117,7 +117,7 @@
 
 ## 第 6 阶段：只刷新可见页面与共享数据更新
 
-状态：实现、Debug 回归与 Release 基线验证完成，等待用户本地验证，尚未提交。
+状态：用户本地验证通过；提交 `1a7801a` 已推送至 origin/main，远端 SHA 已核实。
 
 - RootView 将当前导航页面交给 DashboardViewModel，搜索/筛选/设置刷新统一分派给可见页面。移除 DataDashboardView 独立图表 task，避免同一筛选同时拉取隐藏产品表。
 - 图表与产品表共用防抖调度入口，保留独立请求版本；导航变化、账户变化、设置变化及数据变更使旧请求失效。页面离开后迟到的结果不能覆盖当前内容。
@@ -140,4 +140,33 @@ Release 基线测试通过，计时由 XCTest 附件导出核实：产品表+图
 4. 在导入页完成导入，再返回产品数据/数据看板，确认条件、数据、报告周期正确。
 5. 从菜单触发重建，其他窗口也应更新；快速切页面与账户不出现旧结果回跳或持续转圈。
 
-待提交范围：AccountStore.swift、RootView.swift、DashboardViewModel.swift、DataDashboardView.swift、DashboardVisiblePageTests.swift、VisiblePageQueryBaselineTests.swift、本文与基线报告。既有 project.pbxproj、dist、.cursor 与审查报告变动不纳入。
+提交范围：AccountStore.swift、RootView.swift、DashboardViewModel.swift、DataDashboardView.swift、DashboardVisiblePageTests.swift、VisiblePageQueryBaselineTests.swift、本文与基线报告。既有 project.pbxproj、dist、.cursor 与审查报告变动不纳入。
+
+
+## 第 7 阶段：按用户要求移除预警标签
+
+状态：实现及自动化验证完成，等待本地验证；尚未提交。
+
+用户补充“不需要预警标签，可以删除相关功能和代码”，因此本阶段替代原计划的预警结果缓存优化。
+
+- 删除三方站动态预警规则、自建站标签状态机/指标构建/快照读写及专用设置接口；删除运行时预警缓存、cohort 基准查询、预警分页/导出/图表的全候选映射与筛选分支。分页统一使用现有 SQL LIMIT/OFFSET。
+- 删除预警筛选菜单、表格列、详情徽章、设置参数、维护菜单、CSV 列和 alert_filter 元数据。Merchant 自定义标签、类目筛选及产品详情中 GMC 缺失的数据完整性提示保留。
+- 导入后不再计算预警标签；消费、销售、ROI、CPA、ARPU、CPC、CVR、AOS、趋势及毛利源数据保留。
+- 新增 v10 数据库迁移，删除 label_snapshot_products、label_snapshots 与 product_weekly_metrics.warning_label。保留历史迁移定义保证旧库升级，升级后不再有预警专用表或字段。
+- 删除退役引擎专用测试，保留数值公式和指标对账测试，新增旧库升级/导出核心字段验证，并更新 README。
+
+验证：macOS Debug 构建及 83 个定向回归全部通过，xcresult 核实 0 失败/0 跳过。覆盖 v9→v10 升级前后产品行、报告周与导入记录一致，重复迁移幂等，周聚合再次重建一致；同时验证所有原筛选、50,001 产品容量、导出限制、账户/刷新并发和工作区初始化。最初删除 SQL 标签字段时遗漏分隔符导致周聚合失败，已修正；新增元数据断言按既有自定义标签选中值 EN 修正后最终全部通过。日志：`/private/tmp/pla-phase7-verified-20261001.log`。
+
+Release 基线用例通过；沿用 500 产品/10,000 投放明细、默认筛选、11 样本的查询工作量测量。仅图表 p50/p95 为 78.958/80.941ms，额外产品表+图表为 82.092/86.571ms。与第六阶段属于不同运行，默认图表没有明确提速证据；不能声称移除预警提高应用整体速度。预警全量扫描路径已被删除，无需再实现预警缓存。详见 PERFORMANCE_BASELINE_PHASE7.md。`git diff --check` 通过。
+
+本地验证步骤：
+
+1. 打开已有三方站和自建站账户，确认预警筛选/表格列/详情标签/设置参数/维护动作均已移除。
+2. 与本轮前核对消费、销售、ROI、点击转化和趋势；Merchant 自定义标签、类目、搜索和排序应正常。
+3. 导入投放与销售数据，确认仍能完成聚合和多窗口更新，不再出现计算预警阶段。
+4. 导出 CSV，确认无预警列和 alert_filter，核心指标及报告周正常。
+5. 退出并重启，确认旧账户升级后数据仍正常。升级会清理旧预警历史，核心业务数据不删除。
+
+待提交范围：预警移除相关 App/Domain/Features/Data 源文件和迁移、相关测试更新与退役、README、本文及 PERFORMANCE_BASELINE_PHASE7.md。既有 project.pbxproj 设置键排序、dist、.cursor 和原始审查报告不纳入。
+
+下一阶段建议：直接优化数据看板聚合/产品 Top 10 查询；预警缓存计划已取消。图片后台缩略与缓存、导入周指标增量重建仍待推进。

@@ -4,13 +4,9 @@ enum AppSettings {
     static let defaultPageSizeKey = "dashboard.defaultPageSize"
     static let sidebarVisibleKey = "dashboard.sidebarVisible"
 
-    static let legacyHighEfficiencyROIMultiplierKey = "analytics.highEfficiencyROIMultiplier"
-    static let legacyLowEfficiencyMinClicksKey = "analytics.lowEfficiencyMinClicks"
     static let legacyDataRetentionDaysKey = "data.retentionDays"
     static let legacyLastRetentionPurgeDayKey = "data.lastRetentionPurgeDay"
 
-    static let scopedHighEfficiencyROIMultiplierSuffix = "analytics.highEfficiencyROIMultiplier"
-    static let scopedLowEfficiencyMinClicksSuffix = "analytics.lowEfficiencyMinClicks"
     static let scopedDataRetentionDaysSuffix = "data.retentionDays"
     static let scopedLastRetentionPurgeDaySuffix = "data.lastRetentionPurgeDay"
 
@@ -21,40 +17,6 @@ enum AppSettings {
 
     static func scopedKey(accountID: String, suffix: String) -> String {
         "accounts.\(accountID).\(suffix)"
-    }
-
-    static func highEfficiencyROIMultiplier(accountID: String, userDefaults: UserDefaults = .standard) -> Double {
-        let key = scopedKey(accountID: accountID, suffix: scopedHighEfficiencyROIMultiplierSuffix)
-        if let stored = userDefaults.object(forKey: key) as? Double {
-            return stored
-        }
-        return AnalyticsConfiguration.highEfficiencyROIMultiplier
-    }
-
-    static func setHighEfficiencyROIMultiplier(
-        _ value: Double,
-        accountID: String,
-        userDefaults: UserDefaults = .standard
-    ) {
-        let key = scopedKey(accountID: accountID, suffix: scopedHighEfficiencyROIMultiplierSuffix)
-        userDefaults.set(value, forKey: key)
-    }
-
-    static func lowEfficiencyMinClicks(accountID: String, userDefaults: UserDefaults = .standard) -> Int {
-        let key = scopedKey(accountID: accountID, suffix: scopedLowEfficiencyMinClicksSuffix)
-        if let stored = userDefaults.object(forKey: key) as? Int {
-            return stored
-        }
-        return AnalyticsConfiguration.lowEfficiencyMinClicks
-    }
-
-    static func setLowEfficiencyMinClicks(
-        _ value: Int,
-        accountID: String,
-        userDefaults: UserDefaults = .standard
-    ) {
-        let key = scopedKey(accountID: accountID, suffix: scopedLowEfficiencyMinClicksSuffix)
-        userDefaults.set(value, forKey: key)
     }
 
     static func dataRetentionDays(accountID: String, userDefaults: UserDefaults = .standard) -> Int {
@@ -94,8 +56,6 @@ enum AppSettings {
 
     static func hasScopedSettings(accountID: String, userDefaults: UserDefaults = .standard) -> Bool {
         let suffixes = [
-            scopedHighEfficiencyROIMultiplierSuffix,
-            scopedLowEfficiencyMinClicksSuffix,
             scopedDataRetentionDaysSuffix,
             scopedLastRetentionPurgeDaySuffix,
         ]

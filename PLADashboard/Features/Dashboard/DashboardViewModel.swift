@@ -7,7 +7,6 @@ import SwiftUI
 final class DashboardViewModel {
     var dataSource: DashboardDataSource = .empty
     var searchText = ""
-    var selectedAlertFilter = DashboardViewModel.alertFilterDefaultOption
     var customLabelCatalog: CustomLabelCatalog = .empty
     var selectedCustomLabelFilter: CustomLabelFilterSelection = .all
     var categoryCatalog: GoogleProductCategoryCatalog = .empty
@@ -93,7 +92,6 @@ final class DashboardViewModel {
     }
     /// 每次账户切换递增，用于丢弃过期的异步加载结果。
     private var loadGeneration: UInt = 0
-    private(set) var warningLabelEngine: WarningLabelEngine = .thirdPartyCohort
     private(set) var accountKind: WorkspaceAccountKind = .thirdParty
 
     var rows: [ProductPerformanceRowModel] {
@@ -125,7 +123,6 @@ final class DashboardViewModel {
         } else {
             base = DashboardPreviewData.rows.filter {
                 $0.lsin.localizedCaseInsensitiveContains(query)
-                    || $0.warningLabel.localizedCaseInsensitiveContains(query)
             }
         }
         return base.sorted { tableSort.sortsBefore($0, $1) }
@@ -139,10 +136,6 @@ final class DashboardViewModel {
         self.databaseClient = databaseClient
         self.accountKind = accountKind
         self.bootstrapAction = bootstrap
-        warningLabelEngine = WarningLabelEngine.forAccountKind(accountKind)
-        if !alertFilterOptions.contains(selectedAlertFilter) {
-            selectedAlertFilter = Self.alertFilterDefaultOption
-        }
     }
 
     func resetForAccountSwitch() {
@@ -155,7 +148,6 @@ final class DashboardViewModel {
         settingsTask = nil
         chartRequestID &+= 1
         searchText = ""
-        selectedAlertFilter = Self.alertFilterDefaultOption
         selectedCustomLabelFilter = .all
         selectedCategoryFilter = .all
         currentPage = 1
@@ -176,7 +168,6 @@ final class DashboardViewModel {
         exportErrorMessage = nil
         categoryCatalog = .empty
         customLabelCatalog = .empty
-        warningLabelEngine = .thirdPartyCohort
     }
 
     func retryAfterError() {
@@ -452,23 +443,6 @@ final class DashboardViewModel {
         }
     }
 
-    static let alertFilterDefaultOption = DashboardQueryFilters.alertFilterDefaultOption
-
-    var alertFilterOptions: [String] {
-        let cases: [ProductWarningLabel]
-        switch warningLabelEngine {
-        case .thirdPartyCohort:
-            cases = ProductWarningLabel.thirdPartyFilterCases
-        case .selfBuiltSnapshot:
-            cases = ProductWarningLabel.selfBuiltFilterCases
-        }
-        return [Self.alertFilterDefaultOption] + cases.map(\.rawValue)
-    }
-
-    var isAlertFilterActive: Bool {
-        selectedAlertFilter != Self.alertFilterDefaultOption
-    }
-
     var isCustomLabelFilterActive: Bool {
         selectedCustomLabelFilter.isFiltered
     }
@@ -524,11 +498,9 @@ final class DashboardViewModel {
     func makeCurrentFilters() -> DashboardQueryFilters {
         DashboardQueryFilters(
             searchText: searchText,
-            alertFilter: selectedAlertFilter,
             customLabelFilter: selectedCustomLabelFilter,
             categoryFilter: selectedCategoryFilter,
-            sort: tableSort,
-            warningLabelEngine: warningLabelEngine
+            sort: tableSort
         )
     }
 

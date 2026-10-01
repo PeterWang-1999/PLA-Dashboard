@@ -96,8 +96,6 @@ struct ProductDetailSheet: View {
                     .font(.system(size: 32, weight: .bold, design: .rounded))
                     .textSelection(.enabled)
                 Spacer()
-                WarningLabelView(text: summary.warningLabel, style: summary.warningStyle)
-                    .controlSize(.large)
             }
 
             Text(detail.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "未提供产品标题")

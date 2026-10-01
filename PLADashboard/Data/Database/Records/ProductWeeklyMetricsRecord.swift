@@ -18,7 +18,6 @@ struct ProductWeeklyMetricsRecord: Codable, FetchableRecord, PersistableRecord, 
     var cpcCents: Int?
     var cvr: Double?
     var aos: Double?
-    var warningLabel: String?
 
     enum Columns: String, ColumnExpression {
         case productId = "product_id"
@@ -35,7 +34,6 @@ struct ProductWeeklyMetricsRecord: Codable, FetchableRecord, PersistableRecord, 
         case cpcCents = "cpc_cents"
         case cvr
         case aos
-        case warningLabel = "warning_label"
     }
 
     enum CodingKeys: String, CodingKey {
@@ -53,7 +51,6 @@ struct ProductWeeklyMetricsRecord: Codable, FetchableRecord, PersistableRecord, 
         case cpcCents = "cpc_cents"
         case cvr
         case aos
-        case warningLabel = "warning_label"
     }
 
     var aggregatedMetrics: AggregatedMetrics {
@@ -98,7 +95,6 @@ struct ProductWeeklyMetricsRecord: Codable, FetchableRecord, PersistableRecord, 
             cpcCents: cpcCents,
             cvr: cvr,
             aos: aos,
-            warningLabel: nil
         )
     }
 }

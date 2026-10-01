@@ -28,7 +28,7 @@ private func interpolateCents(_ from: Int, _ to: Int, _ progress: Double) -> Int
     from + Int((Double(to - from) * progress).rounded())
 }
 
-/// 工具栏筛选（预警标签/自定义标签/类目）变化时，让趋势图以与周/日切换相同的
+/// 工具栏筛选（自定义标签/类目）变化时，让趋势图以与周/日切换相同的
 /// 弹性动画从旧数据过渡到新数据。通过 `Animatable` 让 `filterProgress` 逐帧插值，
 /// 再调用 `interpolatedTrend` 生成中间帧数据，交给 `MorphingComboTrendChart` 渲染。
 /// 周/日维度进度由内层图表自身的 `Animatable` 负责，二者互不干扰。

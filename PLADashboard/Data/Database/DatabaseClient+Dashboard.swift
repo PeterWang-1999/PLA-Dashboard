@@ -79,41 +79,13 @@ extension DatabaseClient {
             return DashboardPageResult(rows: [], totalCount: 0, totalPages: 1, weekStarts: [])
         }
 
-        let alertLabel = alertFilterLabel(for: filters.alertFilter)
-
-        // 自建站标签已落库：预警筛选走 SQL JOIN + LIMIT/OFFSET，避免翻页全量扫描。
-        if let alertLabel, filters.warningLabelEngine == .selfBuiltSnapshot {
-            return try fetchDashboardPageSQLPaginated(
-                filters: filters,
-                weekStarts: contextBundle.weekStarts,
-                metricsContext: contextBundle.metricsContext,
-                latestDay: contextBundle.latestDay,
-                page: page,
-                pageSize: pageSize,
-                snapshotLabelFilter: alertLabel
-            )
-        }
-
-        // 三方站标签即时计算：筛选仍需内存过滤（保持原路径）。
-        if alertLabel != nil {
-            return try fetchDashboardPageWithAlertFilter(
-                filters: filters,
-                weekStarts: contextBundle.weekStarts,
-                metricsContext: contextBundle.metricsContext,
-                latestDay: contextBundle.latestDay,
-                page: page,
-                pageSize: pageSize
-            )
-        }
-
         return try fetchDashboardPageSQLPaginated(
             filters: filters,
             weekStarts: contextBundle.weekStarts,
             metricsContext: contextBundle.metricsContext,
             latestDay: contextBundle.latestDay,
             page: page,
-            pageSize: pageSize,
-            snapshotLabelFilter: nil
+            pageSize: pageSize
         )
     }
 
@@ -125,23 +97,12 @@ extension DatabaseClient {
     ) throws -> (productIDs: [String], weekStarts: [String]) {
         try Task.checkCancellation()
         guard let context = try loadDashboardMetricsContext() else { return ([], []) }
-        let alertLabel = alertFilterLabel(for: filters.alertFilter)
-        if alertLabel != nil, filters.warningLabelEngine == .thirdPartyCohort {
-            // 动态预警继续使用原规则计算，避免图表与产品表筛选口径不同。
-            let rows = try fetchAllMappedRows(
-                filters: filters,
-                weekStarts: context.weekStarts,
-                metricsContext: context.metricsContext
-            )
-            return (rows.map(\.id), context.weekStarts)
-        }
         let ranked = try fetchRankedProducts(
             filters: filters,
             weekStarts: context.weekStarts,
             limit: nil,
             offset: 0,
-            includeTotalCount: false,
-            snapshotLabelFilter: filters.warningLabelEngine == .selfBuiltSnapshot ? alertLabel : nil
+            includeTotalCount: false
         )
         return (ranked.products.map(\.productId), context.weekStarts)
     }
@@ -193,19 +154,13 @@ extension DatabaseClient {
         if let cached = cachedDashboardMetrics(for: weekStarts) {
             metricsContext = cached
         } else {
-            let overallWeeks = try fetchOverallWeeklyMetrics(weekStarts: completeWeekStarts)
-            let cohortBenchmarks = try fetchWeeklyCohortSpendBenchmarks(weekStarts: completeWeekStarts)
             let displayOverallWeeks = try fetchOverallWeeklyMetrics(weekStarts: weekStarts)
             let overallBenchmark = displayOverallWeeks.map(\.metrics).reduce(AggregatedMetrics()) { $0 + $1 }
             let totalCostCents = overallBenchmark.costCents
-            let warningTotalCostCents = overallWeeks.map(\.metrics).reduce(AggregatedMetrics()) { $0 + $1 }.costCents
             metricsContext = DashboardMetricsCache(
                 weekStartsKey: weekStarts.cacheKey,
-                overallWeeks: overallWeeks,
-                cohortBenchmarks: cohortBenchmarks,
                 overallBenchmark: overallBenchmark,
-                totalCostCents: totalCostCents,
-                warningTotalCostCents: warningTotalCostCents
+                totalCostCents: totalCostCents
             )
             storeDashboardMetricsCache(metricsContext)
         }
@@ -222,81 +177,12 @@ extension DatabaseClient {
         weekStarts: [String],
         metricsContext: DashboardMetricsCache
     ) throws -> [ProductPerformanceRowModel] {
-        let snapshotLabels = try snapshotLabelsIfNeeded(for: filters.warningLabelEngine)
-        let alertLabel = alertFilterLabel(for: filters.alertFilter)
-
-        // 自建站：预警筛选可在 SQL 侧完成，导出也走同一路径。
-        if filters.warningLabelEngine == .selfBuiltSnapshot {
-            let ranked = try fetchRankedProducts(
-                filters: filters,
-                weekStarts: weekStarts,
-                limit: nil,
-                offset: 0,
-                includeTotalCount: false,
-                snapshotLabelFilter: alertLabel
-            )
-            return try mapProductsToPerformanceRows(
-                products: ranked.products,
-                weekStarts: weekStarts,
-                metricsContext: metricsContext,
-                alertFilter: nil,
-                warningLabelEngine: filters.warningLabelEngine,
-                snapshotLabels: snapshotLabels
-            )
-        }
-
-        if alertLabel != nil {
-            let batchSize = 200
-            var offset = 0
-            var mappedRows: [ProductPerformanceRowModel] = []
-
-            while true {
-                try Task.checkCancellation()
-                let ranked = try fetchRankedProducts(
-                    filters: filters,
-                    weekStarts: weekStarts,
-                    limit: batchSize,
-                    offset: offset,
-                    includeTotalCount: false,
-                    snapshotLabelFilter: nil
-                )
-                if ranked.products.isEmpty { break }
-
-                let batchRows = try mapProductsToPerformanceRows(
-                    products: ranked.products,
-                    weekStarts: weekStarts,
-                    metricsContext: metricsContext,
-                    alertFilter: filters.alertFilter,
-                    warningLabelEngine: filters.warningLabelEngine,
-                    snapshotLabels: snapshotLabels
-                )
-                mappedRows.append(contentsOf: batchRows)
-
-                if ranked.products.count < batchSize { break }
-                offset += batchSize
-            }
-
-            mappedRows.sort { lhs, rhs in
-                filters.sort.sortsBefore(lhs, rhs)
-            }
-            return mappedRows
-        }
-
         let ranked = try fetchRankedProducts(
-            filters: filters,
-            weekStarts: weekStarts,
-            limit: nil,
-            offset: 0,
-            includeTotalCount: false,
-            snapshotLabelFilter: nil
+            filters: filters, weekStarts: weekStarts,
+            limit: nil, offset: 0, includeTotalCount: false
         )
         return try mapProductsToPerformanceRows(
-            products: ranked.products,
-            weekStarts: weekStarts,
-            metricsContext: metricsContext,
-            alertFilter: nil,
-            warningLabelEngine: filters.warningLabelEngine,
-            snapshotLabels: snapshotLabels
+            products: ranked.products, weekStarts: weekStarts, metricsContext: metricsContext
         )
     }
 
@@ -306,16 +192,14 @@ extension DatabaseClient {
         metricsContext: DashboardMetricsCache,
         latestDay: String,
         page: Int,
-        pageSize: Int,
-        snapshotLabelFilter: ProductWarningLabel?
+        pageSize: Int
     ) throws -> DashboardPageResult {
         let ranked = try fetchRankedProducts(
             filters: filters,
             weekStarts: weekStarts,
             limit: pageSize,
             offset: max(0, (page - 1) * pageSize),
-            includeTotalCount: true,
-            snapshotLabelFilter: snapshotLabelFilter
+            includeTotalCount: true
         )
 
         guard ranked.totalCount > 0, !ranked.products.isEmpty else {
@@ -329,82 +213,12 @@ extension DatabaseClient {
         let pageRows = try mapProductsToPerformanceRows(
             products: ranked.products,
             weekStarts: weekStarts,
-            metricsContext: metricsContext,
-            alertFilter: nil,
-            warningLabelEngine: filters.warningLabelEngine,
-            snapshotLabels: try snapshotLabelsIfNeeded(for: filters.warningLabelEngine)
+            metricsContext: metricsContext
         )
 
         return DashboardPageResult(
             rows: pageRows,
             totalCount: ranked.totalCount,
-            totalPages: totalPages,
-            weekStarts: weekStarts,
-            latestDataDay: latestDay
-        )
-    }
-
-    private func fetchDashboardPageWithAlertFilter(
-        filters: DashboardQueryFilters,
-        weekStarts: [String],
-        metricsContext: DashboardMetricsCache,
-        latestDay: String,
-        page: Int,
-        pageSize: Int
-    ) throws -> DashboardPageResult {
-        let batchSize = 200
-        var offset = 0
-        var mappedRows: [ProductPerformanceRowModel] = []
-        let snapshotLabels = try snapshotLabelsIfNeeded(for: filters.warningLabelEngine)
-
-        while true {
-            try Task.checkCancellation()
-            let ranked = try fetchRankedProducts(
-                filters: filters,
-                weekStarts: weekStarts,
-                limit: batchSize,
-                offset: offset,
-                includeTotalCount: false,
-                snapshotLabelFilter: nil
-            )
-
-            if ranked.products.isEmpty { break }
-
-            let batchRows = try mapProductsToPerformanceRows(
-                products: ranked.products,
-                weekStarts: weekStarts,
-                metricsContext: metricsContext,
-                alertFilter: filters.alertFilter,
-                warningLabelEngine: filters.warningLabelEngine,
-                snapshotLabels: snapshotLabels
-            )
-            mappedRows.append(contentsOf: batchRows)
-
-            if ranked.products.count < batchSize { break }
-            offset += batchSize
-        }
-
-        guard !mappedRows.isEmpty else {
-            return DashboardPageResult(
-                rows: [], totalCount: 0, totalPages: 1,
-                weekStarts: weekStarts, latestDataDay: latestDay
-            )
-        }
-
-        mappedRows.sort { lhs, rhs in
-            filters.sort.sortsBefore(lhs, rhs)
-        }
-
-        let totalCount = mappedRows.count
-        let totalPages = max(1, Int(ceil(Double(totalCount) / Double(pageSize))))
-        let safePage = min(max(page, 1), totalPages)
-        let start = (safePage - 1) * pageSize
-        let end = min(start + pageSize, totalCount)
-        let pageRows = start < end ? Array(mappedRows[start..<end]) : []
-
-        return DashboardPageResult(
-            rows: pageRows,
-            totalCount: totalCount,
             totalPages: totalPages,
             weekStarts: weekStarts,
             latestDataDay: latestDay
@@ -421,58 +235,23 @@ extension DatabaseClient {
         weekStarts: [String],
         limit: Int?,
         offset: Int,
-        includeTotalCount: Bool,
-        snapshotLabelFilter: ProductWarningLabel?
+        includeTotalCount: Bool
     ) throws -> RankedProductsResult {
-        let snapshotJoin: (weekId: String, label: String)?
-        var isMissingInGMCFilter = false
-        if let snapshotLabelFilter {
-            if snapshotLabelFilter == .missingInGMC {
-                // 「GMC 缺失」是 products 上的数据完整性标记，不走标签快照 JOIN。
-                snapshotJoin = nil
-                isMissingInGMCFilter = true
-            } else {
-                guard let weekId = try latestLabelSnapshotWeekId() else {
-                    return RankedProductsResult(products: [], totalCount: 0)
-                }
-                snapshotJoin = (weekId, snapshotLabelFilter.rawValue)
-            }
-        } else {
-            snapshotJoin = nil
-        }
-
         return try dbQueue.read { db in
             let filterClause = try buildProductFilterClause(filters: filters, weekStarts: weekStarts, db: db)
             let weekPlaceholders = Array(repeating: "?", count: weekStarts.count).joined(separator: ", ")
-            let snapshotJoinSQL: String
-            if snapshotJoin != nil {
-                snapshotJoinSQL = """
-                    INNER JOIN label_snapshot_products lsp
-                      ON lsp.product_id = p.product_id
-                     AND lsp.week_id = ?
-                     AND lsp.label = ?
-                    """
-            } else {
-                snapshotJoinSQL = ""
-            }
-            let missingInGMCSQL = isMissingInGMCFilter ? " AND p.missing_in_gmc = 1" : ""
-
             let countSQL = """
                 SELECT COUNT(*) FROM (
                   SELECT p.product_id
                   FROM products p
                   INNER JOIN product_weekly_metrics m ON m.product_id = p.product_id
-                  \(snapshotJoinSQL)
                   WHERE m.week_start IN (\(weekPlaceholders))
-                  \(filterClause.sql)\(missingInGMCSQL)
+                  \(filterClause.sql)
                   GROUP BY p.product_id
                   HAVING SUM(m.cost_cents) > 0 OR SUM(m.conversion_value_cents) > 0
                 );
                 """
             var countArgs = StatementArguments()
-            if let snapshotJoin {
-                countArgs += [snapshotJoin.weekId, snapshotJoin.label]
-            }
             for week in weekStarts { countArgs += [week] }
             countArgs += filterClause.arguments
 
@@ -487,17 +266,13 @@ extension DatabaseClient {
                 SELECT p.*
                 FROM products p
                 INNER JOIN product_weekly_metrics m ON m.product_id = p.product_id
-                \(snapshotJoinSQL)
                 WHERE m.week_start IN (\(weekPlaceholders))
-                \(filterClause.sql)\(missingInGMCSQL)
+                \(filterClause.sql)
                 GROUP BY p.product_id
                 HAVING SUM(m.cost_cents) > 0 OR SUM(m.conversion_value_cents) > 0
                 ORDER BY \(filters.sort.sqlOrderClause)
                 """
             var dataArgs = StatementArguments()
-            if let snapshotJoin {
-                dataArgs += [snapshotJoin.weekId, snapshotJoin.label]
-            }
             for week in weekStarts { dataArgs += [week] }
             dataArgs += filterClause.arguments
 
@@ -565,17 +340,16 @@ extension DatabaseClient {
     private func mapProductsToPerformanceRows(
         products: [ProductRecord],
         weekStarts: [String],
-        metricsContext: DashboardMetricsCache,
-        alertFilter: String?,
-        warningLabelEngine: WarningLabelEngine,
-        snapshotLabels: [String: String]
+        metricsContext: DashboardMetricsCache
     ) throws -> [ProductPerformanceRowModel] {
         guard !products.isEmpty else { return [] }
 
         let productIds = products.map(\.productId)
         let latestDay = try fetchLatestMetricDay() ?? weekStarts.last ?? ""
         let trendWeekStarts = weekStarts
-        let completeWeekStarts = metricsContext.overallWeeks.map(\.weekStart)
+        let completeWeekStarts = WeekCalendar.reportingWeekStarts(
+            endingAt: WeekCalendar.parseDay(latestDay) ?? Date()
+        )
         let trendCoverageDays = trendWeekStarts.map { weekStart in
             completeWeekStarts.contains(weekStart)
                 ? 7
@@ -585,79 +359,32 @@ extension DatabaseClient {
         let weeklyByProduct = Dictionary(grouping: weeklyRecords, by: \.productId)
 
         return try products.compactMap { product in
-            try makePerformanceRowIfMatchingAlert(
+            try makePerformanceRow(
                 product: product,
                 weekStarts: weekStarts,
                 trendWeekStarts: trendWeekStarts,
                 trendCoverageDays: trendCoverageDays,
                 weeklyByProduct: weeklyByProduct,
-                metricsContext: metricsContext,
-                alertFilter: alertFilter,
-                warningLabelEngine: warningLabelEngine,
-                snapshotLabels: snapshotLabels
+                metricsContext: metricsContext
             )
         }
     }
 
-    private func snapshotLabelsIfNeeded(for engine: WarningLabelEngine) throws -> [String: String] {
-        switch engine {
-        case .selfBuiltSnapshot:
-            try cachedOrLoadLatestLabelDecisions()
-        case .thirdPartyCohort:
-            [:]
-        }
-    }
-
-    private func makePerformanceRowIfMatchingAlert(
+    private func makePerformanceRow(
         product: ProductRecord,
         weekStarts: [String],
         trendWeekStarts: [String],
         trendCoverageDays: [Int],
         weeklyByProduct: [String: [ProductWeeklyMetricsRecord]],
-        metricsContext: DashboardMetricsCache,
-        alertFilter: String?,
-        warningLabelEngine: WarningLabelEngine,
-        snapshotLabels: [String: String]
+        metricsContext: DashboardMetricsCache
     ) throws -> ProductPerformanceRowModel? {
         let records = weeklyByProduct[product.productId] ?? []
         let recordByWeek = Dictionary(uniqueKeysWithValues: records.map { ($0.weekStart, $0) })
-
-        let completeWeekStarts = metricsContext.overallWeeks.map(\.weekStart)
-        let productWeeks: [WeeklyProductMetrics] = completeWeekStarts.map { week in
-            let metrics = recordByWeek[week]?.aggregatedMetrics ?? AggregatedMetrics()
-            return WeeklyProductMetrics(productId: product.productId, weekStart: week, metrics: metrics)
-        }
 
         let displayPeriodTotals = trendWeekStarts
             .map { recordByWeek[$0]?.aggregatedMetrics ?? AggregatedMetrics() }
             .reduce(AggregatedMetrics()) { $0 + $1 }
         guard displayPeriodTotals.costCents > 0 || displayPeriodTotals.conversionValueCents > 0 else { return nil }
-
-        let warning: ProductWarningLabel?
-        switch warningLabelEngine {
-        case .thirdPartyCohort:
-            warning = WeeklyMetricsRules.resolveWarningLabel(
-                productWeeks: productWeeks,
-                overallWeeks: metricsContext.overallWeeks,
-                cohortBenchmarks: metricsContext.cohortBenchmarks,
-                totalPortfolioCostCents: metricsContext.warningTotalCostCents,
-                settings: AnalyticsSettingsSnapshot.current(accountID: accountID)
-            )
-        case .selfBuiltSnapshot:
-            if let raw = snapshotLabels[product.productId] {
-                warning = ProductWarningLabel(rawValue: raw)
-            } else {
-                warning = nil
-            }
-        }
-
-        // 孤儿产品（有投放/销售数据但无 GMC 目录记录）强制展示「GMC 缺失」标签，覆盖常规预警。
-        let effectiveWarning: ProductWarningLabel? = product.missingInGmc ? .missingInGMC : warning
-
-        if let required = alertFilterLabel(for: alertFilter ?? DashboardQueryFilters.alertFilterDefaultOption),
-           effectiveWarning != required {
-            return nil
-        }
 
         let costTrend = trendWeekStarts.map { recordByWeek[$0]?.costCents ?? 0 }
         let gsTrend = trendWeekStarts.map { recordByWeek[$0]?.conversionValueCents ?? 0 }
@@ -670,18 +397,8 @@ extension DatabaseClient {
             weeklyCostTrend: costTrend,
             weeklyGSTrend: gsTrend,
             trendWeekStarts: trendWeekStarts,
-            trendCoverageDays: trendCoverageDays,
-            warningLabel: effectiveWarning
+            trendCoverageDays: trendCoverageDays
         )
-    }
-
-    private func alertFilterLabel(for selection: String) -> ProductWarningLabel? {
-        switch selection {
-        case DashboardQueryFilters.alertFilterDefaultOption:
-            nil
-        default:
-            ProductWarningLabel(rawValue: selection)
-        }
     }
 
     private func parseCurrency(_ value: String) -> Double {

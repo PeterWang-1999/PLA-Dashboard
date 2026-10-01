@@ -38,9 +38,7 @@ struct DashboardView: View {
             .onChange(of: viewModel.searchText) { _, _ in
                 viewModel.onSearchTextChanged()
             }
-            .onChange(of: viewModel.selectedAlertFilter) { _, _ in
-                viewModel.onFiltersChanged()
-            }
+
             .onChange(of: viewModel.selectedCustomLabelFilter) { _, _ in
                 viewModel.onFiltersChanged()
             }

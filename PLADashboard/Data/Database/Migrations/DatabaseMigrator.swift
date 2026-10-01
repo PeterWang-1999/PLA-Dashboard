@@ -13,7 +13,7 @@ enum DatabaseMigrationError: Error, LocalizedError {
 }
 
 struct AppDatabaseMigrator {
-    static func migrate(_ dbQueue: DatabaseQueue) throws {
+    static func migrate(_ dbQueue: DatabaseQueue, upTo target: String? = nil) throws {
         var migrator = GRDB.DatabaseMigrator()
 
         migrator.registerMigration("v1_initial_schema") { db in
@@ -52,6 +52,14 @@ struct AppDatabaseMigrator {
             try Migration_v9_MissingInGMC.migrate(db)
         }
 
-        try migrator.migrate(dbQueue)
+        migrator.registerMigration("v10_remove_warning_labels") { db in
+            try Migration_v10_RemoveWarningLabels.migrate(db)
+        }
+
+        if let target {
+            try migrator.migrate(dbQueue, upTo: target)
+        } else {
+            try migrator.migrate(dbQueue)
+        }
     }
 }

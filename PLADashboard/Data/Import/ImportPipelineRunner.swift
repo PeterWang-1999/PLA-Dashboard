@@ -87,21 +87,6 @@ enum ImportPipelineRunner: Sendable {
 
         try Task.checkCancellation()
 
-        if accountKind == .selfBuilt,
-           shouldRebuildMetrics,
-           sourceKind == .plaDeliveryDetail || sourceKind == .salesReport {
-            await onProgress(ImportProgress.fromJob(
-                phase: .rebuildingMetrics,
-                job: job,
-                message: "正在计算预警标签…"
-            ))
-            // 同周先导投放再导毛利、或同周重导时必须允许覆盖本周快照，否则会卡在「全普通」。
-            _ = try await databaseClient.recomputeWarningLabelsIfNeeded(
-                force: false,
-                refreshSameWeek: true
-            )
-        }
-
         try Task.checkCancellation()
 
         await onProgress(ImportProgress.fromJob(

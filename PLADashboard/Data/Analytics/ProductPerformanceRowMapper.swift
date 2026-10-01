@@ -1,14 +1,11 @@
 import Foundation
 
 struct DashboardQueryFilters: Sendable, Hashable {
-    static let alertFilterDefaultOption = "全部预警标签"
 
     var searchText: String = ""
-    var alertFilter: String = Self.alertFilterDefaultOption
     var customLabelFilter: CustomLabelFilterSelection = .all
     var categoryFilter: CategoryFilterSelection = .all
     var sort: DashboardTableSort = .default
-    var warningLabelEngine: WarningLabelEngine = .thirdPartyCohort
 }
 
 struct DashboardPageResult: Sendable {
@@ -115,8 +112,7 @@ enum ProductPerformanceRowMapper {
         /// 销售趋势列：近 6 周 Google Ads `conversion_value_cents` 周汇总（非自归因 Gross Sales）。
         weeklyGSTrend: [Int],
         trendWeekStarts: [String] = [],
-        trendCoverageDays: [Int] = [],
-        warningLabel: ProductWarningLabel?
+        trendCoverageDays: [Int] = []
     ) -> ProductPerformanceRowModel {
         let displayLSIN = product.lsin ?? product.productId
 
@@ -130,8 +126,6 @@ enum ProductPerformanceRowMapper {
                 totalCostCents: totalCostCents
             ),
             roi: DashboardMetricFormatter.formatDecimal(displayPeriodTotals.roi, fractionDigits: 2),
-            warningLabel: warningLabel?.rawValue ?? "—",
-            warningStyle: warningStyle(for: warningLabel),
             cpa: DashboardMetricFormatter.formatDecimal(displayPeriodTotals.cpa),
             cpaDelta: DashboardMetricFormatter.formatRelativeDelta(
                 product: displayPeriodTotals.cpa,
@@ -170,30 +164,4 @@ enum ProductPerformanceRowMapper {
         )
     }
 
-    private static func warningStyle(for label: ProductWarningLabel?) -> ProductPerformanceRowModel.WarningLabelStyle {
-        switch label {
-        case .lowSpend:
-            .lowSpend
-        case .highSpendHighEfficiency:
-            .highSpendHighEfficiency
-        case .highSpendLowEfficiency:
-            .highSpendLowEfficiency
-        case .highSpend:
-            .highSpend
-        case .lowEfficiency:
-            .lowEfficiency
-        case .highEfficiency:
-            .highEfficiency
-        case .potentialNew:
-            .potentialNew
-        case .lowSampleOld:
-            .lowSampleOld
-        case .observation:
-            .observation
-        case .missingInGMC:
-            .missingInGMC
-        case nil:
-            .none
-        }
-    }
 }

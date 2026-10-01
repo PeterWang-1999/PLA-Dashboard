@@ -53,7 +53,7 @@ struct DataDashboardView: View {
         .toolbar { DashboardToolbarContent(viewModel: viewModel) }
         .searchable(text: $viewModel.searchText, placement: .toolbar, prompt: "输入产品 ID 查询")
         .onChange(of: viewModel.searchText) { _, _ in viewModel.onSearchTextChanged() }
-        .onChange(of: viewModel.selectedAlertFilter) { _, _ in viewModel.onFiltersChanged() }
+
         .onChange(of: viewModel.selectedCustomLabelFilter) { _, _ in viewModel.onFiltersChanged() }
         .onChange(of: viewModel.selectedCategoryFilter) { _, _ in viewModel.onFiltersChanged() }
         .onChange(of: viewModel.isLoadingDataDashboard) { _, isLoading in

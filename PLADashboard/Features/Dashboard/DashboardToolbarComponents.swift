@@ -23,34 +23,6 @@ private extension View {
 
 // MARK: - Pull-down filters (Menu + borderedButton)
 
-struct DashboardToolbarAlertFilterPicker: View {
-    @Bindable var viewModel: DashboardViewModel
-
-    var body: some View {
-        Menu {
-            Button(DashboardViewModel.alertFilterDefaultOption) {
-                viewModel.selectedAlertFilter = DashboardViewModel.alertFilterDefaultOption
-            }
-
-            Divider()
-
-            ForEach(viewModel.alertFilterOptions.dropFirst(), id: \.self) { value in
-                Button(value) {
-                    viewModel.selectedAlertFilter = value
-                }
-            }
-        } label: {
-            DashboardToolbarFilterLabel(
-                title: viewModel.selectedAlertFilter,
-                usesPrimaryStyle: viewModel.isAlertFilterActive
-            )
-        }
-        .dashboardToolbarPullDownMenuChrome()
-        .accessibilityLabel("预警筛选")
-        .accessibilityValue(viewModel.selectedAlertFilter)
-    }
-}
-
 struct DashboardToolbarCustomLabelFilterPicker: View {
     @Bindable var viewModel: DashboardViewModel
 

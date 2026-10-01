@@ -28,7 +28,7 @@ final class DataDashboardCapacityTests: XCTestCase {
         }
     }
 
-    func testChartSelectionMatchesExportAcrossFiltersAndEngines() async throws {
+    func testChartSelectionMatchesExportAcrossProductFilters() async throws {
         let client = try DatabaseClient.makeInMemoryForTesting()
         try await client.seedDashboardCapacityFixture(count: 12)
         let cases: [DashboardQueryFilters] = [
@@ -37,11 +37,6 @@ final class DataDashboardCapacityTests: XCTestCase {
             DashboardQueryFilters(customLabelFilter: .value(column: "自定义标签 0", value: "even")),
             DashboardQueryFilters(categoryFilter: .level2("Clothing")),
             DashboardQueryFilters(sort: .roiAscending),
-            DashboardQueryFilters(alertFilter: "GMC 缺失"),
-            DashboardQueryFilters(alertFilter: "低消费"),
-            DashboardQueryFilters(warningLabelEngine: .selfBuiltSnapshot),
-            DashboardQueryFilters(alertFilter: "GMC 缺失", warningLabelEngine: .selfBuiltSnapshot),
-            DashboardQueryFilters(alertFilter: "高效", warningLabelEngine: .selfBuiltSnapshot),
         ]
         for filters in cases {
             let exported = try await client.fetchDashboardAllRows(filters: filters)
@@ -110,21 +105,6 @@ private extension DatabaseClient {
         }
         try rebuildAllProductSearchIndex()
         try rebuildProductWeeklyMetrics()
-        if count <= 501 {
-            let decisions = (1...count).map { index in
-                LabelProductDecision(
-                    productId: String(format: "P%06d", index), previousLabel: "普通/观察",
-                    suggestedLabel: index.isMultiple(of: 2) ? "高效" : "普通/观察",
-                    transitionAction: "fixture", reason: "fixture",
-                    failHighRetain: false, marginLt1: false, noSignalRecent3: false,
-                    noConvGSCurrentWeek: false, roiGe1x: true, marginGe1: true,
-                    weeksInLowSampleOld: 0, weeksInPotentialNew: 0
-                )
-            }
-            try persistLabelSnapshot(
-                weekId: "2026-09-20", weekStarts: ["2026-09-20"],
-                historyNote: "capacity fixture", decisions: decisions
-            )
-        }
+
     }
 }

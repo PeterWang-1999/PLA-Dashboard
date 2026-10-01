@@ -7,8 +7,6 @@ struct ProductPerformanceRowModel: Identifiable, Hashable, Sendable {
     let cost: String
     let costShare: String
     let roi: String
-    let warningLabel: String
-    let warningStyle: WarningLabelStyle
     let cpa: String
     let cpaDelta: String
     let arpu: String
@@ -32,19 +30,6 @@ struct ProductPerformanceRowModel: Identifiable, Hashable, Sendable {
     let sortClicks: Int
     let sortLSIN: String
 
-    enum WarningLabelStyle: String, Hashable, Sendable {
-        case none
-        case lowSpend
-        case highSpendHighEfficiency
-        case highSpendLowEfficiency
-        case highSpend
-        case lowEfficiency
-        case highEfficiency
-        case potentialNew
-        case lowSampleOld
-        case observation
-        case missingInGMC
-    }
 }
 
 enum DashboardDataSource: Sendable {

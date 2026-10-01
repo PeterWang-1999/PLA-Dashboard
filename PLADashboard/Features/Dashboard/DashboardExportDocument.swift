@@ -44,13 +44,12 @@ struct DashboardExportCSVDocument: FileDocument, Sendable {
         lines.append("# row_count=\(bundle.totalCount)")
         lines.append("# weeks=\(bundle.weekStarts.joined(separator: ","))")
         lines.append("# search=\(Self.escapeCSV(filters.searchText))")
-        lines.append("# alert_filter=\(Self.escapeCSV(filters.alertFilter))")
         lines.append("# custom_label_filter=\(Self.escapeCSV(filters.customLabelFilter.menuTitle))")
         lines.append("# category_filter=\(Self.escapeCSV(filters.categoryFilter.menuTitle))")
         lines.append("# sort=\(Self.escapeCSV(filters.sort.exportLabel))")
 
         var headers = [
-            "产品 ID", "消费", "消费占比", "ROI", "预警标签",
+            "产品 ID", "消费", "消费占比", "ROI",
         ]
         for week in bundle.weekStarts {
             headers.append("消费趋势_\(week)")
@@ -70,7 +69,6 @@ struct DashboardExportCSVDocument: FileDocument, Sendable {
                 Self.escapeCSV(row.cost),
                 Self.escapeCSV(row.costShare),
                 Self.escapeCSV(row.roi),
-                Self.escapeCSV(row.warningLabel),
             ]
             for cents in row.costTrendWeeks.prefix(bundle.weekStarts.count) {
                 fields.append(Self.escapeCSV(DashboardMetricFormatter.formatCurrencyFromCents(cents)))

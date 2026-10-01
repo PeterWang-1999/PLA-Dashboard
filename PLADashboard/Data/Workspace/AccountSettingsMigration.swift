@@ -16,22 +16,6 @@ enum AccountSettingsMigration {
             return
         }
 
-        if userDefaults.object(forKey: AppSettings.legacyHighEfficiencyROIMultiplierKey) is Double {
-            setHighEfficiencyROIMultiplier(
-                userDefaults.object(forKey: AppSettings.legacyHighEfficiencyROIMultiplierKey) as! Double,
-                accountID: accountID,
-                userDefaults: userDefaults
-            )
-        }
-
-        if userDefaults.object(forKey: AppSettings.legacyLowEfficiencyMinClicksKey) is Int {
-            setLowEfficiencyMinClicks(
-                userDefaults.object(forKey: AppSettings.legacyLowEfficiencyMinClicksKey) as! Int,
-                accountID: accountID,
-                userDefaults: userDefaults
-            )
-        }
-
         if userDefaults.object(forKey: AppSettings.legacyDataRetentionDaysKey) != nil {
             setDataRetentionDays(
                 userDefaults.integer(forKey: AppSettings.legacyDataRetentionDaysKey),
@@ -48,12 +32,7 @@ enum AccountSettingsMigration {
     }
 
     private static func hasLegacyGlobalSettings(userDefaults: UserDefaults) -> Bool {
-        if userDefaults.object(forKey: AppSettings.legacyHighEfficiencyROIMultiplierKey) != nil {
-            return true
-        }
-        if userDefaults.object(forKey: AppSettings.legacyLowEfficiencyMinClicksKey) != nil {
-            return true
-        }
+
         if userDefaults.object(forKey: AppSettings.legacyDataRetentionDaysKey) != nil {
             return true
         }
@@ -61,22 +40,6 @@ enum AccountSettingsMigration {
             return true
         }
         return false
-    }
-
-    private static func setHighEfficiencyROIMultiplier(
-        _ value: Double,
-        accountID: String,
-        userDefaults: UserDefaults
-    ) {
-        AppSettings.setHighEfficiencyROIMultiplier(value, accountID: accountID, userDefaults: userDefaults)
-    }
-
-    private static func setLowEfficiencyMinClicks(
-        _ value: Int,
-        accountID: String,
-        userDefaults: UserDefaults
-    ) {
-        AppSettings.setLowEfficiencyMinClicks(value, accountID: accountID, userDefaults: userDefaults)
     }
 
     private static func setDataRetentionDays(

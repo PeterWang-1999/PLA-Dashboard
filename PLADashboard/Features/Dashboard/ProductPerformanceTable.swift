@@ -29,7 +29,6 @@ struct ProductPerformanceTable: View {
             costColumn
             roiColumn
             Group {
-                warningLabelColumn
                 costTrendColumn
                 gsTrendColumn
                 cpaColumn
@@ -53,7 +52,6 @@ struct ProductPerformanceTable: View {
             costColumn
             roiColumn
             Group {
-                warningLabelColumn
                 costTrendColumn
                 gsTrendColumn
                 cpaColumn
@@ -96,12 +94,6 @@ struct ProductPerformanceTable: View {
     private var roiColumn: some TableColumnContent<ProductPerformanceRowModel, KeyPathComparator<ProductPerformanceRowModel>> {
         column(DashboardColumn.roi, value: \.sortROI) { row in
             Text(row.roi).font(.body)
-        }
-    }
-
-    private var warningLabelColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
-        staticColumn(DashboardColumn.warningLabel, accessibilityValue: \.warningLabel) { row in
-            WarningLabelView(text: row.warningLabel, style: row.warningStyle)
         }
     }
 
