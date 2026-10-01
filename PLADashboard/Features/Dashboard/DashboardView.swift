@@ -85,7 +85,18 @@ struct DashboardView: View {
                 document: exportDocument,
                 contentType: .commaSeparatedText,
                 defaultFilename: exportFilename
-            ) { _ in }
+            ) { result in
+                if let message = ExportSaveFeedback.message(for: result) {
+                    exportErrorMessage = message
+                    showExportError = true
+                }
+            }
+            .onChange(of: viewModel.exportWorkspaceGeneration) { _, _ in
+                isPresentingExporter = false
+                showExportError = false
+                presentedProduct = nil
+                selectedProductIDs.removeAll()
+            }
             .alert("无法导出", isPresented: $showExportError) {
                 Button("好", role: .cancel) {}
             } message: {
@@ -314,6 +325,8 @@ struct DashboardView: View {
             formatter.dateFormat = "yyyyMMdd"
             exportFilename = "pla-dashboard-\(formatter.string(from: Date()))"
             isPresentingExporter = true
+        } catch is CancellationError {
+            return
         } catch {
             exportErrorMessage = error.localizedDescription
             showExportError = true

@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct DashboardExportCSVDocument: FileDocument {
+struct DashboardExportCSVDocument: FileDocument, Sendable {
     static var readableContentTypes: [UTType] { [.commaSeparatedText] }
 
     let text: String
@@ -102,5 +102,34 @@ struct DashboardExportCSVDocument: FileDocument {
 
     private static func escapeCSV(_ value: String) -> String {
         "\"\(value.replacingOccurrences(of: "\"", with: "\"\""))\""
+    }
+}
+
+/// CSV 格式化在独立 actor 上执行，避免大量行拼接占用 MainActor。
+actor DashboardExportBuilder {
+    func build(
+        bundle: DashboardExportBundle,
+        filters: DashboardQueryFilters,
+        includeClicksAndConversions: Bool
+    ) throws -> DashboardExportCSVDocument {
+        try Task.checkCancellation()
+        let document = DashboardExportCSVDocument(
+            bundle: bundle,
+            filters: filters,
+            includeClicksAndConversions: includeClicksAndConversions
+        )
+        try Task.checkCancellation()
+        return document
+    }
+}
+
+/// 系统保存面板的正常取消不需要错误提示。
+enum ExportSaveFeedback {
+    static func message(for result: Result<URL, Error>) -> String? {
+        guard case .failure(let error) = result else { return nil }
+        if error is CancellationError { return nil }
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain, nsError.code == NSUserCancelledError { return nil }
+        return error.localizedDescription
     }
 }

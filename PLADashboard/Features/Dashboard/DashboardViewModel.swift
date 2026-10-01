@@ -36,6 +36,12 @@ final class DashboardViewModel {
     private var chartRequestID: UInt = 0
     @ObservationIgnored private let pageLoader: PageLoader
     @ObservationIgnored private let chartLoader: ChartLoader
+    @ObservationIgnored private let exportLoader: ExportLoader
+    @ObservationIgnored private let exportBuilder = DashboardExportBuilder()
+    private var exportRequestID: UInt = 0
+    var exportWorkspaceGeneration: UInt { loadGeneration }
+
+    typealias ExportLoader = @Sendable (DatabaseClient, DashboardQueryFilters) async throws -> DashboardExportBundle
 
     typealias PageLoader = @Sendable (DatabaseClient, DashboardQueryFilters, Int, Int) async throws -> DashboardPageResult
     typealias ChartLoader = @Sendable (DatabaseClient, DashboardQueryFilters, WorkspaceAccountKind) async throws -> DataDashboardSnapshot
@@ -46,10 +52,14 @@ final class DashboardViewModel {
         },
         chartLoader: @escaping ChartLoader = { client, filters, kind in
             try await client.fetchDataDashboard(filters: filters, accountKind: kind)
+        },
+        exportLoader: @escaping ExportLoader = { client, filters in
+            try await client.fetchDashboardAllRows(filters: filters)
         }
     ) {
         self.pageLoader = pageLoader
         self.chartLoader = chartLoader
+        self.exportLoader = exportLoader
     }
     /// 每次账户切换递增，用于丢弃过期的异步加载结果。
     private var loadGeneration: UInt = 0
@@ -107,6 +117,7 @@ final class DashboardViewModel {
 
     func resetForAccountSwitch() {
         loadGeneration &+= 1
+        exportRequestID &+= 1
         invalidateTableRequest()
         retryTask?.cancel()
         retryTask = nil
@@ -476,19 +487,39 @@ final class DashboardViewModel {
         guard dataSource == .database, let databaseClient else {
             throw DashboardExportError.noData
         }
+        let generation = loadGeneration
+        let filters = makeCurrentFilters()
+        exportRequestID &+= 1
+        let requestID = exportRequestID
         isExporting = true
         exportErrorMessage = nil
-        defer { isExporting = false }
-
-        let bundle = try await databaseClient.fetchDashboardAllRows(filters: makeCurrentFilters())
-        guard !bundle.rows.isEmpty else {
-            throw DashboardExportError.noData
+        defer {
+            if requestID == exportRequestID { isExporting = false }
         }
-        return DashboardExportCSVDocument(
-            bundle: bundle,
-            filters: makeCurrentFilters(),
-            includeClicksAndConversions: includeClicksAndConversions
-        )
+
+        do {
+            let bundle = try await exportLoader(databaseClient, filters)
+            try Task.checkCancellation()
+            guard generation == loadGeneration, requestID == exportRequestID else {
+                throw CancellationError()
+            }
+            guard !bundle.rows.isEmpty else { throw DashboardExportError.noData }
+            let document = try await exportBuilder.build(
+                bundle: bundle,
+                filters: filters,
+                includeClicksAndConversions: includeClicksAndConversions
+            )
+            try Task.checkCancellation()
+            guard generation == loadGeneration, requestID == exportRequestID else {
+                throw CancellationError()
+            }
+            return document
+        } catch {
+            guard !Task.isCancelled, generation == loadGeneration, requestID == exportRequestID else {
+                throw CancellationError()
+            }
+            throw error
+        }
     }
 
     func fetchProductDetail(productID: String) async throws -> ProductDetailModel {

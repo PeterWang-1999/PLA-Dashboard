@@ -73,7 +73,7 @@
 
 ## 第 4 阶段：启动与账户磁盘操作移出主线程
 
-状态：实现及自动化验证完成，等待用户本地构建验证；尚未提交。
+状态：用户本地验证通过；提交 `b84f83f` 已推送至 origin/main，远端 SHA 已核实。
 
 - 新增 WorkspaceAccountService actor，在主线程之外完成账户配置读写、旧工作区迁移、数据库打开及 schema 迁移；新建账户也改为异步。
 - AccountStore 在后台准备完成后统一发布账户配置与数据库 client；切换失败保留原账户，包括磁盘中的选择。
@@ -91,6 +91,25 @@
 4. 导入过程中在另一窗口尝试切账户，应继续被拦截；导入完成或取消后能够切换。
 5. 用数据较大的账户观察启动/切换期间窗口是否仍能响应操作；无需为验证修改生产数据或人为破坏数据库。
 
-待提交范围：AccountStore.swift、CreateAccountSheet.swift、DatabaseClient.swift、WorkspaceAccountService.swift、AccountStoreTests.swift、DashboardViewModelAccountSwitchTests.swift、LegacyDatabaseMigrationTests.swift、SettingsPerAccountTests.swift、WorkspaceAccountServiceTests.swift、本文。既有 project.pbxproj、dist、.cursor 和审查报告变动保持原样。
+提交范围：AccountStore.swift、CreateAccountSheet.swift、DatabaseClient.swift、WorkspaceAccountService.swift、AccountStoreTests.swift、DashboardViewModelAccountSwitchTests.swift、LegacyDatabaseMigrationTests.swift、SettingsPerAccountTests.swift、WorkspaceAccountServiceTests.swift、本文。既有 project.pbxproj、dist、.cursor 和审查报告变动保持原样。
 
-下一阶段候选：导出元数据一致性与保存失败反馈，待本轮本地验证通过并提交后开始。
+## 第 5 阶段：导出快照一致性与保存失败反馈
+
+状态：实现及自动化验证完成，等待用户本地验证；尚未提交。
+
+- 查询与 CSV 头部使用同一份导出筛选快照；报告周使用查询返回的 bundle，不再在 await 后读取已变化的界面条件。
+- 账户切换/后续导出使旧请求失效；旧成功、旧失败和取消都不会再弹出过期保存面板或错误，旧请求不会清除新请求的加载状态。
+- CSV 内容生成放入独立 actor；数据量较大时不在 MainActor 拼接。保持 BOM、列定义、金额口径与 50,000 行上限。
+- 产品数据与产品明细两处系统保存面板都处理写入失败；正常取消静默。账户变化时关闭旧导出面板及旧产品明细。
+
+验证：macOS Debug 构建与 28 个定向测试全部通过（新增导出并发/保存反馈 6、既有导出 2、刷新并发 10、看板账户切换 10），xcresult 核实 0 失败、0 跳过。覆盖筛选快照、报告周、跨账户旧成功/失败、取消成功/失败、旧任务与新加载状态以及保存反馈。日志：`/private/tmp/pla-phase5-final-20261001.log`。`git diff --check` 通过。未做真实保存面板 UI 验证或 Instruments 速度测量。
+
+本地验证步骤：
+
+1. 筛选产品后导出，核对 CSV 的 search/alert/category/custom_label/sort 元数据、产品行及报告周。
+2. 点击导出后立刻改筛选，CSV 应保留点击时的条件；准备导出期间切账户，旧账户结果不应弹出保存面板。
+3. 正常保存产品数据与产品明细 CSV，确认内容可读；取消保存不弹错误。
+4. 若有安全的受限目录可用，尝试保存失败，确认出现“无法导出”提示，无需修改系统权限或填满磁盘。
+5. 导出较大筛选结果时观察界面响应；尚未测量真实加速比例。
+
+待提交范围：DashboardViewModel.swift、DashboardView.swift、DashboardExportDocument.swift、ProductDetailSheet.swift、DashboardExportConcurrencyTests.swift、本文。既有其他工作区变动保持原样。

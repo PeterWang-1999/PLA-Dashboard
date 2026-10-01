@@ -11,6 +11,7 @@ struct ProductDetailSheet: View {
     @State private var detail: ProductDetailModel?
     @State private var loadError: String?
     @State private var isExporting = false
+    @State private var exportErrorMessage: String?
     @State private var exportDocument: ProductDetailExportCSVDocument?
 
     var body: some View {
@@ -47,7 +48,17 @@ struct ProductDetailSheet: View {
             document: exportDocument,
             contentType: .commaSeparatedText,
             defaultFilename: "product-\(summary.id)-detail"
-        ) { _ in }
+        ) { result in
+            exportErrorMessage = ExportSaveFeedback.message(for: result)
+        }
+        .alert("无法导出", isPresented: Binding(
+            get: { exportErrorMessage != nil },
+            set: { if !$0 { exportErrorMessage = nil } }
+        )) {
+            Button("好", role: .cancel) { exportErrorMessage = nil }
+        } message: {
+            Text(exportErrorMessage ?? "")
+        }
     }
 
     private func detailContent(_ detail: ProductDetailModel) -> some View {
