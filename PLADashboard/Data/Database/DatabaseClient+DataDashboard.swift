@@ -12,8 +12,7 @@ extension DatabaseClient {
 
         let productIDs = selection.productIDs
         let weekStarts = selection.weekStarts
-        let weeklyRecords = try fetchWeeklyMetrics(productIds: productIDs, weekStarts: weekStarts)
-        let weekly = aggregateWeekly(records: weeklyRecords, weekStarts: weekStarts)
+        let weekly = try fetchDashboardWeeklyAggregates(productIDs: productIDs, weekStarts: weekStarts)
         let overallWeekly = try fetchOverallWeeklyMetrics(weekStarts: weekStarts)
         let overallByWeek = Dictionary(uniqueKeysWithValues: overallWeekly.map { ($0.weekStart, $0.metrics) })
         let totals = weekly.map(\.metrics).reduce(AggregatedMetrics(), +)
@@ -33,7 +32,7 @@ extension DatabaseClient {
             weekStarts: weekStarts,
             portfolioMetrics: totals
         )
-        let products = try fetchDashboardTopProducts(productIDs: productIDs, weeklyRecords: weeklyRecords)
+        let products = try fetchDashboardTopProducts(productIDs: productIDs, weekStarts: weekStarts)
 
         return DataDashboardSnapshot(
             metrics: makeDashboardMetrics(
@@ -65,17 +64,50 @@ extension DatabaseClient {
         )
     }
 
-    private func aggregateWeekly(
-        records: [ProductWeeklyMetricsRecord],
-        weekStarts: [String]
-    ) -> [WeeklyProductMetrics] {
-        let grouped = Dictionary(grouping: records, by: \.weekStart)
-        return weekStarts.map { weekStart in
-            let metrics = (grouped[weekStart] ?? [])
-                .map(\.aggregatedMetrics)
-                .reduce(AggregatedMetrics(), +)
-            return WeeklyProductMetrics(productId: "__dashboard__", weekStart: weekStart, metrics: metrics)
+    /// 每个批次只返回每周汇总，不把全部产品的逐周记录带回内存。
+    private func fetchDashboardWeeklyAggregates(
+        productIDs: [String], weekStarts: [String]
+    ) throws -> [WeeklyProductMetrics] {
+        var byWeek: [String: AggregatedMetrics] = [:]
+        try dbQueue.read { db in
+            for chunk in productIDs.chunked(maxCount: 500) {
+                try Task.checkCancellation()
+                var arguments = StatementArguments()
+                for id in chunk { arguments += [id] }
+                for week in weekStarts { arguments += [week] }
+                let rows = try Row.fetchAll(db, sql: """
+                    SELECT week_start, \(Self.dashboardMetricsProjection)
+                    FROM product_weekly_metrics
+                    WHERE product_id IN (\(chunk.placeholders))
+                      AND week_start IN (\(weekStarts.placeholders))
+                    GROUP BY week_start;
+                    """, arguments: arguments)
+                for row in rows {
+                    let week: String = row["week_start"]
+                    byWeek[week, default: AggregatedMetrics()] =
+                        byWeek[week, default: AggregatedMetrics()] + Self.dashboardAggregate(row)
+                }
+            }
         }
+        return weekStarts.map {
+            WeeklyProductMetrics(productId: "__dashboard__", weekStart: $0, metrics: byWeek[$0] ?? AggregatedMetrics())
+        }
+    }
+
+    private static let dashboardMetricsProjection = """
+        SUM(cost_cents) AS cost_cents, SUM(impressions) AS impressions,
+        SUM(clicks) AS clicks, SUM(conversions) AS conversions,
+        SUM(conversion_value_cents) AS conversion_value_cents,
+        SUM(gross_sales_cents) AS gross_sales_cents, SUM(gross_profit_cents) AS gross_profit_cents
+        """
+
+    private static func dashboardAggregate(_ row: Row) -> AggregatedMetrics {
+        AggregatedMetrics(
+            costCents: row["cost_cents"] ?? 0, impressions: row["impressions"] ?? 0,
+            clicks: row["clicks"] ?? 0, conversions: row["conversions"] ?? 0,
+            conversionValueCents: row["conversion_value_cents"] ?? 0,
+            grossSalesCents: row["gross_sales_cents"] ?? 0, grossProfitCents: row["gross_profit_cents"] ?? 0
+        )
     }
 
     private func makeDashboardMetrics(
@@ -345,17 +377,43 @@ extension DatabaseClient {
 
     private func fetchDashboardTopProducts(
         productIDs: [String],
-        weeklyRecords: [ProductWeeklyMetricsRecord]
+        weekStarts: [String]
     ) throws -> [DataDashboardProduct] {
-        let metricsByID = Dictionary(grouping: weeklyRecords, by: \.productId).mapValues {
-            $0.map(\.aggregatedMetrics).reduce(AggregatedMetrics(), +)
+        struct Candidate {
+            let id: String
+            let position: Int
+            let metrics: AggregatedMetrics
         }
-        // 保留同花费产品在原筛选排序中的相对次序。
-        let ids = productIDs.enumerated().sorted { lhs, rhs in
-            let leftCost = metricsByID[lhs.element]?.costCents ?? 0
-            let rightCost = metricsByID[rhs.element]?.costCents ?? 0
-            return leftCost == rightCost ? lhs.offset < rhs.offset : leftCost > rightCost
-        }.prefix(10).map(\.element)
+        var candidates: [Candidate] = []
+        try dbQueue.read { db in
+            for (batch, chunk) in productIDs.chunked(maxCount: 500).enumerated() {
+                try Task.checkCancellation()
+                // 位置是内部数组索引；产品身份与周仍用绑定参数。
+                let scope = chunk.enumerated().map { "(?, \(batch * 500 + $0.offset))" }.joined(separator: ",")
+                var arguments = StatementArguments()
+                for id in chunk { arguments += [id] }
+                for week in weekStarts { arguments += [week] }
+                let rows = try Row.fetchAll(db, sql: """
+                    WITH selected(product_id, position) AS (VALUES \(scope))
+                    SELECT m.product_id, s.position, \(Self.dashboardMetricsProjection)
+                    FROM product_weekly_metrics m
+                    INNER JOIN selected s ON s.product_id = m.product_id
+                    WHERE m.week_start IN (\(weekStarts.placeholders))
+                    GROUP BY m.product_id, s.position
+                    ORDER BY cost_cents DESC, s.position ASC LIMIT 10;
+                    """, arguments: arguments)
+                for row in rows {
+                    candidates.append(Candidate(id: row["product_id"], position: row["position"], metrics: Self.dashboardAggregate(row)))
+                }
+            }
+        }
+        // 每批前十必然包含全局前十的候选；同花费时保持原筛选顺序。
+        let top = candidates.sorted {
+            $0.metrics.costCents == $1.metrics.costCents
+                ? $0.position < $1.position : $0.metrics.costCents > $1.metrics.costCents
+        }.prefix(10)
+        let ids = top.map(\.id)
+        let metricsByID = Dictionary(uniqueKeysWithValues: top.map { ($0.id, $0.metrics) })
         let products = try dbQueue.read { db in
             var arguments = StatementArguments()
             for productID in ids { arguments += [productID] }

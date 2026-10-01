@@ -51,6 +51,49 @@ final class DataDashboardCapacityTests: XCTestCase {
         }
     }
 
+    func testSQLAggregatesAndTopTenMatchFullRecordsAcrossBatchesAndWeeks() async throws {
+        let client = try DatabaseClient.makeInMemoryForTesting()
+        try await client.seedDashboardCapacityFixture(count: 1_001)
+        let previousWeekRows = (1...1_001).map { index in
+            let id = String(format: "P%06d", index)
+            return AdsProductDailyRecord(
+                date: "2026-09-19", itemId: id, productId: id, variantId: nil,
+                campaign: "Prior week", currencyCode: "USD",
+                costMicros: index > 990 ? 10_000_000 : (index % 17) * 10_000,
+                impressions: 200, clicks: 20, conversions: 0.5,
+                conversionValueCents: 123, importId: "capacity"
+            )
+        }
+        try await client.insertAdsProductDailyBatch(previousWeekRows)
+        try await client.rebuildProductWeeklyMetrics()
+        for filters in [DashboardQueryFilters(), DashboardQueryFilters(sort: .roiAscending)] {
+            let selection = try await client.fetchDataDashboardProductSelection(filters: filters)
+            let records = try await client.fetchWeeklyMetrics(productIds: selection.productIDs, weekStarts: selection.weekStarts)
+            let snapshot = try await client.fetchDataDashboard(filters: filters, accountKind: .thirdParty)
+            for point in snapshot.weeklyTrend {
+                let metrics = records.filter { $0.weekStart == point.period }.map(\.aggregatedMetrics).reduce(AggregatedMetrics(), +)
+                XCTAssertEqual(point.costCents, metrics.costCents)
+                XCTAssertEqual(point.salesCents, metrics.conversionValueCents)
+                XCTAssertEqual(point.roi, metrics.roi, accuracy: 0.0000001)
+                XCTAssertEqual(point.cvr, metrics.cvr, accuracy: 0.0000001)
+                XCTAssertEqual(point.cpc, metrics.cpc, accuracy: 0.0000001)
+                XCTAssertEqual(point.aos, metrics.aos, accuracy: 0.0000001)
+            }
+            let byProduct = Dictionary(grouping: records, by: \.productId).mapValues {
+                $0.map(\.aggregatedMetrics).reduce(AggregatedMetrics(), +)
+            }
+            let expectedIDs = selection.productIDs.enumerated().sorted {
+                let lhs = byProduct[$0.element]!.costCents
+                let rhs = byProduct[$1.element]!.costCents
+                return lhs == rhs ? $0.offset < $1.offset : lhs > rhs
+            }.prefix(10).map(\.element)
+            XCTAssertEqual(snapshot.topProducts.map(\.productID), expectedIDs)
+            for product in snapshot.topProducts {
+                XCTAssertEqual(product.metrics, byProduct[product.productID])
+            }
+        }
+    }
+
     func testWeeklyBatchReadDoesNotDuplicateRepeatedProductIDs() async throws {
         let client = try DatabaseClient.makeInMemoryForTesting()
         try await client.seedDashboardCapacityFixture(count: 501)
