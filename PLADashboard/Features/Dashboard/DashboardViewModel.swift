@@ -12,6 +12,8 @@ final class DashboardViewModel {
     var categoryCatalog: GoogleProductCategoryCatalog = .empty
     var selectedCategoryFilter: CategoryFilterSelection = .all
     var currentPage = 1
+    /// 仅新页成功落地时重置表格滚动容器，保留加载期间的当前内容。
+    private(set) var tablePageRevision = 0
     var pageSize: Int { AppSettings.defaultPageSize }
     var totalPages = 1
     /// 当前展示数据周期；若含未完成周，会同时说明截止日与覆盖天数。
@@ -393,6 +395,7 @@ final class DashboardViewModel {
                   filters == makeCurrentFilters(), requestedPage == currentPage,
                   requestedSize == pageSize else { return }
             databaseRows = result.rows
+            if mode == .paging { tablePageRevision += 1 }
             totalPages = result.totalPages
             reportingPeriodLabel = WeekCalendar.dashboardDataPeriodLabel(
                 weekStarts: result.weekStarts,

@@ -197,7 +197,7 @@ Release 基线测试通过，原始附件导出核实：500 产品/10,000 投放
 
 ## 第 9 阶段：图片后台缩略与解码缓存
 
-状态：实现及 Debug/Release 定向验证完成，等待用户本地验证；尚未提交。
+状态：用户本地验证通过；提交 `fdd5c13` 已推送至 origin/main，远端 SHA 已核实。
 
 - 使用 ImageIO 在后台按显示像素生成并解码缩略图，MainActor 只创建 NSImage 包装；处理 EXIF 方向。
 - 按 URL/像素尺寸缓存已解码图像，设置 300 项与 32MiB 的 NSCache 软预算，以实际解码字节成本驱逐。
@@ -218,3 +218,47 @@ Release 基线测试通过，原始附件导出核实：500 产品/10,000 投放
 待提交范围：ProductImageLoader.swift、ProductImageView.swift、ProductImageLoaderTests.swift、本文与 PERFORMANCE_IMAGE_PHASE9.md。既有 project.pbxproj、dist、.cursor 与审查报告变动不纳入。
 
 下一项候选：导入后周指标的增量重建，先核对更新/删除数据及报告周边界，再缩小重建范围。
+
+## 第 10 阶段：目录导入省去无关的周指标重建
+
+状态：实现、Debug/Release 回归与 Release 对照基准完成，等待用户本地验证；尚未提交。
+
+检查发现 Merchant 导入仅更新 merchant_items 和产品目录，不修改投放/销售事实及其产品 ID 映射，而原导入收尾只要有投放数据就重新扫描事实表、删除并重写全部周指标。本轮先独立消除这次冗余重建，投放/销售的增量重建留到后续阶段核对历史覆盖和跨周边界。
+
+- Merchant 收尾继续更新筛选目录、执行孤儿产品/GMC 缺失标记对账并刷新看板，不再重建周指标。
+- Google Ads、投放明细继续重建；Product Sales 在存在投放数据时继续重建，保持无投放销售周的保留口径。
+- 工作区打开、空周表引导恢复、手动重建及保留期清理路径保持原有行为。
+
+Debug 构建及 19 个定向回归通过。新增 4 个流水线测试验证已有周指标逐字段一致、Merchant 回归可清除 GMC 缺失标记、纯目录账户的空态、销售导入仍纳入无投放周、无投放时销售不生成周表，以及筛选目录和看板刷新次数。另回归 Merchant 两种账户格式、周聚合公式和 LSIN 对账。日志：`/private/tmp/pla-phase10-tests-20261001.log`。
+
+Release 构建及 5 个测试通过（4 个流水线回归、1 个配对基准），`git diff --check` 通过。500 产品/10,000 投放事实，同一内存数据库交替测量，首对预热后各 11 样本：旧收尾数据库工作 p50/p95 为 21.265/22.261ms，新路径为 0.706/0.729ms。仅测目录导入的收尾数据库工作，筛选目录和看板回调为空，不含文件解析、真实磁盘或页面加载，不能解释为整次导入/整页的加速比例。详见 PERFORMANCE_BASELINE_PHASE10.md，日志：`/private/tmp/pla-phase10-release-20261001.log`。
+
+本地验证步骤：
+
+1. 在有历史投放/销售的账户导入更新后的 Merchant 文件，确认不再显示重建周聚合阶段；标题、图片、标签、类目与筛选应更新。
+2. 对照导入前后的消费、销售、ROI 和周趋势，数值应一致。
+3. 已有投放但此前缺少 GMC 的产品补入目录后，详情的缺失提示应消除。
+4. 导入投放/销售文件仍应更新指标；纯目录账户保持正常空态；另一窗口同步更新。
+
+待提交范围：ImportPipelineRunner.swift、ImportFinishTests.swift、MerchantFinishPerformanceTests.swift、本文及阶段 10 基线报告。既有额外工作区变动保持原样。
+
+## GMC 目录提示：已确认 Figma 方案的代码实现
+
+状态：按用户确认的设计实现，等待本地视觉验证；尚未提交。第 10 阶段目录收尾优化仍保留在工作区，未提前提交。
+
+- ProductPerformanceRowModel 新增 isMissingInGMC，由 ProductPerformanceRowMapper 读取现有 ProductRecord.missingInGmc；分页原查询已返回产品记录，不增加逐行查询或新缓存。
+- ProductPerformanceTable.lsinColumn 在产品 ID 旁显示琥珀色 info.circle，ID 保持普通颜色；提供原生 help 说明，读屏标签包含目录状态，双击/Return 仍沿用详情入口。
+- ProductDetailSheet.missingInGMCBanner 改为“未匹配到 GMC 商品目录”的信息条，说明导入最新目录或核对 ID，保留已有指标；颜色与 Figma 一致并适配浅色/深色外观。
+- 延伸 ImportFinishTests 的真实导入回归：投放形成孤儿产品时列表与详情均为缺失，补入 Merchant 后两处标记清除，消费及 ROI 保持一致。
+
+Figma 对照：产品列表 5:477、详情状态 140:481、交互与代码命名说明 146:657（文件 GEUU4wRvCvUKlNVnZZeP80）。设计稿列表状态为示例，实际应用按数据库判断。
+
+验证：macOS Debug 构建及 13 个定向回归全部通过，覆盖目录补齐前后列表/详情一致、指标不变、详情 SKU 聚合、两种账户筛选和排序。日志 `/private/tmp/pla-gmc-ui-tests-20261001.log`；`git diff --check` 通过。视觉效果及 VoiceOver 的实际朗读由本地验证确认。
+
+本地检查：在已知目录未匹配产品上观察 ID 图标及悬停说明，双击/Return 打开详情，核对琥珀色提示；切深色模式确认可读性。补入目录后刷新，图标与详情提示应同时消失；搜索、排序、侧栏展开/收起及键盘选择应正常。
+
+用户截图反馈后的修复：详情内容在新增信息条后超过固定高度，改为 ScrollView 内承载内容及 36pt 内边距，避免居中溢出裁切顶部和底部。产品 ID 列加宽至 min 140 / ideal 150，图标固定尺寸，文字单行优先布局。分页成功返回后递增 tablePageRevision，重建表格滚动容器以回到第一行；请求失败/取消不递增，同页刷新和排序不重建。分页重建可能恢复用户手动拖动的列宽为布局默认值，绑定的选择/排序保持。构建及 13 个数据回归再次通过，日志 `/private/tmp/pla-gmc-layout-fix.log`；实际滚动定位、窗口裁切与长 ID 显示仍需本地验证。
+
+用户已确认分页定位正常。进一步按已确认方案精简详情：无图片 URL 时隐藏占位图，SKU 表占满可用宽度；空标题不显示占位文字；全部自定义标签为空（含空白字符）时隐藏标签区及分隔线；无落地页 URL 时隐藏访问按钮。是否展示按实际字段判断，不依赖 GMC 缺失状态。导出、关闭及周期说明移出内容 ScrollView，固定在底部；SKU 表保留独立滚动。Debug 构建及 6 个详情/导入回归通过，`git diff --check` 通过，日志 `/private/tmp/pla-detail-compact-20261001.log`。待本地确认无目录产品、正常目录产品、多 SKU 及较小窗口的布局与底部操作可见性；尚未提交。
+
+用户本地确认上述详情与分页修复通过，并授权提交推送。本次列表 info.circle 使用 caption semibold，独立橙色 listIcon（浅色 0.80/0.36/0.02、深色 1/0.65/0.22），详情信息条配色保持原方案。Debug 构建通过：`/private/tmp/pla-gmc-icon-build.log`。阶段 10 与 GMC 提示相关改动一并提交，额外项目配置及 dist 产物不纳入。

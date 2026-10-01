@@ -29,6 +29,7 @@ struct ProductPerformanceRowModel: Identifiable, Hashable, Sendable {
     let sortROI: Double
     let sortClicks: Int
     let sortLSIN: String
+    var isMissingInGMC: Bool = false
 
 }
 

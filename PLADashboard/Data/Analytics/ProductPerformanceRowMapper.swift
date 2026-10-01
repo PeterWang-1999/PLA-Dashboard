@@ -160,7 +160,8 @@ enum ProductPerformanceRowMapper {
             sortCostCents: displayPeriodTotals.costCents,
             sortROI: displayPeriodTotals.roi,
             sortClicks: displayPeriodTotals.clicks,
-            sortLSIN: displayLSIN
+            sortLSIN: displayLSIN,
+            isMissingInGMC: product.missingInGmc
         )
     }
 

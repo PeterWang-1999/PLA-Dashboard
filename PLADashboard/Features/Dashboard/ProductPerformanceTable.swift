@@ -69,8 +69,26 @@ struct ProductPerformanceTable: View {
     }
 
     private var lsinColumn: some TableColumnContent<ProductPerformanceRowModel, Never> {
-        staticColumn(DashboardColumn.lsin, accessibilityValue: \.lsin) { row in
-            Text(row.lsin).font(.body)
+        staticColumn(DashboardColumn.lsin, accessibilityValue: { row in
+            row.isMissingInGMC ? "\(row.lsin)，未匹配到 GMC 商品目录" : row.lsin
+        }) { row in
+            HStack(spacing: 4) {
+                Text(row.lsin)
+                    .font(.body)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                if row.isMissingInGMC {
+                    Image(systemName: "info.circle")
+                        .font(.caption.weight(.semibold))
+                        .fixedSize()
+                        .foregroundStyle(GMCStatusAppearance.listIcon)
+                        .help("未匹配到 GMC 商品目录。打开产品详情查看说明。")
+                        .accessibilityHidden(true)
+                }
+            }
+            .help(row.isMissingInGMC
+                ? "未匹配到 GMC 商品目录。打开产品详情查看说明。"
+                : row.lsin)
         }
     }
 

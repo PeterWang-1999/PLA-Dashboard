@@ -35,7 +35,7 @@ enum DashboardColumn: String, CaseIterable, Identifiable {
     var widthSpec: WidthSpec {
         switch self {
         case .lsin:
-            .fixed(min: 110, ideal: 115)
+            .fixed(min: 140, ideal: 150)
         case .productImage:
             .fixed(min: 40, ideal: 45)
         case .cost:

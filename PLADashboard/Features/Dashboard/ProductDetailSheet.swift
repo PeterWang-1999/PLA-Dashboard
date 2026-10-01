@@ -22,7 +22,16 @@ struct ProductDetailSheet: View {
 
             Group {
                 if let detail {
-                    detailContent(detail)
+                    VStack(spacing: 0) {
+                        ScrollView {
+                            detailContent(detail)
+                                .padding(36)
+                        }
+                        Divider()
+                        footer(detail)
+                            .padding(.horizontal, 36)
+                            .padding(.vertical, 16)
+                    }
                 } else if let loadError {
                     ContentUnavailableView {
                         Label("无法加载产品明细", systemImage: "exclamationmark.triangle")
@@ -39,7 +48,6 @@ struct ProductDetailSheet: View {
                         .controlSize(.large)
                 }
             }
-            .padding(36)
         }
         .frame(minWidth: 860, idealWidth: 980, minHeight: 560, idealHeight: 650)
         .task(id: summary.id) { await reload() }
@@ -68,25 +76,33 @@ struct ProductDetailSheet: View {
             }
             header(detail)
             hero(detail)
-            Divider()
-            labels(detail)
-            footer(detail)
+            if detail.customLabels.contains(where: { $0?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty != nil }) {
+                Divider()
+                labels(detail)
+            }
         }
     }
 
     private var missingInGMCBanner: some View {
-        Label {
-            Text("产品有花费/销售数据，但在 GMC 中不存在")
-                .font(.body.weight(.semibold))
-        } icon: {
-            Image(systemName: "exclamationmark.triangle.fill")
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "info.circle")
+                .foregroundStyle(GMCStatusAppearance.foreground)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("未匹配到 GMC 商品目录")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(GMCStatusAppearance.foreground)
+                Text("产品已有投放或销售数据，但尚未匹配到已导入的 GMC 目录。\n请导入最新商品目录或核对产品 ID；已有指标仍可查看。")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .foregroundStyle(.red)
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .accessibilityLabel("异常提示：产品有花费/销售数据，但在 GMC 中不存在")
+        .background(GMCStatusAppearance.background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 
     private func header(_ detail: ProductDetailModel) -> some View {
@@ -98,18 +114,21 @@ struct ProductDetailSheet: View {
                 Spacer()
             }
 
-            Text(detail.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "未提供产品标题")
-                .font(.title3.weight(.medium))
-                .foregroundStyle(detail.title == nil ? .secondary : .primary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            if let title = detail.title?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
+                Text(title)
+                    .font(.title3.weight(.medium))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
     private func hero(_ detail: ProductDetailModel) -> some View {
         HStack(alignment: .top, spacing: 20) {
-            ProductImageView(imageURL: detail.imageURL, size: 280)
-                .accessibilityLabel("产品 \(detail.productID) 的图片")
+            if let imageURL = detail.imageURL {
+                ProductImageView(imageURL: imageURL, size: 280)
+                    .accessibilityLabel("产品 \(detail.productID) 的图片")
+            }
 
             skuTable(detail)
                 .frame(maxWidth: .infinity, minHeight: 280, maxHeight: 280)
@@ -216,10 +235,9 @@ struct ProductDetailSheet: View {
             }
             .disabled(detail.skuRows.isEmpty)
 
-            Button("访问落地页") {
-                if let url = detail.canonicalURL { openURL(url) }
+            if let url = detail.canonicalURL {
+                Button("访问落地页") { openURL(url) }
             }
-            .disabled(detail.canonicalURL == nil)
 
             if let reportingPeriodLabel {
                 Text(reportingPeriodLabel)

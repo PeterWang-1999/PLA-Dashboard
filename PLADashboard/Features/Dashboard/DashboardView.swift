@@ -136,6 +136,7 @@ struct DashboardView: View {
                     selection: $selectedProductIDs,
                     onOpenProduct: openProductDetail
                 )
+                .id(viewModel.tablePageRevision)
                 .disabled(viewModel.isLoading)
                 .opacity(viewModel.isPaging ? 0.85 : 1)
 

@@ -72,7 +72,8 @@ enum ImportPipelineRunner: Sendable {
 
         var shouldRebuildMetrics =
             sourceKind == .adsProduct || sourceKind == .plaDeliveryDetail
-        if !shouldRebuildMetrics {
+        // 商品目录不修改投放/销售事实或产品 ID 映射，周指标无需重算。
+        if sourceKind == .salesReport {
             shouldRebuildMetrics = try await databaseClient.hasFactTableData()
         }
         if shouldRebuildMetrics {
@@ -82,10 +83,10 @@ enum ImportPipelineRunner: Sendable {
                 message: "正在重建周聚合…"
             ))
             try await databaseClient.rebuildProductWeeklyMetrics()
+        }
+        if shouldRebuildMetrics || sourceKind == .merchantCenter {
             try await databaseClient.reconcileOrphanProducts()
         }
-
-        try Task.checkCancellation()
 
         try Task.checkCancellation()
 
