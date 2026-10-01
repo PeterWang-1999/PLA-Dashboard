@@ -174,7 +174,7 @@ Release 基线用例通过；沿用 500 产品/10,000 投放明细、默认筛�
 
 ## 第 8 阶段：图表周指标与 Top 10 使用 SQL 汇总
 
-状态：实现、自动化验证与 Release 基线完成，等待用户本地验证；尚未提交。
+状态：用户本地验证通过；提交 `91b1ecd` 已推送至 origin/main，远端 SHA 已核实。
 
 - 周趋势在 SQL 中按报告周 SUM，每批最多返回报告周数条汇总，不再读取全部产品逐周记录并在 Swift 分组。
 - Top 10 每批由 SQL 汇总产品指标并 LIMIT 10，随后仅合并各批候选选出全局前十。使用原产品筛选数组中的位置处理同花费顺序，保持消费优先及原排序的稳定次序。
@@ -194,3 +194,27 @@ Release 基线测试通过，原始附件导出核实：500 产品/10,000 投放
 5. 如有大账户观察加载响应；无需为验证修改生产数据。
 
 待提交范围：DatabaseClient+DataDashboard.swift、DataDashboardCapacityTests.swift、本文与 PERFORMANCE_BASELINE_PHASE8.md。既有额外工作区变动保持原样。
+
+## 第 9 阶段：图片后台缩略与解码缓存
+
+状态：实现及 Debug/Release 定向验证完成，等待用户本地验证；尚未提交。
+
+- 使用 ImageIO 在后台按显示像素生成并解码缩略图，MainActor 只创建 NSImage 包装；处理 EXIF 方向。
+- 按 URL/像素尺寸缓存已解码图像，设置 300 项与 32MiB 的 NSCache 软预算，以实际解码字节成本驱逐。
+- 合并相同 URL/尺寸/重试令牌的并发请求；取消单个订阅者不影响其他视图，取消最后一个订阅者停止工作，排队请求也能取消。
+- URL/尺寸变化立即隐藏旧图片，并用操作身份防止旧结果回填；重试更新缓存，保留 CDN 请求头、超时及三并发限制。
+
+验证：Debug 构建、6 个加载器测试通过；Release 构建与 15 个定向测试（6 个加载器、9 个 URL 规则）全部通过。日志：`/private/tmp/pla-phase9-tests-20261001.log`、`/private/tmp/pla-phase9-release-20261001.log`。Release 测试只通过命令启用 ENABLE_TESTABILITY，不修改项目配置。`git diff --check` 通过。
+
+证据限于缩略尺寸、缓存与并发工作量，未测量真实账户的整页耗时和进程峰值内存，不声称固定加速比例。详见 PERFORMANCE_IMAGE_PHASE9.md。
+
+本地验证步骤：
+
+1. 在产品表、Top 10 和产品详情查看图片清晰度、比例及方向，尤其在 Retina 显示器上。
+2. 快速滚动、搜索、排序、切账户，确认无错图、旧图回跳或持续加载。
+3. 反复打开同一产品详情、切换页面，观察图片复用与窗口响应。
+4. 图片下载失败时点击重试，确认正常恢复；无图片产品保持占位。
+
+待提交范围：ProductImageLoader.swift、ProductImageView.swift、ProductImageLoaderTests.swift、本文与 PERFORMANCE_IMAGE_PHASE9.md。既有 project.pbxproj、dist、.cursor 与审查报告变动不纳入。
+
+下一项候选：导入后周指标的增量重建，先核对更新/删除数据及报告周边界，再缩小重建范围。

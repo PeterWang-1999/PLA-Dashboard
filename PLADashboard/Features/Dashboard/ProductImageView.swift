@@ -4,14 +4,17 @@ struct ProductImageView: View {
     let imageURL: URL?
     var size: CGFloat = 40
 
+    @Environment(\.displayScale) private var displayScale
     @State private var loadedImage: NSImage?
+    @State private var loadedTaskID: String?
+    @State private var operationID = UUID()
     @State private var isLoading = false
     @State private var loadFailed = false
     @State private var reloadToken = 0
 
     var body: some View {
         Group {
-            if let loadedImage {
+            if let loadedImage, loadedTaskID == loadTaskID {
                 Image(nsImage: loadedImage)
                     .resizable()
                     .scaledToFill()
@@ -53,7 +56,7 @@ struct ProductImageView: View {
 
     private var loadTaskID: String {
         guard let imageURL else { return "nil" }
-        return "\(imageURL.absoluteString)|\(reloadToken)"
+        return "\(imageURL.absoluteString)|\(reloadToken)|\(pixelSize)"
     }
 
     private var failurePlaceholder: some View {
@@ -86,42 +89,35 @@ struct ProductImageView: View {
             .accessibilityLabel("无产品图片")
     }
 
+    private var pixelSize: Int { max(1, min(Int(ceil(size * displayScale)), 4_096)) }
+
     @MainActor
     private func loadImageIfNeeded() async {
-        guard let imageURL else {
-            loadedImage = nil
-            loadFailed = false
-            isLoading = false
-            return
-        }
-
-        isLoading = true
+        let operation = UUID()
+        operationID = operation
+        let taskID = loadTaskID
+        loadedImage = nil
+        loadedTaskID = nil
         loadFailed = false
-        let token = reloadToken
-
+        isLoading = imageURL != nil
+        defer { if operationID == operation { isLoading = false } }
+        guard let imageURL else { return }
         do {
-            let data = try await ProductImageLoader.shared.loadImageData(
-                from: imageURL,
-                reloadToken: token
+            let thumbnail = try await ProductImageLoader.shared.loadThumbnail(
+                from: imageURL, maxPixelSize: pixelSize, reloadToken: reloadToken
             )
-            guard !Task.isCancelled, token == reloadToken else { return }
-            if let image = NSImage(data: data) {
-                loadedImage = image
-                loadFailed = false
-            } else {
-                loadedImage = nil
-                loadFailed = true
-            }
-        } catch is CancellationError {
-            return
+            guard !Task.isCancelled, operationID == operation else { return }
+            loadedImage = NSImage(cgImage: thumbnail.image, size: NSSize(
+                width: CGFloat(thumbnail.image.width) / displayScale,
+                height: CGFloat(thumbnail.image.height) / displayScale
+            ))
+            loadedTaskID = taskID
         } catch {
-            guard !Task.isCancelled, token == reloadToken else { return }
-            loadedImage = nil
+            guard !Task.isCancelled, operationID == operation else { return }
             loadFailed = true
         }
-
-        isLoading = false
     }
+
 }
 
 #Preview {
