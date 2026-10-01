@@ -5,6 +5,14 @@ actor DatabaseClient {
     nonisolated let accountID: String
     let dbQueue: DatabaseQueue
     private var dashboardMetricsCache: DashboardMetricsCache?
+    struct DashboardCountCache {
+        let filters: DashboardQueryFilters
+        let weekStarts: [String]
+        let revision: Int
+        let dataVersion: Int
+        let count: Int
+    }
+    var dashboardCountCache: DashboardCountCache?
     private var migrationsChecked: Bool
 
     static let databaseDirectoryName = WorkspacePaths.applicationDirectoryName
@@ -73,6 +81,7 @@ actor DatabaseClient {
 
     func invalidateDashboardCache() {
         dashboardMetricsCache = nil
+        dashboardCountCache = nil
     }
 
     func cachedDashboardMetrics(for weekStarts: [String]) -> DashboardMetricsCache? {

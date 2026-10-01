@@ -257,7 +257,23 @@ extension DatabaseClient {
 
             let totalCount: Int
             if includeTotalCount {
-                totalCount = try Int.fetchOne(db, sql: countSQL, arguments: countArgs) ?? 0
+                // 同一连接的写入及其他连接的提交均会使计数失效。
+                // 排序、页码不改变筛选集合；仅保留最近一个集合，限制缓存大小。
+                var countFilters = filters
+                countFilters.sort = .default
+                let revision = try Int.fetchOne(db, sql: "SELECT total_changes();") ?? 0
+                let dataVersion = try Int.fetchOne(db, sql: "PRAGMA data_version;") ?? 0
+                if let cached = dashboardCountCache,
+                   cached.filters == countFilters, cached.weekStarts == weekStarts,
+                   cached.revision == revision, cached.dataVersion == dataVersion {
+                    totalCount = cached.count
+                } else {
+                    totalCount = try Int.fetchOne(db, sql: countSQL, arguments: countArgs) ?? 0
+                    dashboardCountCache = DashboardCountCache(
+                        filters: countFilters, weekStarts: weekStarts,
+                        revision: revision, dataVersion: dataVersion, count: totalCount
+                    )
+                }
             } else {
                 totalCount = 0
             }
