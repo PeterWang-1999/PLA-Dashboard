@@ -20,11 +20,43 @@ extension DatabaseClient {
     }
 
     func rebuildProductWeeklyMetrics() throws {
+        try rebuildProductWeeklyMetrics(incremental: false)
+    }
+
+    /// 成功导入后仅重算持久失效集合；未建立完整基线时自动全量恢复。
+    func refreshProductWeeklyMetricsAfterImport() throws {
+        try rebuildProductWeeklyMetrics(incremental: true)
+    }
+
+    private func rebuildProductWeeklyMetrics(incremental: Bool) throws {
+        try Task.checkCancellation()
         let signpost = PerformanceSignposts.beginETLRebuild()
         defer { PerformanceSignposts.endETLRebuild(signpost) }
 
-        try dbQueue.write { db in
-            try db.execute(sql: "DELETE FROM product_weekly_metrics;")
+        let didRefresh = try dbQueue.write { db -> Bool in
+            let hasRefreshState = try db.tableExists("weekly_metrics_refresh_state")
+            let initialized = hasRefreshState
+                ? (try Int.fetchOne(db, sql: "SELECT initialized FROM weekly_metrics_refresh_state WHERE id = 1;") ?? 0) == 1
+                : false
+            let pendingCount = incremental && initialized
+                ? (try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM weekly_metrics_dirty_products;") ?? 0)
+                : 0
+            if incremental && initialized && pendingCount == 0 { return false }
+            let existingProducts = incremental && initialized
+                ? (try Int.fetchOne(db, sql: "SELECT COUNT(DISTINCT product_id) FROM product_weekly_metrics;") ?? 0)
+                : 0
+            // 覆盖大部分产品时保留全量路径，避免准备键集的额外开销。
+            let scoped = incremental && initialized && pendingCount * 2 < existingProducts
+            if scoped {
+                try prepareWeeklyMetricsRefreshKeys(db)
+                try db.execute(sql: "DELETE FROM product_weekly_metrics WHERE product_id IN (SELECT product_id FROM weekly_metrics_dirty_products);")
+            } else {
+                try db.execute(sql: "DELETE FROM product_weekly_metrics;")
+            }
+            try Task.checkCancellation()
+            let adsSource = scoped ? "temp.weekly_metrics_ads_keys k CROSS JOIN ads_product_daily a ON k.date = a.date AND k.item_id = a.item_id AND k.campaign = a.campaign AND k.currency_code = a.currency_code" : "ads_product_daily a"
+            let salesSource = scoped ? "temp.weekly_metrics_sales_keys k CROSS JOIN sales_daily s ON k.date = s.date AND k.lsin = s.lsin" : "sales_daily s"
+            let productScope = scoped ? "AND product_id IN (SELECT product_id FROM weekly_metrics_dirty_products)" : ""
             // 键集 = 有投放的产品 ×（该产品有投放或有销售的周）。
             // 不能只用投放周 LEFT JOIN 销售：无花费但有 GS 的周必须保留，
             // 否则加权毛利/近 3 周活跃会丢数（对标 Python 产品×周完整网格）。
@@ -65,13 +97,13 @@ extension DatabaseClient {
                       a.conversion_value_cents,
                       ROW_NUMBER() OVER (
                         PARTITION BY a.date, a.item_id, a.campaign, a.currency_code
-                        ORDER BY j.imported_at DESC
+                        ORDER BY j.imported_at DESC, a.rowid DESC
                       ) AS rn
-                    FROM ads_product_daily a
+                    FROM \(adsSource)
                     INNER JOIN import_jobs j ON j.id = a.import_id
                     WHERE j.status = ?
                   ) AS ranked_ads
-                  WHERE rn = 1
+                  WHERE rn = 1 \(productScope)
                   GROUP BY product_id, week_start
                 ),
                 sales_weekly AS (
@@ -88,15 +120,15 @@ extension DatabaseClient {
                       s.gross_profit_cents,
                       ROW_NUMBER() OVER (
                         PARTITION BY s.date, s.lsin
-                        ORDER BY j.imported_at DESC
+                        ORDER BY j.imported_at DESC, s.rowid DESC
                       ) AS rn
-                    FROM sales_daily s
+                    FROM \(salesSource)
                     INNER JOIN import_jobs j ON j.id = s.import_id
                     WHERE j.status = ?
                       AND s.product_id IS NOT NULL
                       AND TRIM(s.product_id) != ''
                   ) AS ranked_sales
-                  WHERE rn = 1
+                  WHERE rn = 1 \(productScope)
                   GROUP BY product_id, week_start
                 ),
                 week_keys AS (
@@ -156,8 +188,36 @@ extension DatabaseClient {
                 ImportJobStatus.succeeded.rawValue,
                 ImportJobStatus.succeeded.rawValue,
             ])
+            try Task.checkCancellation()
+            if hasRefreshState {
+                try db.execute(sql: "DELETE FROM weekly_metrics_dirty_products;")
+                try db.execute(sql: "UPDATE weekly_metrics_refresh_state SET initialized = 1 WHERE id = 1;")
+            }
+            return true
         }
-        invalidateDashboardCache()
+        if didRefresh { invalidateDashboardCache() }
+    }
+
+    private func prepareWeeklyMetricsRefreshKeys(_ db: Database) throws {
+        // 先收集自然键，再读键下的所有候选，避免先按产品过滤而选错最新覆盖记录。
+        try db.execute(sql: """
+            CREATE TEMP TABLE IF NOT EXISTS weekly_metrics_ads_keys (
+              date TEXT, item_id TEXT, campaign TEXT, currency_code TEXT,
+              PRIMARY KEY (date, item_id, campaign, currency_code)
+            ) WITHOUT ROWID;
+            CREATE TEMP TABLE IF NOT EXISTS weekly_metrics_sales_keys (
+              date TEXT, lsin TEXT, PRIMARY KEY (date, lsin)
+            ) WITHOUT ROWID;
+            DELETE FROM temp.weekly_metrics_ads_keys;
+            DELETE FROM temp.weekly_metrics_sales_keys;
+            INSERT OR IGNORE INTO temp.weekly_metrics_ads_keys
+              SELECT a.date, a.item_id, a.campaign, a.currency_code
+              FROM weekly_metrics_dirty_products d
+              CROSS JOIN ads_product_daily a ON a.product_id = d.product_id;
+            INSERT OR IGNORE INTO temp.weekly_metrics_sales_keys
+              SELECT s.date, s.lsin FROM weekly_metrics_dirty_products d
+              CROSS JOIN sales_daily s ON s.product_id = d.product_id;
+            """)
     }
 
     func fetchWeeklyMetrics(
@@ -249,7 +309,12 @@ extension DatabaseClient {
                 sql: "DELETE FROM ads_product_daily WHERE date < ?;",
                 arguments: [cutoff]
             )
-            return db.changesCount
+            let deleted = db.changesCount
+            if deleted > 0, try db.tableExists("weekly_metrics_refresh_state") {
+                // 删除事实已经提交后，重建失败/取消也能在下次启动恢复。
+                try db.execute(sql: "UPDATE weekly_metrics_refresh_state SET initialized = 0 WHERE id = 1;")
+            }
+            return deleted
         }
         if deleted > 0 {
             try rebuildProductWeeklyMetrics()

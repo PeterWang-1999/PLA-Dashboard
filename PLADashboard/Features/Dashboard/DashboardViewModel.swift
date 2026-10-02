@@ -204,8 +204,14 @@ final class DashboardViewModel {
             guard generation == loadGeneration else { return }
 
             var metricsCount = try await databaseClient.productWeeklyMetricsCount()
-            if metricsCount == 0, try await databaseClient.hasFactTableData() {
-                try await databaseClient.rebuildProductWeeklyMetrics()
+            let shouldRefreshMetrics: Bool
+            if metricsCount > 0 {
+                shouldRefreshMetrics = true
+            } else {
+                shouldRefreshMetrics = try await databaseClient.hasFactTableData()
+            }
+            if shouldRefreshMetrics {
+                try await databaseClient.refreshProductWeeklyMetricsAfterImport()
                 metricsCount = try await databaseClient.productWeeklyMetricsCount()
             }
 

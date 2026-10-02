@@ -56,6 +56,10 @@ struct AppDatabaseMigrator {
             try Migration_v10_RemoveWarningLabels.migrate(db)
         }
 
+        migrator.registerMigration("v11_weekly_metrics_refresh") { db in
+            try Migration_v11_WeeklyMetricsRefresh.migrate(db)
+        }
+
         if let target {
             try migrator.migrate(dbQueue, upTo: target)
         } else {

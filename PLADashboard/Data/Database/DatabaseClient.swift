@@ -99,6 +99,9 @@ actor DatabaseClient {
     func reconcileLsinPrefixedProductIDs() throws {
         try dbQueue.write { db in
             try Migration_v5_LsinProductIDReconciliation.migrate(db)
+            if try db.tableExists("weekly_metrics_refresh_state") {
+                try db.execute(sql: "UPDATE weekly_metrics_refresh_state SET initialized = 0 WHERE id = 1;")
+            }
         }
         invalidateDashboardCache()
     }
@@ -136,6 +139,9 @@ actor DatabaseClient {
                 arguments: [ImportSourceKind.adsProduct.rawValue]
             )
             try db.execute(sql: "DELETE FROM product_weekly_metrics;")
+            if try db.tableExists("weekly_metrics_refresh_state") {
+                try db.execute(sql: "UPDATE weekly_metrics_refresh_state SET initialized = 0 WHERE id = 1;")
+            }
             return true
         }
         if didDelete {

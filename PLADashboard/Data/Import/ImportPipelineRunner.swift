@@ -82,7 +82,7 @@ enum ImportPipelineRunner: Sendable {
                 job: job,
                 message: "正在重建周聚合…"
             ))
-            try await databaseClient.rebuildProductWeeklyMetrics()
+            try await databaseClient.refreshProductWeeklyMetricsAfterImport()
         }
         if shouldRebuildMetrics || sourceKind == .merchantCenter {
             try await databaseClient.reconcileOrphanProducts()

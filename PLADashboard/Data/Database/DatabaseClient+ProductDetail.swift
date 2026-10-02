@@ -30,7 +30,7 @@ extension DatabaseClient {
                         a.conversion_value_cents,
                         ROW_NUMBER() OVER (
                           PARTITION BY a.date, a.item_id, a.campaign, a.currency_code
-                          ORDER BY j.imported_at DESC
+                          ORDER BY j.imported_at DESC, a.rowid DESC
                         ) AS rn
                       FROM ads_product_daily a
                       INNER JOIN import_jobs j ON j.id = a.import_id

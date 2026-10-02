@@ -15,6 +15,35 @@ extension DatabaseClient {
     func updateImportJob(_ job: ImportJobRecord) throws {
         try dbQueue.write { db in
             try job.update(db)
+            if job.status == ImportJobStatus.succeeded.rawValue {
+                try markWeeklyMetricsDirty(for: job, db: db)
+            }
+        }
+    }
+
+    private func markWeeklyMetricsDirty(for job: ImportJobRecord, db: Database) throws {
+        guard try db.tableExists("weekly_metrics_dirty_products") else { return }
+        // 包含同一自然键的历史产品：ID 改变时旧产品也必须清除旧指标。
+        switch ImportSourceKind(rawValue: job.sourceKind) {
+        case .adsProduct, .plaDeliveryDetail:
+            try db.execute(sql: """
+                INSERT OR IGNORE INTO weekly_metrics_dirty_products (product_id)
+                SELECT a.product_id FROM ads_product_daily n
+                JOIN ads_product_daily a
+                  ON a.date = n.date AND a.item_id = n.item_id
+                 AND a.campaign = n.campaign AND a.currency_code = n.currency_code
+                WHERE n.import_id = ?;
+                """, arguments: [job.id])
+        case .salesReport:
+            try db.execute(sql: """
+                INSERT OR IGNORE INTO weekly_metrics_dirty_products (product_id)
+                SELECT s.product_id FROM sales_daily n
+                JOIN sales_daily s ON s.date = n.date AND s.lsin = n.lsin
+                WHERE n.import_id = ? AND s.product_id IS NOT NULL
+                  AND TRIM(s.product_id) != '';
+                """, arguments: [job.id])
+        case .merchantCenter, .none:
+            break
         }
     }
 
@@ -720,6 +749,9 @@ extension DatabaseClient {
                 sql: "DELETE FROM import_row_errors WHERE import_id = ?;",
                 arguments: [importId]
             )
+            if try db.tableExists("weekly_metrics_refresh_state") {
+                try db.execute(sql: "UPDATE weekly_metrics_refresh_state SET initialized = 0 WHERE id = 1;")
+            }
             if var job = try ImportJobRecord.fetchOne(db, key: importId) {
                 job.status = ImportJobStatus.failed.rawValue
                 try job.update(db)

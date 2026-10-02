@@ -232,7 +232,7 @@ extension DatabaseClient {
                     WITH ranked AS (
                       SELECT a.*, ROW_NUMBER() OVER (
                         PARTITION BY a.date, a.item_id, a.campaign, a.currency_code
-                        ORDER BY j.imported_at DESC
+                        ORDER BY j.imported_at DESC, a.rowid DESC
                       ) AS rn
                       FROM ads_product_daily a
                       INNER JOIN import_jobs j ON j.id = a.import_id
@@ -289,7 +289,7 @@ extension DatabaseClient {
                     WITH ranked AS (
                       SELECT a.*, ROW_NUMBER() OVER (
                         PARTITION BY a.date, a.item_id, a.campaign, a.currency_code
-                        ORDER BY j.imported_at DESC
+                        ORDER BY j.imported_at DESC, a.rowid DESC
                       ) AS rn
                       FROM ads_product_daily a
                       INNER JOIN import_jobs j ON j.id = a.import_id

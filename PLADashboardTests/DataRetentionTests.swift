@@ -1,5 +1,4 @@
 import XCTest
-import GRDB
 @testable import PLADashboard
 
 final class DataRetentionTests: XCTestCase {
@@ -17,10 +16,10 @@ final class DataRetentionTests: XCTestCase {
         )
         defer { try? FileManager.default.removeItem(at: adsURL) }
 
-        _ = try await AdsProductImporter(databaseClient: databaseClient)
+        let imported = try await AdsProductImporter(databaseClient: databaseClient)
             .importFile(sourceURL: adsURL) { _ in }
 
-        let before = try await databaseClient.adsDailyRowCount()
+        let before = try await databaseClient.countAdsProductDaily(importId: imported.importId)
         XCTAssertEqual(before, 2)
 
         let expired = try await databaseClient.countExpiredAdsDailyRows(retentionDays: 30)
@@ -29,7 +28,7 @@ final class DataRetentionTests: XCTestCase {
         let deleted = try await databaseClient.purgeExpiredAdsDaily(retentionDays: 30)
         XCTAssertEqual(deleted, 1)
 
-        let after = try await databaseClient.adsDailyRowCount()
+        let after = try await databaseClient.countAdsProductDaily(importId: imported.importId)
         XCTAssertEqual(after, 1)
     }
 
@@ -37,13 +36,5 @@ final class DataRetentionTests: XCTestCase {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
         try contents.write(to: url, atomically: true, encoding: .utf8)
         return url
-    }
-}
-
-private extension DatabaseClient {
-    func adsDailyRowCount() async throws -> Int {
-        try await dbQueue.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM ads_product_daily;") ?? 0
-        }
     }
 }
