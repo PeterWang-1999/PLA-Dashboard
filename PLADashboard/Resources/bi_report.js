@@ -81,15 +81,38 @@ const categoryChoices = async merchantId => {
     const items = Array.isArray(response) ? response : response.data;
     if (!Array.isArray(items)) throw new Error("BI Data 品类数据格式无效");
     const byID = new Map(items.map(item => [String(item.categories_id), item]));
-    return items.map(item => {
+    return [...byID.values()].flatMap(item => {
         const path = [item];
         while (path.length < 3) {
             const parent = byID.get(String(path[0].parent_categories_id));
             if (!parent || path.includes(parent)) break;
             path.unshift(parent);
         }
-        return {path, label: path.map(node => node.categories_name).join(" / ")};
+        // The report renders the cascade from level 1 and requires a complete path.
+        if (!path.every((node, index) => Number(node.categories_level) === index + 1 &&
+            Number(node.categories_id) > 0 && node.categories_name)) return [];
+        return [{path, label: path.map(node => node.categories_name).join(" / ")}];
     });
+};
+const leaf = choice => choice.path[choice.path.length - 1];
+const usesCategories = filters => filters.classification === "category" ||
+    (!filters.classification && (!!filters.category || !!filters.selectedCategories?.length));
+const selectedCategoryPaths = (choices, filters) => {
+    if (filters.selectedCategories?.length) {
+        const byID = new Map(choices.map(choice => [String(leaf(choice).categories_id), choice]));
+        const ids = [...new Set(filters.selectedCategories.map(category => category.id))];
+        const matches = ids.map(id => byID.get(id));
+        if (matches.some(match => !match)) throw new Error("所选品类已不可用，请重新选择");
+        if (new Set(matches.map(match => Number(leaf(match).categories_level))).size !== 1) {
+            throw new Error("只能同时选择同一层级的品类");
+        }
+        return matches;
+    }
+    if (!filters.category) return [];
+    const exact = choices.filter(choice => choice.label === filters.category);
+    const matches = exact.length ? exact : choices.filter(choice => leaf(choice).categories_name === filters.category);
+    if (matches.length !== 1) throw new Error("无法唯一确认品类，请重新选择完整的品类路径");
+    return matches;
 };
 const names = (items, key) => [...new Set(items.map(item => item[key]).filter(name => typeof name === "string" && name))];
 const weekLabel = optionName => optionName.trim().split(/\s+/)[0];
@@ -131,19 +154,15 @@ if (operation === "productParameters") {
         metadata("/common/getProductTags")
     ]);
     const merchant = needed(merchants.find(item => item.merchant_name === (f.merchant || "LITB")), "商户");
-    const isCategory = f.classification === "category" || (!f.classification && !!f.category);
+    const isCategory = usesCategories(f);
     const unit = isCategory ? "" : f.businessUnit;
     if (unit && !units.some(item => item.bu === unit)) throw new Error("投放产品明细没有所选 BU");
-    const choices = (isCategory ? f.category : unit) ? await categoryChoices(merchant.merchant_id) : [];
-    const category = isCategory ? f.category : unit;
-    const exact = choices.filter(choice => choice.label === category);
-    const matchingCategories = exact.length ? exact : choices.filter(choice =>
-        choice.path[choice.path.length - 1].categories_name === category);
-    if (isCategory && category && matchingCategories.length !== 1) {
-        throw new Error("投放产品明细无法确认所选品类");
-    }
+    const choices = (unit || (isCategory && (f.category || f.selectedCategories?.length)))
+        ? await categoryChoices(merchant.merchant_id) : [];
+    const selected = isCategory ? selectedCategoryPaths(choices, f) : [];
+    if (selected.length > 1) throw new Error("投放产品明细只支持单个品类");
     const categoryNode = isCategory
-        ? matchingCategories[0]?.path.slice(-1)[0]
+        ? selected.map(leaf)[0]
         : choices.find(choice => choice.path.length === 1 && choice.label === unit)?.path[0];
     const countryKey = f.country.trim().toUpperCase();
     let country = countries.find(item =>
@@ -215,7 +234,13 @@ if (operation === "options") {
         channels: names(channels.channelGroupList, "NAME"),
         businessUnits: names(businessUnits, "BU"),
         countries: names(countries, "NAME"),
-        categories: names(categories, "label"),
+        categoryTree: categories.map(choice => ({
+            id: String(leaf(choice).categories_id),
+            parentID: choice.path.length > 1 ? String(leaf(choice).parent_categories_id) : null,
+            level: Number(leaf(choice).categories_level),
+            name: leaf(choice).categories_name,
+            path: choice.label
+        })),
         reportWeeks: [...new Set(names(weeks.data_list, "NAME").map(weekLabel))],
         merchants: names(merchants, "name")
     };
@@ -267,13 +292,9 @@ const applyMerchant = async (isCategory, name) => {
     return needed(select.value, "商户");
 };
 
-const applyCategory = async (merchantId, name) => {
-    if (!name) return;
-    const choices = await categoryChoices(merchantId);
-    const exact = choices.filter(choice => choice.label === name);
-    const matches = exact.length ? exact : choices.filter(choice =>
-        choice.path[choice.path.length - 1].categories_name === name);
-    if (matches.length !== 1) throw new Error("无法唯一确认品类，请重新选择完整的品类路径");
+const applyCategories = async (merchantId, filters) => {
+    if (!filters.category && !filters.selectedCategories?.length) return;
+    const matches = selectedCategoryPaths(await categoryChoices(merchantId), filters);
     const input = await wait(() => {
         const field = report.getElementById("inputBox");
         return visible(field) && (text(field).includes("点击选择品类") || field.querySelector(".tag-badge")) ? field : null;
@@ -282,16 +303,18 @@ const applyCategory = async (merchantId, name) => {
     if (report.getElementById("allCheck")?.checked) {
         needed(report.getElementById("allItem"), "全部品类").click();
     }
-    for (const [index, node] of matches[0].path.entries()) {
-        const item = await wait(() => Array.from(report.querySelectorAll(".cascader-item[data-id]"))
-            .find(element => element.dataset.id === String(node.categories_id) && visible(element)), "品类层级");
-        if (index + 1 === matches[0].path.length) {
-            item.click();
-            if (!item.querySelector("input[type=checkbox]")?.checked) {
-                throw new Error("BI Data 未应用所选品类");
+    for (const {path} of matches) {
+        for (const [index, node] of path.entries()) {
+            const item = await wait(() => Array.from(report.querySelectorAll(".cascader-item[data-id]"))
+                .find(element => element.dataset.id === String(node.categories_id) && visible(element)), "品类层级");
+            if (index + 1 === path.length) {
+                const checkbox = needed(item.querySelector("input[type=checkbox]"), "品类复选框");
+                if (checkbox.disabled) throw new Error("BI Data 禁用了所选品类：" + node.categories_name);
+                if (!checkbox.checked) item.click();
+                if (!checkbox.checked) throw new Error("BI Data 未应用所选品类：" + node.categories_name);
+            } else {
+                item.dispatchEvent(new report.defaultView.MouseEvent("mouseover", {bubbles: true}));
             }
-        } else {
-            item.dispatchEvent(new report.defaultView.MouseEvent("mouseover", {bubbles: true}));
         }
     }
     input.click();
@@ -304,7 +327,7 @@ const confirmExportButton = prompt => find(prompt, "a,button", e => text(e) === 
 
 if (operation === "prepare") {
     const f = args.filters;
-    const isCategory = f.classification === "category" || (!f.classification && !!f.category);
+    const isCategory = usesCategories(f);
     const mode = report.querySelector(`input[name="dataType2"][value="${isCategory ? "category" : "bu"}"]`);
     checked(needed(mode, "分类方式"), true);
     const merchant = await applyMerchant(isCategory, f.merchant);
@@ -332,7 +355,7 @@ if (operation === "prepare") {
     await applyChannelGroup(f.channel);
     if (f.country) await selectNamedOption("country", f.country, "国家");
     if (isCategory) {
-        await applyCategory(merchant, f.category);
+        await applyCategories(merchant, f);
     } else if (f.businessUnit) {
         await selectNamedOption("buList", f.businessUnit, "BU");
     }

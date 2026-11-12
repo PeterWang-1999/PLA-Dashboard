@@ -54,10 +54,19 @@ enum BIClassification: String, Codable {
     case category
 }
 
+struct BICategory: Codable, Equatable, Identifiable {
+    let id: String
+    let parentID: String?
+    let level: Int
+    let name: String
+    let path: String
+}
+
 struct BIFilters: Codable, Equatable {
     var channel = "Google PLA"
     var businessUnit = "Toys & Hobbies"
     var category = ""
+    var selectedCategories: [BICategory]?
     var country = ""
     var firstWeek: String?
     var lastWeek: String?
@@ -66,10 +75,23 @@ struct BIFilters: Codable, Equatable {
     var merchant: String?
 
     var classificationMode: BIClassification {
-        classification ?? (category.isEmpty ? .businessUnit : .category)
+        classification ?? (category.isEmpty && selectedCategories?.isEmpty != false ? .businessUnit : .category)
     }
 
-    var supportsProductDetail: Bool { channel == "Google PLA" }
+    var productDetailRestriction: String? {
+        if channel != "Google PLA" { return "投放产品明细仅支持 Google PLA。" }
+        if classificationMode == .category, let selectedCategories, selectedCategories.count > 1 {
+            return "投放产品明细只支持单个品类。定时下载两份报表时，请选择单品类预设。"
+        }
+        return nil
+    }
+
+    var supportsProductDetail: Bool { productDetailRestriction == nil }
+
+    mutating func selectCategories(_ categories: [BICategory]) {
+        category = ""
+        selectedCategories = categories.isEmpty ? nil : categories
+    }
 
     func resolved(through now: Date) -> BIFilters {
         guard firstWeek == nil || lastWeek == nil else { return self }
@@ -92,7 +114,7 @@ struct BIFilters: Codable, Equatable {
 struct BIFilterOptions: Codable {
     var channels = ["Google PLA"]
     var businessUnits = ["Toys & Hobbies"]
-    var categories: [String] = []
+    var categoryTree: [BICategory]?
     var countries: [String] = []
     var reportWeeks: [String]?
     var merchants: [String]?

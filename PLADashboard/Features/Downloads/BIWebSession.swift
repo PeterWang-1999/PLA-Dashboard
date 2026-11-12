@@ -75,15 +75,11 @@ final class BIWebSession: NSObject, WKUIDelegate, WKNavigationDelegate, WKDownlo
         try await waitForReport(timeout: .seconds(12))
         let arguments = merchant.map { ["merchant": $0] } ?? [:]
         let response = try await evaluate("options", arguments: arguments)
-        guard let dictionary = response as? [String: [String]] else { return BIFilterOptions() }
-        return BIFilterOptions(
-            channels: dictionary["channels"] ?? [],
-            businessUnits: dictionary["businessUnits"] ?? [],
-            categories: dictionary["categories"] ?? [],
-            countries: dictionary["countries"] ?? [],
-            reportWeeks: dictionary["reportWeeks"],
-            merchants: dictionary["merchants"]
-        )
+        guard let dictionary = response as? [String: Any] else {
+            throw Failure(status: .failed, message: "BI Data 筛选项格式无效。")
+        }
+        let data = try JSONSerialization.data(withJSONObject: dictionary)
+        return try JSONDecoder().decode(BIFilterOptions.self, from: data)
     }
 
     func export(
@@ -167,8 +163,8 @@ final class BIWebSession: NSObject, WKUIDelegate, WKNavigationDelegate, WKDownlo
     }
 
     private func productExportParameters(filters: BIFilters) async throws -> [String: Any] {
-        guard filters.supportsProductDetail else {
-            throw Failure(status: .failed, message: "Market Performance 的投放产品明细只支持 Google PLA，请调整定时任务的筛选预设。")
+        if let restriction = filters.productDetailRestriction {
+            throw Failure(status: .failed, message: restriction)
         }
         guard try await waitForAuthentication() else {
             if try await signInFormIsVisible() {

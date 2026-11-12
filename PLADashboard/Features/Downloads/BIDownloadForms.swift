@@ -43,7 +43,7 @@ private struct BIFormRow<Content: View>: View {
     }
 }
 
-private struct BISelectionLabel: View {
+struct BISelectionLabel: View {
     let value: String
 
     var body: some View {
@@ -222,7 +222,7 @@ struct BIExportSheet: View {
                     get: { filters.merchant ?? "" },
                     set: { merchant in
                         filters.merchant = merchant.isEmpty ? nil : merchant
-                        filters.category = ""
+                        filters.selectCategories([])
                     }
                 ), values: options.merchants ?? [], all: "BI Data 默认商户")
                 filterPicker("渠道分组", selection: $filters.channel, values: options.channels, all: "全部渠道")
@@ -234,8 +234,8 @@ struct BIExportSheet: View {
                     filterPicker("BU", selection: $filters.businessUnit, values: options.businessUnits, all: "全部 BU")
                 case .category:
                     exportRow("品类") {
-                        searchablePicker("品类", choices: options.categories, selection: $filters.category, all: "全部品类")
-                        .disabled(isLoadingOptions || optionsError != nil)
+                        BICategoryPicker(categories: options.categoryTree ?? [], filters: $filters)
+                            .disabled(isLoadingOptions || optionsError != nil)
                     }
                 }
                 exportRow("国家") {
@@ -343,7 +343,7 @@ struct BIExportSheet: View {
                 set: { mode in
                     filters.classification = mode
                     switch mode {
-                    case .businessUnit: filters.category = ""
+                    case .businessUnit: filters.selectCategories([])
                     case .category: filters.businessUnit = ""
                     }
                 }
@@ -456,8 +456,8 @@ struct BIScheduleSheet: View {
                     if let filters = preset?.filters {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("报表周 · \(filters.rangeRule)")
-                            if !filters.supportsProductDetail {
-                                Text("投放产品明细仅支持 Google PLA，请选择对应的筛选预设。")
+                            if let restriction = filters.productDetailRestriction {
+                                Text(restriction)
                                     .foregroundStyle(.orange)
                             }
                             if filters.firstWeek == nil, let nextRun {
