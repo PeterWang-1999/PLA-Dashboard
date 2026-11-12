@@ -33,6 +33,48 @@ final class SalesReportImporterTests: XCTestCase {
         XCTAssertEqual(product?.lsin, "S14429548")
     }
 
+    func testSyncReplacesChangedSalesAcrossCategoriesAndSkipsUnchangedRows() async throws {
+        let client = try DatabaseClient.makeInMemoryForTesting()
+        let importer = SalesReportImporter(databaseClient: client)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let first = folder.appendingPathComponent("first.csv")
+        let second = folder.appendingPathComponent("second.csv")
+        let header = "日期,LSIN,Gross Sales($),毛利额($)\n"
+        try sampleCSV.write(to: first, atomically: true, encoding: .utf8)
+        let original = try await importer.importFile(sourceURL: first) { _ in }
+
+        try (header + "2026-06-20,S14429548,101,31").write(to: first, atomically: true, encoding: .utf8)
+        try (header + "2026-06-21,S14429549,25.50,7.65\n2026-06-21,S14429550,10,3")
+            .write(to: second, atomically: true, encoding: .utf8)
+
+        let updated = try await importer.importFile(sourceURL: first, additionalSyncFiles: [second], incrementalSync: true) { _ in }
+        let repeated = try await importer.importFile(sourceURL: first, additionalSyncFiles: [second], incrementalSync: true) { _ in }
+        let originalCount = try await client.countSalesDaily(importId: original.importId)
+        let updatedCount = try await client.countSalesDaily(importId: updated.importId)
+        let repeatedCount = try await client.countSalesDaily(importId: repeated.importId)
+        let coverage = try await client.salesGrossProfitCoverage(weekStarts: [])
+        XCTAssertEqual(originalCount, 1)
+        XCTAssertEqual(updatedCount, 2)
+        XCTAssertEqual(repeatedCount, 0)
+        XCTAssertEqual(coverage.salesGrossSumCents, 13_650)
+        XCTAssertEqual(coverage.salesProfitSumCents, 4_165)
+        let addedProduct = try await client.fetchProducts(ids: ["14429550"]).first
+        XCTAssertEqual(addedProduct?.lsin, "S14429550")
+
+        try (header + "2026-06-20,S14429548,200,60").write(to: first, atomically: true, encoding: .utf8)
+        try (header + "2026-06-21,S14429549,invalid,7.65").write(to: second, atomically: true, encoding: .utf8)
+        do {
+            _ = try await importer.importFile(sourceURL: first, additionalSyncFiles: [second], incrementalSync: true) { _ in }
+            XCTFail("Expected an invalid row to roll back the sales sync")
+        } catch ImportPipelineError.invalidSyncData {
+            let afterFailure = try await client.salesGrossProfitCoverage(weekStarts: [])
+            XCTAssertEqual(afterFailure.salesGrossSumCents, 13_650)
+            XCTAssertEqual(afterFailure.salesProfitSumCents, 4_165)
+        }
+    }
+
     func testImportRequiresGrossProfitColumn() async throws {
         let csv = """
 日期,LSIN,Gross Sales($)

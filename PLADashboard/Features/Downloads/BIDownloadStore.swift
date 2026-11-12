@@ -6,8 +6,8 @@ import Observation
 final class BIDownloadStore {
     enum SyncPhase {
         case connecting
-        case downloading(file: Int, total: Int)
-        case importing(ImportProgress)
+        case downloading(completed: Int, total: Int)
+        case importing(BIReport, ImportProgress)
         case finishing(String)
         case cancelling
 
@@ -180,47 +180,64 @@ final class BIDownloadStore {
         defer { try? FileManager.default.removeItem(at: folder) }
         let now = Date()
         let runs = BIDownloadRun.batch(origin: .sync, filters: filters.resolved(through: now), createdAt: now)
-        let browser = BIWebSession(portal: portal, accountID: accountUUID)
-        var imported = false
+        var detailResult: ImportResult?
+        var salesImported = false
         do {
             try Task.checkCancellation()
-            browser.open()
-            var files: [URL] = []
-            for (index, run) in runs.enumerated() {
-                try Task.checkCancellation()
-                let output = folder.appendingPathComponent("投放产品明细-\(index + 1).xlsx")
-                try await browser.export(run, to: output, onSubmissionStarted: {}) { _ in
-                    if !Task.isCancelled { syncPhase = .downloading(file: index + 1, total: runs.count) }
-                }
-                files.append(output)
-            }
+            let files = try await downloadSyncReports(runs, to: folder, portal: portal, accountID: accountUUID)
             try Task.checkCancellation()
             connectedAccounts.insert(accountID)
-            guard let first = files.first else { return }
-            let result = try await PlaDeliveryDetailImporter(databaseClient: client).importFile(
-                sourceURL: first,
-                additionalSyncFiles: Array(files.dropFirst()),
-                incrementalSync: true
-            ) { [weak self] progress in
-                await self?.updateSyncProgress(progress)
+            guard let details = files[.productDetail], let firstDetail = details.first,
+                  let sales = files[.productSales], let firstSales = sales.first else {
+                throw ImportPipelineError.invalidSyncData("同步所需的 BI Data 报表不完整。")
             }
-            imported = true
+            let result = try await PlaDeliveryDetailImporter(databaseClient: client).importFile(
+                sourceURL: firstDetail, additionalSyncFiles: Array(details.dropFirst()), incrementalSync: true
+            ) { [weak self] progress in
+                await self?.updateSyncProgress(progress, report: .productDetail)
+            }
+            detailResult = result
+            let salesResult = try await SalesReportImporter(databaseClient: client).importFile(
+                sourceURL: firstSales, additionalSyncFiles: Array(sales.dropFirst()), incrementalSync: true
+            ) { [weak self] progress in
+                await self?.updateSyncProgress(progress, report: .productSales)
+            }
+            salesImported = true
             try await ImportPipelineRunner.finishImport(
                 sourceKind: .plaDeliveryDetail, result: result, databaseClient: client,
                 accountKind: .selfBuilt,
-                onProgress: { [weak self] progress in await self?.updateSyncProgress(progress) },
+                onProgress: { [weak self] progress in await self?.updateSyncProgress(progress, report: .productDetail) },
                 reloadFilterCatalogs: {},
                 refreshDashboard: { await accountStore.notifyDataChanged(accountID: accountID) }
             )
-            let changed = try await client.countAdsProductDaily(importId: result.importId)
-            syncResult = changed == 0 ? "同步完成，投放指标没有变更。" : "同步完成，新增或更新 \(changed) 条投放指标记录。"
+            let adsCount = try await client.countAdsProductDaily(importId: result.importId)
+            let salesCount = try await client.countSalesDaily(importId: salesResult.importId)
+            syncResult = "同步完成。新增或更新 \(adsCount) 条投放记录、\(salesCount) 条销售记录。"
         } catch {
             if (error as? BIWebSession.Failure)?.status == .needsLogin {
                 connectedAccounts.remove(accountID)
             }
-            if imported {
+            if salesImported {
                 accountStore.notifyDataChanged(accountID: accountID)
-                syncResult = "数据已写入，刷新看板时发生错误。\(error.localizedDescription)"
+                syncResult = "两份报表已写入，更新看板时发生错误。\(error.localizedDescription)"
+            } else if let detailResult {
+                let cancelled = Task.isCancelled
+                syncPhase = .finishing("正在刷新已导入的投放产品明细…")
+                let refresh = Task {
+                    try await ImportPipelineRunner.finishImport(
+                        sourceKind: .plaDeliveryDetail, result: detailResult, databaseClient: client,
+                        accountKind: .selfBuilt, onProgress: { _ in }, reloadFilterCatalogs: {},
+                        refreshDashboard: { await accountStore.notifyDataChanged(accountID: accountID) }
+                    )
+                }
+                var message = cancelled
+                    ? "已取消同步。投放产品明细已更新，Product Sales 保留原有数据。"
+                    : "投放产品明细已写入，Product Sales 导入未完成。\(error.localizedDescription)"
+                if case let .failure(refreshError) = await refresh.result {
+                    accountStore.notifyDataChanged(accountID: accountID)
+                    message += " 刷新看板失败。\(refreshError.localizedDescription)"
+                }
+                syncResult = message
             } else if Task.isCancelled {
                 accountStore.notifyDataChanged(accountID: accountID)
                 syncResult = "已取消同步，原有数据已保留。"
@@ -230,7 +247,56 @@ final class BIDownloadStore {
         }
     }
 
-    private func updateSyncProgress(_ progress: ImportProgress) {
+    private func downloadSyncReports(
+        _ runs: [BIDownloadRun], to folder: URL, portal: URL, accountID: UUID
+    ) async throws -> [BIReport: [URL]] {
+        let outputs = runs.map { run in
+            folder.appendingPathComponent(run.id.uuidString).appendingPathExtension(run.reportKind.fileExtension)
+        }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        syncPhase = .downloading(completed: 0, total: runs.count)
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            let maxConcurrentDownloads = 2
+            let downloads = zip(runs, outputs)
+            var pending = downloads.dropFirst(maxConcurrentDownloads).makeIterator()
+            var completed = 0
+
+            for (run, output) in downloads.prefix(maxConcurrentDownloads) {
+                group.addTask {
+                    try await Self.downloadSyncReport(run, to: output, portal: portal, accountID: accountID)
+                }
+            }
+            while try await group.next() != nil {
+                try Task.checkCancellation()
+                completed += 1
+                syncPhase = .downloading(completed: completed, total: runs.count)
+
+                if let (run, output) = pending.next() {
+                    group.addTask {
+                        try await Self.downloadSyncReport(run, to: output, portal: portal, accountID: accountID)
+                    }
+                }
+            }
+        }
+
+        // Import files in category order even when downloads finish out of order.
+        var files: [BIReport: [URL]] = [:]
+        for (run, output) in zip(runs, outputs) {
+            files[run.reportKind, default: []].append(output)
+        }
+        return files
+    }
+
+    private static func downloadSyncReport(_ run: BIDownloadRun, to output: URL, portal: URL, accountID: UUID) async throws {
+        try Task.checkCancellation()
+        // A session owns its download destination and cancellation state.
+        let browser = BIWebSession(portal: portal, accountID: accountID)
+        browser.open()
+        try await browser.export(run, to: output, onSubmissionStarted: {}) { _ in }
+    }
+
+    private func updateSyncProgress(_ progress: ImportProgress, report: BIReport) {
         guard !Task.isCancelled else { return }
         switch progress.phase {
         case .finalizing, .rebuildingMetrics, .refreshingDashboard, .completed:
@@ -238,7 +304,7 @@ final class BIDownloadStore {
         case .failed, .cancelled:
             break
         default:
-            syncPhase = .importing(progress)
+            syncPhase = .importing(report, progress)
         }
     }
 

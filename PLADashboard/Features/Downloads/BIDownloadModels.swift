@@ -79,6 +79,13 @@ struct BIFilters: Codable, Equatable {
     var merchant: String?
     var productDetailThroughDay: String?
 
+    var scheduledProductDetailFilters: Self {
+        var filters = self
+        filters.dimensions = [.date, .country, .category2, .category3]
+        filters.productDetailThroughDay = nil
+        return filters
+    }
+
     var classificationMode: BIClassification {
         classification ?? (category.isEmpty && selectedCategories?.isEmpty != false ? .businessUnit : .category)
     }
@@ -171,6 +178,7 @@ struct BISchedule: Codable, Identifiable {
 enum BIReport: String, Codable {
     case channelAnalysis = "渠道投放分析"
     case productDetail = "投放产品明细"
+    case productSales = "Product Sales"
 
     var fileExtension: String { self == .productDetail ? "xlsx" : "csv" }
     var openTitle: String { "打开 \(fileExtension.uppercased())" }
@@ -197,19 +205,32 @@ struct BIDownloadRun: Codable, Identifiable {
     var reportKind: BIReport { report ?? .channelAnalysis }
     var remoteTaskName: String { "\(reportKind.rawValue)__PLA_\(id.uuidString)" }
 
+    var productDetailExportFilters: BIFilters {
+        // Also correct requests restored from the queue before the scheduled filters were fixed.
+        origin == .scheduled ? filters.scheduledProductDetailFilters : filters
+    }
+
     static func batch(origin: Origin, filters: BIFilters, createdAt: Date) -> [Self] {
         let channel = BIDownloadRun(origin: origin, filters: filters, submittedAt: createdAt, report: .channelAnalysis)
         if origin == .manual { return [channel] }
 
-        var productFilters = filters
-        productFilters.productDetailThroughDay = BIReportCalendar.dayLabel(createdAt)
+        var productFilters = origin == .sync ? filters : filters.scheduledProductDetailFilters
+        if origin == .sync {
+            productFilters.productDetailThroughDay = BIReportCalendar.dayLabel(createdAt)
+        }
         let categories = filters.selectedCategories ?? []
-        let products = (categories.isEmpty ? [productFilters] : categories.map { category in
+        let reportFilters = categories.isEmpty ? [productFilters] : categories.map { category in
             var single = productFilters
             single.selectCategories([category])
             return single
-        }).map { BIDownloadRun(origin: origin, filters: $0, submittedAt: createdAt, report: .productDetail) }
-        return origin == .sync ? products : [channel] + products
+        }
+        let products = reportFilters.map { BIDownloadRun(origin: origin, filters: $0, submittedAt: createdAt, report: .productDetail) }
+        if origin == .sync {
+            return products.flatMap { product in
+                [product, BIDownloadRun(origin: origin, filters: product.filters, submittedAt: createdAt, report: .productSales)]
+            }
+        }
+        return [channel] + products
     }
 }
 

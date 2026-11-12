@@ -8,7 +8,7 @@ struct BISyncProgressBanner: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("同步投放产品明细")
+                    Text("同步 BI 数据")
                         .font(.headline)
                         .accessibilityAddTraits(.isHeader)
                     Text(status)
@@ -39,7 +39,7 @@ struct BISyncProgressBanner: View {
     private var progressBar: some View {
         if let fraction {
             ProgressView(value: fraction)
-                .accessibilityLabel("导入进度")
+                .accessibilityLabel("当前阶段进度")
         } else {
             ProgressView()
                 .accessibilityLabel("同步进行中")
@@ -49,20 +49,26 @@ struct BISyncProgressBanner: View {
     private var status: String {
         switch phase {
         case .connecting:
-            "正在连接 BI Data…"
-        case let .downloading(file, total):
-            "正在下载报表（\(file)/\(total)）…"
-        case let .importing(progress):
-            progress.message ?? "正在导入，已处理 \(progress.processedRows) 行…"
+            return "正在连接 BI Data…"
+        case let .downloading(completed, total):
+            return "正在获取 BI Data 报表，已下载 \(completed) / \(total) 份…"
+        case let .importing(report, progress):
+            return "\(report.rawValue) · \(progress.message ?? "正在导入，已处理 \(progress.processedRows) 行…")"
         case let .finishing(message):
-            message
+            return message
         case .cancelling:
-            "正在取消同步…"
+            return "正在取消同步…"
         }
     }
 
     private var fraction: Double? {
-        guard case let .importing(progress) = phase else { return nil }
-        return progress.fractionCompleted
+        switch phase {
+        case let .downloading(completed, total) where total > 0:
+            return Double(completed) / Double(total)
+        case let .importing(_, progress):
+            return progress.fractionCompleted
+        default:
+            return nil
+        }
     }
 }

@@ -68,7 +68,7 @@ struct CreateAccountSheet: View {
         case .thirdParty:
             "三方站支持 Merchant Center 与 Google Ads 导入。"
         case .selfBuilt:
-            "自建站支持 Merchant Center、投放产品明细与 Product Sales；看板「销售趋势」来自投放明细转化价值。"
+            "自建站可导入 Merchant Center 商品资料，并通过「同步数据」获取投放产品明细与 Product Sales。"
         }
     }
 

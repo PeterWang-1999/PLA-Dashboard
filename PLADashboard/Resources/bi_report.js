@@ -1,10 +1,10 @@
 // Invoked in WebKit's client content world on the configured BI Data origin.
-if (operation === "cancelProductExport") {
-    (globalThis.plaProductExportController ??= new AbortController()).abort();
+if (operation === "cancelExport") {
+    (globalThis.plaExportController ??= new AbortController()).abort();
     return true;
 }
-const productExportController = operation === "productParameters" || operation === "downloadProduct"
-    ? (globalThis.plaProductExportController ??= new AbortController()) : null;
+const exportController = ["productParameters", "downloadProduct", "submitSales", "checkDownload"].includes(operation)
+    ? (globalThis.plaExportController ??= new AbortController()) : null;
 const visible = element => !!element?.getClientRects().length &&
     element.ownerDocument.defaultView.getComputedStyle(element).visibility !== "hidden";
 const text = element => (element?.innerText || element?.value || "").trim().replace(/\s+/g, " ");
@@ -73,7 +73,7 @@ if (operation === "ready") {
 const metadata = async (path, parameters = {}, method = "GET") => {
     const url = new URL(path, location.origin);
     const fields = new URLSearchParams(parameters);
-    const request = {method, credentials: "same-origin", signal: productExportController?.signal};
+    const request = {method, credentials: "same-origin", signal: exportController?.signal};
     if (method === "GET") url.search = fields.toString();
     else request.body = fields;
     const response = await fetch(url, request);
@@ -208,7 +208,7 @@ if (operation === "productParameters") {
 }
 
 if (operation === "downloadProduct") {
-    const controller = productExportController;
+    const controller = exportController;
     const timeout = setTimeout(() => controller.abort(), 300000);
     try {
         const response = await fetch(productReportBase + "/exportProductData", {
@@ -232,7 +232,71 @@ if (operation === "downloadProduct") {
     }
 }
 
-needed(query, "查询");
+if (operation === "submitSales") {
+    const filters = args.filters;
+    const [merchants, dates, units, channels, buGroups] = await Promise.all([
+        metadata("/fe/common/getMerchantList"),
+        metadata("/fe/common/getLitbWeekList"),
+        metadata("/SubNationalProfit/BulistByUser"),
+        metadata("/common/getChannelByField", {ignorePrivilege: false, field: "channel_set"}),
+        metadata("/fe/common/getBuGroupPermission", {ignorePrivilege: false}, "POST")
+    ]);
+    const merchant = needed(merchants.find(item => item.merchant_name === filters.merchant), "商户");
+    const selected = selectedCategoryPaths(await categoryChoices(merchant.merchant_id), filters);
+    if (selected.length !== 1) throw new Error("Product Sales 每次导出需要一个明确的品类");
+    const category = leaf(selected[0]);
+    const categoryLevel = Number(category.categories_level);
+    const categoryId = String(category.categories_id);
+    const categoryInfo = (id, level) => metadata("/common/categoryInfo", {
+        id, level, merchant_id: merchant.merchant_id
+    });
+    const parentId = selected[0].path[categoryLevel - 2]?.categories_id ?? 0;
+    const [siblings, children] = await Promise.all([
+        categoryInfo(parentId, categoryLevel - 1), categoryInfo(categoryId, categoryLevel)
+    ]);
+    const visibleCategory = needed(siblings.flatMap(item => item.children ?? [item])
+        .find(item => String(item.id) === categoryId), "Product Sales 品类权限");
+    if (children.length && Number(visibleCategory.categoryFlag) !== 1) {
+        throw new Error("当前 BI Data 账号无法导出此品类，请选择有权限的下级品类");
+    }
+    // The legacy report expects the selected node followed by its immediate children.
+    const legacyCategoryId = [categoryId, ...children.map(item => item.id)].join("_");
+    const channel = needed(channels.channelGroupList.find(item => item.NAME === filters.channel), "渠道");
+    const range = productWeekRange(dates, filters.firstWeek, filters.lastWeek);
+    const endDate = range.endDate < filters.productDetailThroughDay ? range.endDate : filters.productDetailThroughDay;
+    if (!endDate || endDate < range.startDate) throw new Error("Product Sales 的起始周晚于今天");
+    const bus = names(units, "BU").join(",");
+    if (!bus) throw new Error("无法确认 Product Sales 可用的 BU");
+    const params = {
+        merchantId: String(merchant.merchant_id),
+        categoryLevel, categoryId: legacyCategoryId,
+        sDate: range.startDate, eDate: endDate, timeFlag: "day",
+        openType: "tps.STAT_DATE,tps.LSIN", channelSet: [channel.NAME],
+        application: "total", sortField: "orders", bus, lsins: "", countryCode: "all",
+        m_start: "", m_end: "", productTags: [], cateType: "0", combination: "false",
+        expandCountry: "false", exportTagSel: "", exportTagValueSel: [], styleNum: "", supplier: "",
+        productState: "all", tagName: [],
+        buGroup: buGroups.length === 0 ? ["-99"] :
+            buGroups.length === Number(buGroups[0].BTS) ? [] : names(buGroups, "BU_GROUP"),
+        report_name: "product_sales_detail", user_defined: args.task,
+        exportVisibleFields: "", exportContent: ["lsin", "sales", "basic1", "flow1"], exportTagSelGroup: ""
+    };
+    const controller = exportController;
+    const timeout = setTimeout(() => controller.abort(), 30000);
+    try {
+        const response = await fetch("/ProductSales/AppProductSales/export", {
+            method: "POST", credentials: "same-origin", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(params), signal: controller.signal
+        });
+        if (!response.ok || response.redirected) throw new Error("Product Sales 导出接口请求失败");
+        const id = await response.json();
+        return Number.isSafeInteger(Number(id)) ? Number(id) : 0;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+if (operation !== "checkDownload") needed(query, "查询");
 
 if (operation === "options") {
     const [channels, businessUnits, countrySets, weeks, merchants] = await Promise.all([
@@ -399,9 +463,12 @@ if (operation === "confirm") {
 
 if (operation === "checkDownload") {
     const url = new URL("/common2/look", location.origin);
-    url.search = new URLSearchParams({export_id: "", exportname: "渠道投放分析"});
+    url.search = new URLSearchParams({export_id: args.exportID ?? "", exportname: args.exportName ?? "渠道投放分析"});
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
+    const cancel = () => controller.abort();
+    if (exportController.signal.aborted) cancel();
+    exportController.signal.addEventListener("abort", cancel, {once: true});
     let rows;
     try {
         const response = await fetch(url, {credentials: "same-origin", cache: "no-store", signal: controller.signal});
@@ -411,6 +478,7 @@ if (operation === "checkDownload") {
         return {status: "unavailable"};
     } finally {
         clearTimeout(timeout);
+        exportController.signal.removeEventListener("abort", cancel);
     }
     if (!Array.isArray(rows)) return {status: "unavailable"};
     const matchingRows = rows.filter(row => row.USER_DEFINED === args.task);

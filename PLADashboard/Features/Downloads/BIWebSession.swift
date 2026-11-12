@@ -97,7 +97,7 @@ final class BIWebSession: NSObject, WKUIDelegate, WKNavigationDelegate, WKDownlo
         if run.reportKind == .productDetail {
             try await withTaskCancellationHandler {
                 try Task.checkCancellation()
-                let parameters = try await productExportParameters(filters: run.filters)
+                let parameters = try await productExportParameters(filters: run.productDetailExportFilters)
                 try Task.checkCancellation()
                 onSubmissionStarted()
                 progress(.downloading)
@@ -110,7 +110,30 @@ final class BIWebSession: NSObject, WKUIDelegate, WKNavigationDelegate, WKDownlo
             } onCancel: {
                 Task { @MainActor in
                     self.webView.stopLoading()
-                    _ = try? await self.evaluate("cancelProductExport")
+                    _ = try? await self.evaluate("cancelExport")
+                }
+            }
+            return
+        }
+        if run.reportKind == .productSales {
+            try await withTaskCancellationHandler {
+                try await requireAuthentication()
+                try Task.checkCancellation()
+                let filters = try JSONSerialization.jsonObject(with: JSONEncoder().encode(run.filters))
+                let arguments = ["task": run.remoteTaskName, "filters": filters]
+                let result = try await evaluate("submitSales", arguments: arguments) as? Int
+                try Task.checkCancellation()
+                guard let result, result > 0 else {
+                    throw Failure(status: .failed, message: "Product Sales 未接受导出请求，可能已有相同筛选的任务正在生成。")
+                }
+                onSubmissionStarted()
+                try await downloadQueuedReport(
+                    run, to: output, exportName: "product_sales_detail", exportID: String(result), progress: progress
+                )
+            } onCancel: {
+                Task { @MainActor in
+                    self.webView.stopLoading()
+                    _ = try? await self.evaluate("cancelExport")
                 }
             }
             return
@@ -128,10 +151,19 @@ final class BIWebSession: NSObject, WKUIDelegate, WKNavigationDelegate, WKDownlo
             _ = try await evaluate("confirm", arguments: task)
         }
         onSubmissionStarted()
+        try await downloadQueuedReport(run, to: output, exportName: run.reportKind.rawValue, progress: progress)
+    }
+
+    private func downloadQueuedReport(
+        _ run: BIDownloadRun, to output: URL, exportName: String, exportID: String = "",
+        progress: (BIDownloadRun.Status) -> Void
+    ) async throws {
+        let task = ["task": run.remoteTaskName, "exportName": exportName, "exportID": exportID]
         let deadline = ContinuousClock.now + .seconds(300)
         var sawRemoteTask = false
         var checkedList = false
         while ContinuousClock.now < deadline {
+            try Task.checkCancellation()
             let result = try await evaluate("checkDownload", arguments: task) as? [String: String]
             switch result?["status"] {
             case "ready":
@@ -175,18 +207,22 @@ final class BIWebSession: NSObject, WKUIDelegate, WKNavigationDelegate, WKDownlo
         if let restriction = filters.productDetailRestriction {
             throw Failure(status: .failed, message: restriction)
         }
-        guard try await waitForAuthentication() else {
-            if try await signInFormIsVisible() {
-                throw Failure(status: .needsLogin, message: "BI Data 显示了公司登录表单，请重新登录后重试。")
-            }
-            throw Failure(status: .connectionFailed, message: "未能连接 BI Data，请检查网络连接后重试。")
-        }
+        try await requireAuthentication()
         let encoded = try JSONEncoder().encode(filters)
         let arguments = ["filters": try JSONSerialization.jsonObject(with: encoded)]
         guard let parameters = try await evaluate("productParameters", arguments: arguments) as? [String: Any] else {
             throw Failure(status: .failed, message: "无法生成投放产品明细的导出参数。")
         }
         return parameters
+    }
+
+    private func requireAuthentication() async throws {
+        guard try await waitForAuthentication() else {
+            if try await signInFormIsVisible() {
+                throw Failure(status: .needsLogin, message: "BI Data 显示了公司登录表单，请重新登录后重试。")
+            }
+            throw Failure(status: .connectionFailed, message: "未能连接 BI Data，请检查网络连接后重试。")
+        }
     }
 
     func waitForReport(timeout: Duration) async throws {
@@ -277,6 +313,9 @@ final class BIWebSession: NSObject, WKUIDelegate, WKNavigationDelegate, WKDownlo
                 throw Failure(status: .failed, message: "报表下载超时，可以从任务记录重试。")
             }
             try downloadResult.get()
+            if run.reportKind == .productSales {
+                _ = try ImportTextEncoding.normalizeToUTF8IfNeeded(at: partial)
+            }
             try Self.validateReport(at: partial, for: run)
             try FileManager.default.moveItem(at: partial, to: output)
         } catch {
@@ -307,6 +346,13 @@ final class BIWebSession: NSObject, WKUIDelegate, WKNavigationDelegate, WKDownlo
         switch run.reportKind {
         case .channelAnalysis:
             try validateCSV(at: url, dimensions: run.filters.dimensions)
+        case .productSales:
+            let handle = try FileHandle(forReadingFrom: url)
+            defer { try? handle.close() }
+            let prefix = try handle.read(upToCount: 65_536) ?? Data()
+            let header = String(decoding: prefix.prefix { $0 != 10 && $0 != 13 }, as: UTF8.self)
+            let separator = try DelimitedFileSniffer.detectSeparator(fileURL: url)
+            _ = try SalesColumnMap(headers: TSVFieldParser.parseFields(header, delimiter: separator.rawValue))
         case .productDetail:
             let manifest = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
             defer { try? FileManager.default.removeItem(at: manifest) }

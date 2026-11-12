@@ -2,6 +2,22 @@ import XCTest
 @testable import PLADashboard
 
 final class ImportTextEncodingTests: XCTestCase {
+    func testNormalizesGBKWhenPreviewEndsInsideACharacter() throws {
+        let header = try XCTUnwrap("日期,LSIN,Gross Sales($),毛利额($)\n".data(using: ImportTextEncoding.gb18030))
+        let character = try XCTUnwrap("中".data(using: ImportTextEncoding.gb18030))
+        var data = header
+        data.append(Data(repeating: 65, count: 65_535 - header.count))
+        data.append(character)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        try data.write(to: url)
+
+        XCTAssertTrue(try ImportTextEncoding.normalizeToUTF8IfNeeded(at: url))
+        let decoded = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(decoded.hasPrefix("日期,LSIN"))
+        XCTAssertTrue(decoded.hasSuffix("中"))
+    }
+
     func testDetectGBKWithoutBOM() {
         let gbkHeader = "日期,LSIN\n"
         guard let data = gbkHeader.data(using: ImportTextEncoding.gb18030) else {

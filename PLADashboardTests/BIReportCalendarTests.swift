@@ -5,14 +5,16 @@ import Testing
 struct BIReportCalendarTests {
     @Test func scheduledRunCreatesBothReportsWithTheSameResolvedWeeks() {
         let date = Date(timeIntervalSinceReferenceDate: 816_161_000)
-        let filters = BIFilters().resolved(through: date)
+        var filters = BIFilters().resolved(through: date)
+        filters.dimensions = [.date]
         let runs = BIDownloadRun.batch(origin: .scheduled, filters: filters, createdAt: date)
         #expect(runs.map(\.reportKind) == [.channelAnalysis, .productDetail])
         #expect(runs.map(\.reportKind.fileExtension) == ["csv", "xlsx"])
         #expect(runs.first?.filters == filters)
         #expect(runs.last?.filters.firstWeek == filters.firstWeek)
         #expect(runs.last?.filters.lastWeek == filters.lastWeek)
-        #expect(runs.last?.filters.productDetailThroughDay == BIReportCalendar.dayLabel(date))
+        #expect(runs.last?.filters.productDetailThroughDay == nil)
+        #expect(runs.last?.filters.dimensions == [.date, .country, .category2, .category3])
         #expect(runs.allSatisfy { $0.submittedAt == date })
         #expect(Set(runs.map(\.id)).count == 2)
         #expect(BIDownloadRun.batch(origin: .manual, filters: filters, createdAt: date)
@@ -32,7 +34,29 @@ struct BIReportCalendarTests {
         #expect(scheduled.map(\.reportKind) == [.channelAnalysis, .productDetail, .productDetail])
         #expect(scheduled.first?.filters.selectedCategories == categories)
         let sync = BIDownloadRun.batch(origin: .sync, filters: filters, createdAt: now)
-        #expect(sync.map { $0.filters.selectedCategories?.map(\.id) ?? [] } == [["12"], ["13"]])
+        #expect(sync.map { $0.filters.selectedCategories?.map(\.id) ?? [] } == [["12"], ["12"], ["13"], ["13"]])
+        #expect(sync.map(\.reportKind) == [.productDetail, .productSales, .productDetail, .productSales])
+        #expect(sync.allSatisfy { $0.filters.productDetailThroughDay == BIReportCalendar.dayLabel(now) })
+    }
+
+    @Test func queuedScheduledProductDetailUsesWeeklyExportEvenWithAnOldDailyCutoff() throws {
+        let data = Data("""
+        {
+          "origin": "定时下载",
+          "report": "投放产品明细",
+          "id": "11111111-2222-4333-8444-555555555555",
+          "filters": {
+            "channel": "Google PLA", "businessUnit": "Toys & Hobbies", "category": "", "country": "",
+            "dimensions": ["日期"], "productDetailThroughDay": "2026-11-12"
+          },
+          "submittedAt": 816161000,
+          "status": "queued"
+        }
+        """.utf8)
+        let run = try JSONDecoder().decode(BIDownloadRun.self, from: data)
+        #expect(run.reportKind == .productDetail)
+        #expect(run.productDetailExportFilters.productDetailThroughDay == nil)
+        #expect(run.productDetailExportFilters.dimensions == [.date, .country, .category2, .category3])
     }
 
     @Test func existingRunKeepsItsOriginalReportAndRemoteName() throws {

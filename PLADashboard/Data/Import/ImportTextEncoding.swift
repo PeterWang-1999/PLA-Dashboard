@@ -37,7 +37,7 @@ enum ImportTextEncoding {
     }
 
     /// 根据 BOM 与采样字节判断源编码。
-    static func detect(preview: Data) -> Detected {
+    static func detect(preview: Data, isTruncated: Bool = false) -> Detected {
         if preview.starts(with: [0xEF, 0xBB, 0xBF]) {
             return .utf8(stripBOM: true)
         }
@@ -52,12 +52,15 @@ enum ImportTextEncoding {
         }
 
         let sample = Data(preview.prefix(65_536))
-        if String(data: sample, encoding: .utf8) != nil {
-            return .utf8(stripBOM: false)
+        // The preview can end inside a UTF-8 or GB18030 character (up to four bytes).
+        let maxTrailingBytes = isTruncated ? min(3, sample.count) : 0
+        func decodesAs(_ encoding: String.Encoding) -> Bool {
+            (0...maxTrailingBytes).contains { count in
+                String(data: sample.dropLast(count), encoding: encoding) != nil
+            }
         }
-        if String(data: sample, encoding: gb18030) != nil {
-            return .gb18030
-        }
+        if decodesAs(.utf8) { return .utf8(stripBOM: false) }
+        if decodesAs(gb18030) { return .gb18030 }
         return .utf8(stripBOM: false)
     }
 
@@ -71,7 +74,7 @@ enum ImportTextEncoding {
         let preview = try handle.read(upToCount: 65_536) ?? Data()
         guard !preview.isEmpty else { return false }
 
-        let detected = detect(preview: preview)
+        let detected = detect(preview: preview, isTruncated: fileSize > UInt64(preview.count))
 
         switch detected {
         case .utf8(let stripBOM):

@@ -41,13 +41,13 @@ open "/Applications/PLA Dashboard.app"
 首次启动后，在窗口左下角打开账户菜单，选择“新建账户…”，输入账户名称并选择类型：
 
 - 三方站：使用 Merchant Center TSV 与 Google Ads 产品数据。
-- 自建站：使用 Merchant Center TSV、投放产品明细，以及可选的 Product Sales CSV。
+- 自建站：导入 Merchant Center TSV，并同步 BI Data 的投放产品明细和 Product Sales。
 
 不同账户使用独立的本地数据库、导入历史和偏好设置。导入进行中不能切换账户。
 
 ### 2. 导入数据
 
-进入侧边栏“数据导入”，先选择数据源，再选择文件。建议先导入 Merchant Center 商品资料，再导入投放和销售数据。每个数据源都可以先点“导入样例文件”检查格式。
+进入侧边栏“数据导入”选择文件，也可先点“导入样例文件”检查格式。
 
 #### 三方站
 
@@ -57,10 +57,9 @@ open "/Applications/PLA Dashboard.app"
 #### 自建站
 
 1. **Merchant Center TSV**：必需字段为 `序号` / `id`、`标题` / `title`、`链接` / `link`、`图片链接` / `image link`。
-2. **投放产品明细（CSV/XLSX）**：必需字段为 `日期`、`LSIN`、`Market Cost`、`Impressions`、`Clicks`、`Conversions`、`Conversion Value`；`首次上架时间` 与 `CMS3` 为可选字段。
-3. **Product Sales CSV**：必需字段为 `日期`、`LSIN`、`Gross Sales($)`、`毛利额($)`。
+2. **同步 BI Data**：在「数据下载」连接 BI Data，并在「设置」配置默认品类。回到「产品数据」，从底栏选择「数据维护 → 同步数据」，应用会下载并导入投放产品明细和 Product Sales。两个报表都使用 Google PLA 和默认品类，按天覆盖过去六个完整周和本周截至当天，以北京时间周日为每周起点。同步新增或更新有变化的记录。
 
-导入结果会显示有效行、错误和警告；可导出错误与警告 CSV 进行修正。「导入历史」按数据源显示最近的批次。应用使用文件指纹防止重复写入。
+导入结果会显示有效行、错误和警告；可导出错误与警告 CSV 进行修正。「导入历史」按数据源显示最近的批次。手动导入使用文件指纹识别重复文件。
 
 ### 3. 使用产品数据看板
 

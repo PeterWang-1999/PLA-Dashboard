@@ -65,17 +65,19 @@ struct ImportsView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(sourceTitle)
                     .font(.title2.weight(.semibold))
-                Spacer()
-                Picker("数据源", selection: $viewModel.selectedSourceKind) {
-                    ForEach(viewModel.availableImportKinds) { kind in
-                        Text(kind.displayName).tag(kind)
+                if viewModel.availableImportKinds.count > 1 {
+                    Spacer()
+                    Picker("数据源", selection: $viewModel.selectedSourceKind) {
+                        ForEach(viewModel.availableImportKinds) { kind in
+                            Text(kind.displayName).tag(kind)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .disabled(viewModel.isImporting)
+                    .accessibilityLabel("数据源")
+                    .accessibilityValue(viewModel.selectedSourceKind.displayName)
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .disabled(viewModel.isImporting)
-                .accessibilityLabel("数据源")
-                .accessibilityValue(viewModel.selectedSourceKind.displayName)
             }
 
             HStack(alignment: .center) {

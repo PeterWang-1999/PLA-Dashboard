@@ -295,7 +295,7 @@ Sample Dress\tshopify_ZZ_10416614474003_54238242767123\thttps://example.com/dres
         try await store.switchAccount(to: account.id)
 
         let capabilities = try XCTUnwrap(store.activeCapabilities)
-        XCTAssertTrue(capabilities.importSourceKinds.contains(.salesReport))
+        XCTAssertFalse(capabilities.importSourceKinds.contains(.salesReport))
 
         guard let sampleURL = Bundle.main.url(forResource: "SampleSales", withExtension: "csv") else {
             XCTFail("未找到内置样例文件 SampleSales.csv")

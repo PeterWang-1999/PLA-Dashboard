@@ -21,6 +21,51 @@ extension DatabaseClient {
         }
     }
 
+    func finishSalesSync(_ job: ImportJobRecord) throws {
+        try dbQueue.write { db in
+            let arguments: StatementArguments = [job.id, ImportJobStatus.succeeded.rawValue]
+            try db.execute(sql: """
+                DELETE FROM sales_daily AS incoming
+                WHERE incoming.import_id = ? AND EXISTS (
+                  SELECT 1 FROM sales_daily previous
+                  WHERE previous.rowid = (
+                    SELECT s.rowid FROM sales_daily s
+                    JOIN import_jobs j ON j.id = s.import_id
+                    WHERE s.date = incoming.date AND s.lsin = incoming.lsin AND j.status = ?
+                    ORDER BY j.imported_at DESC, s.rowid DESC LIMIT 1
+                  )
+                  AND previous.product_id = incoming.product_id
+                  AND previous.gross_sales_cents = incoming.gross_sales_cents
+                  AND previous.gross_profit_cents = incoming.gross_profit_cents
+                );
+                """, arguments: arguments)
+            try job.update(db)
+            try markWeeklyMetricsDirty(for: job, db: db)
+            try db.execute(sql: """
+                DELETE FROM sales_daily WHERE rowid IN (
+                  SELECT previous.rowid FROM sales_daily incoming
+                  JOIN sales_daily previous ON previous.date = incoming.date AND previous.lsin = incoming.lsin
+                  JOIN import_jobs j ON j.id = previous.import_id
+                  WHERE incoming.import_id = ? AND previous.import_id != incoming.import_id AND j.status = ?
+                );
+                """, arguments: arguments)
+            try db.execute(sql: """
+                INSERT INTO products (product_id, lsin, first_seen_at, last_seen_at, updated_from_import_id)
+                SELECT product_id, lsin, ?, ?, ?
+                FROM (
+                  SELECT product_id, lsin,
+                    ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY date DESC, lsin) AS position
+                  FROM sales_daily WHERE import_id = ? AND product_id IS NOT NULL
+                )
+                WHERE position = 1
+                ON CONFLICT(product_id) DO UPDATE SET lsin = excluded.lsin,
+                  last_seen_at = excluded.last_seen_at, updated_from_import_id = excluded.updated_from_import_id
+                WHERE products.lsin IS NOT excluded.lsin;
+                """, arguments: [job.importedAt, job.importedAt, job.id, job.id])
+        }
+        invalidateDashboardCache()
+    }
+
     func finishProductDetailImport(
         _ job: ImportJobRecord,
         firstListedDates: [(productId: String, firstListedAt: String)],

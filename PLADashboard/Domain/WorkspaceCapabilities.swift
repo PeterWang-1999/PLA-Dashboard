@@ -13,7 +13,7 @@ struct WorkspaceCapabilities: Equatable, Sendable {
             )
         case .selfBuilt:
             WorkspaceCapabilities(
-                importSourceKinds: [.merchantCenter, .salesReport],
+                importSourceKinds: [.merchantCenter],
                 sidebarNavigationItems: AppNavigationItem.defaultSidebarCases + [.downloads]
             )
         }
