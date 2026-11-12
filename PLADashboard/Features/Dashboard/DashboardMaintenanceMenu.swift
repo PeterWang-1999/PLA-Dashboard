@@ -20,7 +20,7 @@ struct DashboardMaintenanceMenu: View {
         Menu {
             if accountStore.activeAccount?.kind == .selfBuilt {
                 Button {
-                    Task { await downloads.synchronizeProductData(accountStore: accountStore) }
+                    downloads.synchronizeProductData(accountStore: accountStore)
                 } label: {
                     Label("同步数据", systemImage: "arrow.clockwise")
                 }
@@ -46,14 +46,7 @@ struct DashboardMaintenanceMenu: View {
                 .disabled(isRunningProductDiagnostics || accountStore.isImportInProgress)
             }
         } label: {
-            if let progress = downloads.syncProgress {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text(progress)
-                }
-            } else {
-                Label("数据维护", systemImage: "wrench.and.screwdriver")
-            }
+            Label("数据维护", systemImage: "wrench.and.screwdriver")
         }
         .menuStyle(.borderedButton)
         .controlSize(.large)
@@ -91,14 +84,6 @@ struct DashboardMaintenanceMenu: View {
             Button("好", role: .cancel) {}
         } message: {
             Text(productDiagnosticsMessage ?? "")
-        }
-        .alert("同步数据", isPresented: Binding(
-            get: { downloads.syncResult != nil },
-            set: { if !$0 { downloads.syncResult = nil } }
-        )) {
-            Button("好", role: .cancel) {}
-        } message: {
-            Text(downloads.syncResult ?? "")
         }
     }
 

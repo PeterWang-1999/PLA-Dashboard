@@ -95,13 +95,22 @@ final class BIWebSession: NSObject, WKUIDelegate, WKNavigationDelegate, WKDownlo
         }
         try files.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
         if run.reportKind == .productDetail {
-            let parameters = try await productExportParameters(filters: run.filters)
-            onSubmissionStarted()
-            progress(.downloading)
-            try await downloadReport(to: output, for: run) {
-                let downloaded = try await evaluate("downloadProduct", arguments: ["parameters": parameters])
-                guard downloaded as? Bool == true else {
-                    throw Failure(status: .failed, message: "BI Data 未返回有效的投放产品明细 XLSX。")
+            try await withTaskCancellationHandler {
+                try Task.checkCancellation()
+                let parameters = try await productExportParameters(filters: run.filters)
+                try Task.checkCancellation()
+                onSubmissionStarted()
+                progress(.downloading)
+                try await downloadReport(to: output, for: run) {
+                    let downloaded = try await evaluate("downloadProduct", arguments: ["parameters": parameters])
+                    guard downloaded as? Bool == true else {
+                        throw Failure(status: .failed, message: "BI Data 未返回有效的投放产品明细 XLSX。")
+                    }
+                }
+            } onCancel: {
+                Task { @MainActor in
+                    self.webView.stopLoading()
+                    _ = try? await self.evaluate("cancelProductExport")
                 }
             }
             return
@@ -259,6 +268,7 @@ final class BIWebSession: NSObject, WKUIDelegate, WKNavigationDelegate, WKDownlo
 
         do {
             try await start()
+            try Task.checkCancellation()
             let deadline = ContinuousClock.now + .seconds(90)
             while downloadResult == nil && ContinuousClock.now < deadline {
                 try await Task.sleep(for: .milliseconds(200))

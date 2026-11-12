@@ -145,6 +145,36 @@ final class PlaDeliveryDetailImporterTests: XCTestCase {
             XCTAssertEqual(afterFailure, 1)
         }
     }
+
+    func testCancellingSyncBeforeCommitPreservesPreviousRows() async throws {
+        let client = try DatabaseClient.makeInMemoryForTesting()
+        let importer = PlaDeliveryDetailImporter(databaseClient: client)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".csv")
+        defer { try? FileManager.default.removeItem(at: file) }
+        try sampleCSV.write(to: file, atomically: true, encoding: .utf8)
+        let previous = try await importer.importFile(sourceURL: file, incrementalSync: true) { _ in }
+
+        try sampleCSV.replacingOccurrences(of: "282.68", with: "300.00").write(to: file, atomically: true, encoding: .utf8)
+        let cancelledImport = Task {
+            try await importer.importFile(sourceURL: file, incrementalSync: true) { progress in
+                if case .finalizing = progress.phase {
+                    withUnsafeCurrentTask { $0?.cancel() }
+                }
+            }
+        }
+
+        do {
+            _ = try await cancelledImport.value
+            XCTFail("Cancelled sync should not commit")
+        } catch ImportPipelineError.cancelled {
+            let jobs = try await client.fetchImportJobs()
+            let cancelled = try XCTUnwrap(jobs.first { $0.status == ImportJobStatus.cancelled.rawValue })
+            let cancelledRows = try await client.countAdsProductDaily(importId: cancelled.id)
+            XCTAssertEqual(cancelledRows, 0)
+            let previousRows = try await client.fetchAdsProductDaily(importId: previous.importId)
+            XCTAssertEqual(previousRows.map(\.costMicros).sorted(), [127_990_000, 282_680_000])
+        }
+    }
 }
 
 final class PurgeLegacyGoogleAdsImportsTests: XCTestCase {

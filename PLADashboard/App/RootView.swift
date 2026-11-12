@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct RootView: View {
     @Environment(AccountStore.self) private var accountStore
     @Environment(DashboardSettingsNotifier.self) private var dashboardSettingsNotifier
+    @Environment(BIDownloadStore.self) private var downloads
     @SceneStorage("dashboard.sidebarVisible") private var sidebarVisibleStorage = true
 
     @State private var windowState = WindowState()
@@ -41,6 +42,11 @@ struct RootView: View {
             sidebar
         } detail: {
             detailContent
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if let phase = downloads.syncPhase {
+                        BISyncProgressBanner(phase: phase, onCancel: downloads.cancelProductSync)
+                    }
+                }
                 .focusedSceneValue(\.triggerImportPicker) {
                     selectedNavigationItem = .imports
                     importViewModel.presentImportPicker()
@@ -99,6 +105,14 @@ struct RootView: View {
             Button("好", role: .cancel) {}
         } message: {
             Text("导入进行中，请先取消导入或等待完成。")
+        }
+        .alert("同步数据", isPresented: Binding(
+            get: { downloads.syncResult != nil },
+            set: { if !$0 { downloads.syncResult = nil } }
+        )) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(downloads.syncResult ?? "")
         }
     }
 

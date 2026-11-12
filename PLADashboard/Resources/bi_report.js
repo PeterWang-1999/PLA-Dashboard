@@ -1,4 +1,10 @@
 // Invoked in WebKit's client content world on the configured BI Data origin.
+if (operation === "cancelProductExport") {
+    (globalThis.plaProductExportController ??= new AbortController()).abort();
+    return true;
+}
+const productExportController = operation === "productParameters" || operation === "downloadProduct"
+    ? (globalThis.plaProductExportController ??= new AbortController()) : null;
 const visible = element => !!element?.getClientRects().length &&
     element.ownerDocument.defaultView.getComputedStyle(element).visibility !== "hidden";
 const text = element => (element?.innerText || element?.value || "").trim().replace(/\s+/g, " ");
@@ -67,7 +73,7 @@ if (operation === "ready") {
 const metadata = async (path, parameters = {}, method = "GET") => {
     const url = new URL(path, location.origin);
     const fields = new URLSearchParams(parameters);
-    const request = {method, credentials: "same-origin"};
+    const request = {method, credentials: "same-origin", signal: productExportController?.signal};
     if (method === "GET") url.search = fields.toString();
     else request.body = fields;
     const response = await fetch(url, request);
@@ -202,7 +208,7 @@ if (operation === "productParameters") {
 }
 
 if (operation === "downloadProduct") {
-    const controller = new AbortController();
+    const controller = productExportController;
     const timeout = setTimeout(() => controller.abort(), 300000);
     try {
         const response = await fetch(productReportBase + "/exportProductData", {
@@ -212,6 +218,7 @@ if (operation === "downloadProduct") {
         if (!response.ok || response.redirected) return false;
         const file = await response.blob();
         const signature = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+        if (controller.signal.aborted) return false;
         if (signature.join(",") !== "80,75,3,4") return false;
         const link = document.createElement("a");
         link.href = URL.createObjectURL(file);

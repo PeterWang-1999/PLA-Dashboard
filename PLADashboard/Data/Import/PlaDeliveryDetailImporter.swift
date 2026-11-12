@@ -124,6 +124,9 @@ actor PlaDeliveryDetailImporter {
             let categories = state.cms3CostMicrosByProductID.compactMap { productId, costs in
                 costs.max { ($0.value, $0.key) < ($1.value, $1.key) }.map { (productId: productId, plaCms3: $0.key) }
             }
+            if incrementalSync {
+                await onProgress(.fromJob(phase: .finalizing, job: job, message: "正在提交数据库变更…"))
+            }
             try Task.checkCancellation()
             try await databaseClient.finishProductDetailImport(
                 job, firstListedDates: firstListedDates, categories: categories, replacingExisting: incrementalSync
