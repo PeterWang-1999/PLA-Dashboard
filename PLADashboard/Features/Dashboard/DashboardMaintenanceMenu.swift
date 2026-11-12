@@ -4,6 +4,7 @@ import SwiftUI
 struct DashboardMaintenanceMenu: View {
     @Environment(AccountStore.self) private var accountStore
     @Environment(DashboardSettingsNotifier.self) private var dashboardSettingsNotifier
+    @Environment(BIDownloadStore.self) private var downloads
 
     @State private var showPurgeConfirmation = false
     @State private var pendingPurgeCount = 0
@@ -17,12 +18,20 @@ struct DashboardMaintenanceMenu: View {
 
     var body: some View {
         Menu {
+            if accountStore.activeAccount?.kind == .selfBuilt {
+                Button {
+                    Task { await downloads.synchronizeProductData(accountStore: accountStore) }
+                } label: {
+                    Label("同步数据", systemImage: "arrow.clockwise")
+                }
+                .disabled(accountStore.isImportInProgress || isPurging || isRunningProductDiagnostics)
+            }
 
             Section("数据保留") {
                 Button("清理过期 Ads 数据…", role: .destructive) {
                     Task { await preparePurgeConfirmation() }
                 }
-                .disabled(retentionDays == 0 || isPurging)
+                .disabled(retentionDays == 0 || isPurging || accountStore.isImportInProgress)
             }
 
             Section("产品图") {
@@ -34,10 +43,17 @@ struct DashboardMaintenanceMenu: View {
                 Button("合并 S 前缀产品记录…") {
                     showReconcileConfirmation = true
                 }
-                .disabled(isRunningProductDiagnostics)
+                .disabled(isRunningProductDiagnostics || accountStore.isImportInProgress)
             }
         } label: {
-            Label("数据维护", systemImage: "wrench.and.screwdriver")
+            if let progress = downloads.syncProgress {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text(progress)
+                }
+            } else {
+                Label("数据维护", systemImage: "wrench.and.screwdriver")
+            }
         }
         .menuStyle(.borderedButton)
         .controlSize(.large)
@@ -75,6 +91,14 @@ struct DashboardMaintenanceMenu: View {
             Button("好", role: .cancel) {}
         } message: {
             Text(productDiagnosticsMessage ?? "")
+        }
+        .alert("同步数据", isPresented: Binding(
+            get: { downloads.syncResult != nil },
+            set: { if !$0 { downloads.syncResult = nil } }
+        )) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(downloads.syncResult ?? "")
         }
     }
 
@@ -118,6 +142,7 @@ struct DashboardMaintenanceMenu: View {
 
     @MainActor
     private func performPurge() async {
+        guard !accountStore.isImportInProgress else { return }
         guard let client = activeDatabaseClient else {
             showPurgeFailure("数据库未就绪")
             return
@@ -156,6 +181,7 @@ struct DashboardMaintenanceMenu: View {
 
     @MainActor
     private func reconcilePrefixedProducts() async {
+        guard !accountStore.isImportInProgress else { return }
         guard let client = activeDatabaseClient else {
             showProductDiagnosticsFailure("数据库未就绪")
             return

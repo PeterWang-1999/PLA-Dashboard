@@ -71,9 +71,9 @@ struct BIDownloadsView: View {
             case .connection:
                 BIConnectionSheet(accountID: accountID, portal: workspace.portal)
             case .export:
-                BIExportSheet(accountID: accountID, presets: workspace.presets)
+                BIExportSheet(accountID: accountID, presets: workspace.effectivePresets)
             case .schedule(let task):
-                BIScheduleSheet(accountID: accountID, task: task, presets: workspace.presets)
+                BIScheduleSheet(accountID: accountID, task: task, presets: workspace.effectivePresets)
             case .detail(let id):
                 if let run = workspace.runs.first(where: { $0.id == id }) {
                     BIRunDetailSheet(accountID: accountID, run: run, canRetry: connected)
@@ -128,7 +128,7 @@ struct BIDownloadsView: View {
     }
 
     private func scheduleCard(_ task: BISchedule) -> some View {
-        let preset = workspace.presets.first { $0.id == task.presetID }
+        let preset = workspace.effectivePresets.first { $0.id == task.presetID }
         return VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -175,9 +175,14 @@ struct BIDownloadsView: View {
             } else {
                 Table(workspace.runs) {
                     TableColumn("报表 / 来源") { run in
-                        HStack(spacing: 8) {
-                            Text(run.reportKind.rawValue).fontWeight(.medium)
-                            Text(run.origin.rawValue).font(.caption).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: 8) {
+                                Text(run.reportKind.rawValue).fontWeight(.medium)
+                                Text(run.origin.rawValue).font(.caption).foregroundStyle(.secondary)
+                            }
+                            if run.reportKind == .productDetail, let category = run.filters.categoryLabel {
+                                Text(category).font(.caption).foregroundStyle(.secondary).lineLimit(1).help(category)
+                            }
                         }
                     }
                     .width(min: 125, ideal: 235)

@@ -1,13 +1,18 @@
 import SwiftUI
 
 struct DashboardEmptyStateView: View {
+    var accountKind: WorkspaceAccountKind = .thirdParty
     var onImport: () -> Void = {}
 
     var body: some View {
         ContentUnavailableView {
             Label("暂无产品数据", systemImage: "tray")
         } description: {
-            Text("请先导入 Merchant Center 与投放数据（三方站：Google Ads；自建站：投放产品明细），然后刷新聚合。")
+            if accountKind == .selfBuilt {
+                Text("导入 Merchant Center 商品资料，并从底栏「数据维护 → 同步数据」获取 BI Data 投放产品明细。")
+            } else {
+                Text("请先导入 Merchant Center 和 Google Ads 数据，然后刷新聚合。")
+            }
         } actions: {
             Button("导入数据", action: onImport)
                 .buttonStyle(.borderedProminent)

@@ -48,6 +48,7 @@ struct PLADashboardApp: App {
             SettingsView()
                 .environment(accountStore)
                 .environment(dashboardSettingsNotifier)
+                .environment(downloads)
         }
     }
 }

@@ -12,7 +12,7 @@ final class WorkspaceCapabilitiesTests: XCTestCase {
         let capabilities = WorkspaceCapabilities.forKind(.selfBuilt)
         XCTAssertEqual(
             capabilities.importSourceKinds,
-            [.merchantCenter, .plaDeliveryDetail, .salesReport]
+            [.merchantCenter, .salesReport]
         )
         XCTAssertFalse(capabilities.importSourceKinds.contains(.adsProduct))
     }

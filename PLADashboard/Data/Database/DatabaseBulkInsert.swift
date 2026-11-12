@@ -13,19 +13,28 @@ extension Database {
     }
 
     /// Ads 日事实表多行 `INSERT OR REPLACE`（减少语句往返）。
-    func bulkInsertAdsProductDaily(_ rows: [AdsProductDailyRecord]) throws {
+    func bulkInsertAdsProductDaily(_ rows: [AdsProductDailyRecord], accumulatingMetrics: Bool = false) throws {
         guard !rows.isEmpty else { return }
         let columnCount = 12
         let maxRowsPerStatement = 80
+        let insert = accumulatingMetrics ? "INSERT" : "INSERT OR REPLACE"
+        let conflict = accumulatingMetrics ? """
+            ON CONFLICT(date, item_id, campaign, currency_code, import_id) DO UPDATE SET
+              cost_micros = ads_product_daily.cost_micros + excluded.cost_micros,
+              impressions = ads_product_daily.impressions + excluded.impressions,
+              clicks = ads_product_daily.clicks + excluded.clicks,
+              conversions = ads_product_daily.conversions + excluded.conversions,
+              conversion_value_cents = ads_product_daily.conversion_value_cents + excluded.conversion_value_cents
+            """ : ""
         for chunkStart in stride(from: 0, to: rows.count, by: maxRowsPerStatement) {
             let chunk = Array(rows[chunkStart..<min(chunkStart + maxRowsPerStatement, rows.count)])
             let valuePlaceholders = Array(repeating: "(?,?,?,?,?,?,?,?,?,?,?,?)", count: chunk.count)
                 .joined(separator: ", ")
             let sql = """
-                INSERT OR REPLACE INTO ads_product_daily (
+                \(insert) INTO ads_product_daily (
                   date, item_id, product_id, variant_id, campaign, currency_code,
                   cost_micros, impressions, clicks, conversions, conversion_value_cents, import_id
-                ) VALUES \(valuePlaceholders);
+                ) VALUES \(valuePlaceholders) \(conflict);
                 """
             var arguments = StatementArguments()
             for row in chunk {

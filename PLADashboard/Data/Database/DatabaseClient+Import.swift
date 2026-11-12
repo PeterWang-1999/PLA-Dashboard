@@ -21,6 +21,54 @@ extension DatabaseClient {
         }
     }
 
+    func finishProductDetailImport(
+        _ job: ImportJobRecord,
+        firstListedDates: [(productId: String, firstListedAt: String)],
+        categories: [(productId: String, plaCms3: String)],
+        replacingExisting: Bool
+    ) throws {
+        try dbQueue.write { db in
+            if replacingExisting { try discardUnchangedAds(for: job, db: db) }
+            try job.update(db)
+            try markWeeklyMetricsDirty(for: job, db: db)
+            if replacingExisting {
+                try db.execute(sql: """
+                    DELETE FROM ads_product_daily WHERE rowid IN (
+                      SELECT old.rowid FROM ads_product_daily n
+                      CROSS JOIN ads_product_daily old ON old.date = n.date AND old.item_id = n.item_id
+                        AND old.campaign = n.campaign AND old.currency_code = n.currency_code
+                      JOIN import_jobs j ON j.id = old.import_id
+                      WHERE n.import_id = ? AND old.import_id != n.import_id AND j.status = ?
+                    );
+                    """, arguments: [job.id, ImportJobStatus.succeeded.rawValue])
+            }
+            try upsertProductFirstListedDates(firstListedDates, importId: job.id, importedAt: job.importedAt, db: db)
+            try upsertProductPlaCategories(categories, importId: job.id, importedAt: job.importedAt, db: db)
+        }
+        invalidateDashboardCache()
+    }
+
+    private func discardUnchangedAds(for job: ImportJobRecord, db: Database) throws {
+        try db.execute(sql: """
+            DELETE FROM ads_product_daily AS n
+            WHERE n.import_id = ? AND EXISTS (
+              SELECT 1 FROM ads_product_daily old
+              WHERE old.rowid = (
+                SELECT a.rowid FROM ads_product_daily a
+                JOIN import_jobs j ON j.id = a.import_id
+                WHERE a.date = n.date AND a.item_id = n.item_id
+                  AND a.campaign = n.campaign AND a.currency_code = n.currency_code
+                  AND j.status = ?
+                ORDER BY j.imported_at DESC, a.rowid DESC LIMIT 1
+              )
+              AND old.product_id = n.product_id AND old.variant_id IS n.variant_id
+              AND old.cost_micros = n.cost_micros AND old.impressions = n.impressions
+              AND old.clicks = n.clicks AND old.conversions = n.conversions
+              AND old.conversion_value_cents = n.conversion_value_cents
+            );
+            """, arguments: [job.id, ImportJobStatus.succeeded.rawValue])
+    }
+
     private func markWeeklyMetricsDirty(for job: ImportJobRecord, db: Database) throws {
         guard try db.tableExists("weekly_metrics_dirty_products") else { return }
         // 包含同一自然键的历史产品：ID 改变时旧产品也必须清除旧指标。
@@ -291,12 +339,12 @@ extension DatabaseClient {
 
     // MARK: - Ads product daily
 
-    func insertAdsProductDailyBatch(_ rows: [AdsProductDailyRecord]) throws {
+    func insertAdsProductDailyBatch(_ rows: [AdsProductDailyRecord], accumulatingMetrics: Bool = false) throws {
         guard !rows.isEmpty else { return }
         let signpost = PerformanceSignposts.beginImportFlush()
         defer { PerformanceSignposts.endImportFlush(signpost) }
         try dbQueue.write { db in
-            try db.bulkInsertAdsProductDaily(rows)
+            try db.bulkInsertAdsProductDaily(rows, accumulatingMetrics: accumulatingMetrics)
         }
         invalidateDashboardCache()
     }
@@ -377,130 +425,123 @@ extension DatabaseClient {
     }
 
     /// 写入投放明细中的首次上架日：保留更早的日期；不存在的产品则创建占位行。
-    func upsertProductFirstListedAtBatch(
+    private func upsertProductFirstListedDates(
         _ entries: [(productId: String, firstListedAt: String)],
         importId: String,
-        importedAt: String
+        importedAt: String,
+        db: Database
     ) throws {
         guard !entries.isEmpty else { return }
-        let signpost = PerformanceSignposts.beginImportFlush()
-        defer { PerformanceSignposts.endImportFlush(signpost) }
-        try dbQueue.write { db in
-            let ids = entries.map(\.productId)
-            let existingRows = try ProductRecord
-                .filter(ids.contains(ProductRecord.Columns.productId))
-                .fetchAll(db)
-            var existingByID = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.productId, $0) })
+        let ids = entries.map(\.productId)
+        let existingRows = try ProductRecord
+            .filter(ids.contains(ProductRecord.Columns.productId))
+            .fetchAll(db)
+        var existingByID = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.productId, $0) })
 
-            var toInsert: [ProductRecord] = []
-            var toUpdate: [ProductRecord] = []
+        var toInsert: [ProductRecord] = []
+        var toUpdate: [ProductRecord] = []
 
-            for entry in entries {
-                if var existing = existingByID[entry.productId] {
-                    if let current = existing.firstListedAt,
-                       !current.isEmpty,
-                       current <= entry.firstListedAt {
-                        continue
-                    }
-                    existing.firstListedAt = entry.firstListedAt
-                    existing.lastSeenAt = importedAt
-                    existing.updatedFromImportId = importId
-                    toUpdate.append(existing)
-                    existingByID[entry.productId] = existing
-                } else {
-                    let product = ProductRecord(
-                        productId: entry.productId,
-                        title: nil,
-                        canonicalLink: nil,
-                        imageUrl: nil,
-                        customLabel0: nil,
-                        customLabel1: nil,
-                        customLabel2: nil,
-                        customLabel3: nil,
-                        customLabel4: nil,
-                        lsin: nil,
-                        googleProductCategory: nil,
-                        firstListedAt: entry.firstListedAt,
-                        firstSeenAt: importedAt,
-                        lastSeenAt: importedAt,
-                        updatedFromImportId: importId
-                    )
-                    toInsert.append(product)
-                    existingByID[entry.productId] = product
+        for entry in entries {
+            if var existing = existingByID[entry.productId] {
+                if let current = existing.firstListedAt,
+                   !current.isEmpty,
+                   current <= entry.firstListedAt {
+                    continue
                 }
-            }
-
-            if !toInsert.isEmpty {
-                try db.insertRecords(toInsert)
-            }
-            for product in toUpdate {
-                try product.update(db)
+                existing.firstListedAt = entry.firstListedAt
+                existing.lastSeenAt = importedAt
+                existing.updatedFromImportId = importId
+                toUpdate.append(existing)
+                existingByID[entry.productId] = existing
+            } else {
+                let product = ProductRecord(
+                    productId: entry.productId,
+                    title: nil,
+                    canonicalLink: nil,
+                    imageUrl: nil,
+                    customLabel0: nil,
+                    customLabel1: nil,
+                    customLabel2: nil,
+                    customLabel3: nil,
+                    customLabel4: nil,
+                    lsin: nil,
+                    googleProductCategory: nil,
+                    firstListedAt: entry.firstListedAt,
+                    firstSeenAt: importedAt,
+                    lastSeenAt: importedAt,
+                    updatedFromImportId: importId
+                )
+                toInsert.append(product)
+                existingByID[entry.productId] = product
             }
         }
-        invalidateDashboardCache()
+
+        if !toInsert.isEmpty {
+            try db.insertRecords(toInsert)
+        }
+        for product in toUpdate {
+            try product.update(db)
+        }
     }
 
     /// 写入投放明细主 CMS3（按本文件花费最高的类目覆盖）。
-    func upsertProductPlaCMS3Batch(
+    private func upsertProductPlaCategories(
         _ entries: [(productId: String, plaCms3: String)],
         importId: String,
-        importedAt: String
+        importedAt: String,
+        db: Database
     ) throws {
         guard !entries.isEmpty else { return }
-        let signpost = PerformanceSignposts.beginImportFlush()
-        defer { PerformanceSignposts.endImportFlush(signpost) }
-        try dbQueue.write { db in
-            let ids = entries.map(\.productId)
-            let existingRows = try ProductRecord
-                .filter(ids.contains(ProductRecord.Columns.productId))
-                .fetchAll(db)
-            var existingByID = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.productId, $0) })
+        let ids = entries.map(\.productId)
+        let existingRows = try ProductRecord
+            .filter(ids.contains(ProductRecord.Columns.productId))
+            .fetchAll(db)
+        var existingByID = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.productId, $0) })
 
-            var toInsert: [ProductRecord] = []
-            var toUpdate: [ProductRecord] = []
+        var toInsert: [ProductRecord] = []
+        var toUpdate: [ProductRecord] = []
 
-            for entry in entries {
-                let cms3 = entry.plaCms3.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !cms3.isEmpty else { continue }
+        for entry in entries {
+            let cms3 = entry.plaCms3.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cms3.isEmpty else { continue }
 
-                if var existing = existingByID[entry.productId] {
-                    existing.plaCms3 = cms3
-                    existing.lastSeenAt = importedAt
-                    existing.updatedFromImportId = importId
-                    toUpdate.append(existing)
-                    existingByID[entry.productId] = existing
-                } else {
-                    let product = ProductRecord(
-                        productId: entry.productId,
-                        title: nil,
-                        canonicalLink: nil,
-                        imageUrl: nil,
-                        customLabel0: nil,
-                        customLabel1: nil,
-                        customLabel2: nil,
-                        customLabel3: nil,
-                        customLabel4: nil,
-                        lsin: nil,
-                        googleProductCategory: nil,
-                        firstListedAt: nil,
-                        plaCms3: cms3,
-                        firstSeenAt: importedAt,
-                        lastSeenAt: importedAt,
-                        updatedFromImportId: importId
-                    )
-                    toInsert.append(product)
-                    existingByID[entry.productId] = product
-                }
-            }
-
-            if !toInsert.isEmpty {
-                try db.insertRecords(toInsert)
-            }
-            for product in toUpdate {
-                try product.update(db)
+            if var existing = existingByID[entry.productId] {
+                guard existing.plaCms3 != cms3 else { continue }
+                existing.plaCms3 = cms3
+                existing.lastSeenAt = importedAt
+                existing.updatedFromImportId = importId
+                toUpdate.append(existing)
+                existingByID[entry.productId] = existing
+            } else {
+                let product = ProductRecord(
+                    productId: entry.productId,
+                    title: nil,
+                    canonicalLink: nil,
+                    imageUrl: nil,
+                    customLabel0: nil,
+                    customLabel1: nil,
+                    customLabel2: nil,
+                    customLabel3: nil,
+                    customLabel4: nil,
+                    lsin: nil,
+                    googleProductCategory: nil,
+                    firstListedAt: nil,
+                    plaCms3: cms3,
+                    firstSeenAt: importedAt,
+                    lastSeenAt: importedAt,
+                    updatedFromImportId: importId
+                )
+                toInsert.append(product)
+                existingByID[entry.productId] = product
             }
         }
-        invalidateDashboardCache()
+
+        if !toInsert.isEmpty {
+            try db.insertRecords(toInsert)
+        }
+        for product in toUpdate {
+            try product.update(db)
+        }
     }
 
     /// 孤儿产品对账（幂等，顺序无关）：

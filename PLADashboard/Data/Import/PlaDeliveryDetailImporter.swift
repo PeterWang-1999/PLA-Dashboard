@@ -14,6 +14,8 @@ actor PlaDeliveryDetailImporter {
     func importFile(
         sourceURL: URL,
         fileName: String? = nil,
+        additionalSyncFiles: [URL] = [],
+        incrementalSync: Bool = false,
         onProgress: @Sendable @escaping (ImportProgress) async -> Void
     ) async throws -> ImportResult {
         let importId = UUID().uuidString
@@ -26,26 +28,26 @@ actor PlaDeliveryDetailImporter {
             validRows: 0,
             invalidRows: 0,
             warningRows: 0,
-            message: "正在复制文件…"
+            message: incrementalSync ? "正在准备导入…" : "正在复制文件…"
         ))
 
-        let staging = try ImportStagingStore.stage(
+        let staging = incrementalSync ? nil : try ImportStagingStore.stage(
             sourceURL: sourceURL,
             accountID: databaseClient.accountID,
             importId: importId,
             fileName: fileName
         )
 
-        if let existing = try await databaseClient.findImportJobByChecksum(staging.checksum) {
+        if let staging, let existing = try await databaseClient.findImportJobByChecksum(staging.checksum) {
             throw ImportPipelineError.duplicateFile(existingJobId: existing.id)
         }
 
         var job = ImportJobRecord(
             id: importId,
             sourceKind: ImportSourceKind.plaDeliveryDetail.rawValue,
-            fileName: staging.fileName,
-            filePathBookmark: staging.bookmarkData,
-            fileChecksum: staging.checksum,
+            fileName: staging?.fileName ?? fileName ?? "BI Data · 投放产品明细",
+            filePathBookmark: staging?.bookmarkData,
+            fileChecksum: staging?.checksum,
             importedAt: importedAt,
             status: ImportJobStatus.running.rawValue,
             totalRows: 0,
@@ -56,7 +58,8 @@ actor PlaDeliveryDetailImporter {
         )
         try await databaseClient.createImportJob(job)
 
-        let format = ImportSpreadsheetFormat.detect(at: staging.stagedFileURL)
+        let input = staging?.stagedFileURL ?? sourceURL
+        let format = ImportSpreadsheetFormat.detect(at: input)
 
         await onProgress(ImportProgress(
             phase: .parsing,
@@ -68,11 +71,11 @@ actor PlaDeliveryDetailImporter {
             message: "正在统计行数…"
         ))
 
-        let state = ImportAccumulationState()
+        let state = ImportAccumulationState(incrementalSync: incrementalSync)
 
         if format == .delimited {
             let estimate = try DelimitedFileLineCounter.estimateDataRowCount(
-                fileURL: staging.stagedFileURL,
+                fileURL: input,
                 linesToSkip: Self.linesToSkip
             )
             state.estimatedTotalRows = estimate > 0 ? estimate : nil
@@ -88,27 +91,27 @@ actor PlaDeliveryDetailImporter {
         }
 
         do {
-            try await consumeRows(
-                format: format,
-                stagedFileURL: staging.stagedFileURL,
-                state: state,
-                onProgress: onProgress
-            ) { event in
-                try await self.handleEvent(
-                    event,
-                    importId: importId,
+            for file in [input] + additionalSyncFiles {
+                state.columnMap = nil
+                try await consumeRows(
+                    format: ImportSpreadsheetFormat.detect(at: file),
+                    stagedFileURL: file,
                     state: state,
                     onProgress: onProgress
-                )
+                ) { event in
+                    try await self.handleEvent(event, importId: importId, state: state, onProgress: onProgress)
+                }
+                guard state.columnMap != nil else {
+                    throw StreamingDelimitedParserError.missingHeader
+                }
             }
-
-            guard state.columnMap != nil else {
-                throw StreamingDelimitedParserError.missingHeader
+            if incrementalSync, state.invalidRows > 0 {
+                let firstError = state.firstInvalidRow ?? state.errorBatch.first { $0.severity == ImportRowSeverity.error.rawValue }
+                let detail = firstError.map { "（第 \($0.rowNumber) 行：\($0.message)）" } ?? ""
+                throw ImportPipelineError.invalidSyncData("报表有 \(state.invalidRows) 行无法导入\(detail)。")
             }
 
             try await flushBatch(state)
-            try await flushFirstListedDates(state, importId: importId, importedAt: importedAt)
-            try await flushPlaCMS3(state, importId: importId, importedAt: importedAt)
             try await appendErrors(state, force: true)
 
             job.totalRows = state.processedRows
@@ -116,12 +119,18 @@ actor PlaDeliveryDetailImporter {
             job.invalidRows = state.invalidRows
             job.warningRows = state.warningRows
             job.status = ImportJobStatus.succeeded.rawValue
-            try await databaseClient.updateImportJob(job)
-
             let errors = try await databaseClient.fetchImportErrors(importId: importId)
+            let firstListedDates = state.firstListedByProductID.map { (productId: $0.key, firstListedAt: $0.value) }
+            let categories = state.cms3CostMicrosByProductID.compactMap { productId, costs in
+                costs.max { ($0.value, $0.key) < ($1.value, $1.key) }.map { (productId: productId, plaCms3: $0.key) }
+            }
+            try Task.checkCancellation()
+            try await databaseClient.finishProductDetailImport(
+                job, firstListedDates: firstListedDates, categories: categories, replacingExisting: incrementalSync
+            )
             return ImportResult(
                 importId: importId,
-                stagedFileURL: staging.stagedFileURL,
+                stagedFileURL: input,
                 job: job,
                 errors: errors
             )
@@ -438,40 +447,7 @@ actor PlaDeliveryDetailImporter {
         guard !state.adsBatch.isEmpty else { return }
         let batch = state.adsBatch
         state.adsBatch.removeAll(keepingCapacity: true)
-        try await databaseClient.insertAdsProductDailyBatch(batch)
-    }
-
-    private func flushFirstListedDates(
-        _ state: ImportAccumulationState,
-        importId: String,
-        importedAt: String
-    ) async throws {
-        guard !state.firstListedByProductID.isEmpty else { return }
-        let entries = state.firstListedByProductID.map { (productId: $0.key, firstListedAt: $0.value) }
-        state.firstListedByProductID.removeAll(keepingCapacity: true)
-        try await databaseClient.upsertProductFirstListedAtBatch(
-            entries,
-            importId: importId,
-            importedAt: importedAt
-        )
-    }
-
-    private func flushPlaCMS3(
-        _ state: ImportAccumulationState,
-        importId: String,
-        importedAt: String
-    ) async throws {
-        guard !state.cms3CostMicrosByProductID.isEmpty else { return }
-        let entries: [(productId: String, plaCms3: String)] = state.cms3CostMicrosByProductID.compactMap { productId, costs in
-            guard let best = costs.max(by: { $0.value < $1.value }) else { return nil }
-            return (productId: productId, plaCms3: best.key)
-        }
-        state.cms3CostMicrosByProductID.removeAll(keepingCapacity: true)
-        try await databaseClient.upsertProductPlaCMS3Batch(
-            entries,
-            importId: importId,
-            importedAt: importedAt
-        )
+        try await databaseClient.insertAdsProductDailyBatch(batch, accumulatingMetrics: state.incrementalSync)
     }
 
     private func appendErrors(
@@ -480,6 +456,9 @@ actor PlaDeliveryDetailImporter {
     ) async throws {
         guard force || state.errorBatch.count >= batchSize else { return }
         let batch = state.errorBatch
+        if state.firstInvalidRow == nil {
+            state.firstInvalidRow = batch.first { $0.severity == ImportRowSeverity.error.rawValue }
+        }
         state.errorBatch.removeAll(keepingCapacity: true)
         try await databaseClient.insertImportErrorsBatch(batch)
     }
@@ -506,6 +485,12 @@ actor PlaDeliveryDetailImporter {
 
 /// 跨回调累积导入状态（由 Importer actor 串行访问）。
 private final class ImportAccumulationState: @unchecked Sendable {
+    let incrementalSync: Bool
+    var firstInvalidRow: ImportRowErrorRecord?
+
+    init(incrementalSync: Bool) {
+        self.incrementalSync = incrementalSync
+    }
     var columnMap: PlaDeliveryDetailColumnMap?
     var estimatedTotalRows: Int?
     var adsBatch: [AdsProductDailyRecord] = []

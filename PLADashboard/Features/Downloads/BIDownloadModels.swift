@@ -25,6 +25,11 @@ enum BIReportCalendar {
         if next { return today > date ? today : calendar.date(byAdding: .day, value: 1, to: today) }
         return today <= date ? today : calendar.date(byAdding: .day, value: -1, to: today)
     }
+
+    static func dayLabel(_ date: Date) -> String {
+        let day = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", day.year ?? 0, day.month ?? 0, day.day ?? 0)
+    }
 }
 
 struct BIReportWeek: Identifiable {
@@ -32,8 +37,7 @@ struct BIReportWeek: Identifiable {
     var id: String {
         var format = Date.FormatStyle(date: .numeric, time: .omitted, locale: Locale(identifier: "en_CA"))
         format.timeZone = BIReportCalendar.timeZone
-        let day = BIReportCalendar.calendar.dateComponents([.year, .month, .day], from: start)
-        let key = String(format: "%04d-%02d-%02d", day.year ?? 0, day.month ?? 0, day.day ?? 0)
+        let key = BIReportCalendar.dayLabel(start)
         return WeekCalendar.plaWeekLabel(forWeekStartDay: key) ?? format.format(start)
     }
 
@@ -73,16 +77,22 @@ struct BIFilters: Codable, Equatable {
     var dimensions = Set(BIDimension.allCases)
     var classification: BIClassification?
     var merchant: String?
+    var productDetailThroughDay: String?
 
     var classificationMode: BIClassification {
         classification ?? (category.isEmpty && selectedCategories?.isEmpty != false ? .businessUnit : .category)
     }
 
+    var categoryLabel: String? {
+        guard classificationMode == .category else { return nil }
+        if let selectedCategories, !selectedCategories.isEmpty {
+            return selectedCategories.map(\.name).joined(separator: "、")
+        }
+        return category.isEmpty ? "全部品类" : category
+    }
+
     var productDetailRestriction: String? {
         if channel != "Google PLA" { return "投放产品明细仅支持 Google PLA。" }
-        if classificationMode == .category, let selectedCategories, selectedCategories.count > 1 {
-            return "投放产品明细只支持单个品类。定时下载两份报表时，请选择单品类预设。"
-        }
         return nil
     }
 
@@ -91,6 +101,16 @@ struct BIFilters: Codable, Equatable {
     mutating func selectCategories(_ categories: [BICategory]) {
         category = ""
         selectedCategories = categories.isEmpty ? nil : categories
+    }
+
+    func usingDefaultCategories(_ categories: [BICategory]?) -> Self {
+        var result = self
+        result.classification = .category
+        result.merchant = "LITB"
+        result.businessUnit = ""
+        result.selectCategories(categories ?? [])
+        if result.selectedCategories == nil { result.category = "Toys & Hobbies / Toys & Games" }
+        return result
     }
 
     func resolved(through now: Date) -> BIFilters {
@@ -160,6 +180,7 @@ struct BIDownloadRun: Codable, Identifiable {
     enum Origin: String, Codable {
         case scheduled = "定时下载"
         case manual = "临时导出"
+        case sync = "同步数据"
     }
 
     enum Status: String, Codable {
@@ -177,8 +198,18 @@ struct BIDownloadRun: Codable, Identifiable {
     var remoteTaskName: String { "\(reportKind.rawValue)__PLA_\(id.uuidString)" }
 
     static func batch(origin: Origin, filters: BIFilters, createdAt: Date) -> [Self] {
-        let reports: [BIReport] = origin == .scheduled ? [.channelAnalysis, .productDetail] : [.channelAnalysis]
-        return reports.map { BIDownloadRun(origin: origin, filters: filters, submittedAt: createdAt, report: $0) }
+        let channel = BIDownloadRun(origin: origin, filters: filters, submittedAt: createdAt, report: .channelAnalysis)
+        if origin == .manual { return [channel] }
+
+        var productFilters = filters
+        productFilters.productDetailThroughDay = BIReportCalendar.dayLabel(createdAt)
+        let categories = filters.selectedCategories ?? []
+        let products = (categories.isEmpty ? [productFilters] : categories.map { category in
+            var single = productFilters
+            single.selectCategories([category])
+            return single
+        }).map { BIDownloadRun(origin: origin, filters: $0, submittedAt: createdAt, report: .productDetail) }
+        return origin == .sync ? products : [channel] + products
     }
 }
 
@@ -188,4 +219,15 @@ struct BIWorkspace: Codable {
     var presets = [BIPreset.standard]
     var schedules: [BISchedule] = []
     var runs: [BIDownloadRun] = []
+    var defaultCategories: [BICategory]?
+
+    var effectivePresets: [BIPreset] {
+        presets.map { preset in
+            guard preset.id == BIPreset.standard.id else { return preset }
+            var updated = preset
+            updated.name = "默认品类 · Google PLA · 周报"
+            updated.filters = preset.filters.usingDefaultCategories(defaultCategories)
+            return updated
+        }
+    }
 }

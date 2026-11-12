@@ -119,7 +119,7 @@ struct DashboardView: View {
             }
         } else if viewModel.showsEmptyState {
             dashboardPlaceholderLayout {
-                DashboardEmptyStateView(onImport: onRequestDataUpdate)
+                DashboardEmptyStateView(accountKind: accountKind, onImport: onRequestDataUpdate)
             }
         } else if viewModel.isLoading, viewModel.rows.isEmpty {
             dashboardPlaceholderLayout {

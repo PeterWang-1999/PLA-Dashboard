@@ -75,13 +75,14 @@ struct ImportResult: Sendable {
 enum ImportPipelineError: Error, LocalizedError {
     case duplicateFile(existingJobId: String)
     case missingRequiredColumns(String)
+    case invalidSyncData(String)
     case cancelled
 
     var errorDescription: String? {
         switch self {
         case .duplicateFile(let id):
             "该文件已导入过（批次 \(id)）"
-        case .missingRequiredColumns(let message):
+        case .missingRequiredColumns(let message), .invalidSyncData(let message):
             message
         case .cancelled:
             "导入已取消"

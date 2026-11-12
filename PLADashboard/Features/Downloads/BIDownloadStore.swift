@@ -8,6 +8,8 @@ final class BIDownloadStore {
     private(set) var connectedAccounts: Set<String> = []
     private(set) var busyAccount: String?
     var errorMessage: String?
+    private(set) var syncProgress: String?
+    var syncResult: String?
 
     @ObservationIgnored private var loop: Task<Void, Never>?
     @ObservationIgnored private var command: Task<Void, Never>?
@@ -81,15 +83,23 @@ final class BIDownloadStore {
     }
 
     func refreshFilterOptions(for accountID: String, merchant: String?) async throws {
+        let portal = workspaces[accountID]?.portal
+        let options = try await loadFilterOptions(for: accountID, merchant: merchant)
+        guard workspaces[accountID]?.portal == portal else { return }
+        change(accountID) { $0.options = options }
+    }
+
+    func loadFilterOptions(for accountID: String, merchant: String?) async throws -> BIFilterOptions {
         guard let portal = workspaces[accountID]?.portal,
-              let account = UUID(uuidString: accountID) else { return }
+              let account = UUID(uuidString: accountID) else {
+            throw BIWebSession.Failure(status: .needsLogin, message: "请先在「数据下载」连接 BI Data。")
+        }
         let browser = BIWebSession(portal: portal, accountID: account)
         browser.open()
         do {
             let options = try await browser.options(merchant: merchant)
             try Task.checkCancellation()
-            guard workspaces[accountID]?.portal == portal else { return }
-            change(accountID) { $0.options = options }
+            return options
         } catch let failure as BIWebSession.Failure {
             try Task.checkCancellation()
             if failure.status == .needsLogin, workspaces[accountID]?.portal == portal {
@@ -97,6 +107,87 @@ final class BIDownloadStore {
             }
             throw failure
         }
+    }
+
+    func saveDefaultCategories(_ categories: [BICategory], accountID: String) -> Bool {
+        guard let level = categories.first?.level, categories.allSatisfy({ $0.level == level }) else { return false }
+        return change(accountID) { $0.defaultCategories = categories }
+    }
+
+    func resetDefaultCategories(accountID: String) -> Bool {
+        change(accountID) { $0.defaultCategories = nil }
+    }
+
+    func synchronizeProductData(accountStore: AccountStore) async {
+        guard syncProgress == nil, let account = accountStore.activeAccount, account.kind == .selfBuilt,
+              let client = accountStore.activeDatabaseClient, client.accountID == account.id else { return }
+        let workspace = workspace(account.id)
+        guard let portal = workspace.portal, let accountUUID = UUID(uuidString: account.id) else {
+            syncResult = "请先在「数据下载」连接 BI Data，再同步产品数据。"
+            return
+        }
+        let operationID: UUID
+        do {
+            operationID = try accountStore.beginImport(accountID: account.id, workspaceRevision: accountStore.workspaceRevision)
+        } catch {
+            syncResult = error.localizedDescription
+            return
+        }
+        syncProgress = "正在连接 BI Data…"
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(operationID.uuidString, isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: folder)
+            syncProgress = nil
+            accountStore.endImport(operationID)
+        }
+        let now = Date()
+        let filters = BIFilters().usingDefaultCategories(workspace.defaultCategories).resolved(through: now)
+        let runs = BIDownloadRun.batch(origin: .sync, filters: filters, createdAt: now)
+        let browser = BIWebSession(portal: portal, accountID: accountUUID)
+        browser.open()
+        var imported = false
+        do {
+            var files: [URL] = []
+            for (index, run) in runs.enumerated() {
+                let output = folder.appendingPathComponent("投放产品明细-\(index + 1).xlsx")
+                syncProgress = "正在下载投放产品明细（\(index + 1)/\(runs.count)）…"
+                try await browser.export(run, to: output, onSubmissionStarted: {}) { _ in }
+                files.append(output)
+            }
+            connectedAccounts.insert(account.id)
+            guard let first = files.first else { return }
+            let result = try await PlaDeliveryDetailImporter(databaseClient: client).importFile(
+                sourceURL: first,
+                additionalSyncFiles: Array(files.dropFirst()),
+                incrementalSync: true
+            ) { [weak self] progress in
+                await self?.updateSyncProgress(progress)
+            }
+            imported = true
+            try await ImportPipelineRunner.finishImport(
+                sourceKind: .plaDeliveryDetail, result: result, databaseClient: client,
+                accountKind: account.kind,
+                onProgress: { [weak self] progress in await self?.updateSyncProgress(progress) },
+                reloadFilterCatalogs: {},
+                refreshDashboard: { await accountStore.notifyDataChanged(accountID: account.id) }
+            )
+            let changed = try await client.countAdsProductDaily(importId: result.importId)
+            syncResult = changed == 0 ? "同步完成，投放产品明细没有变更。" : "同步完成，新增或更新 \(changed) 条投放产品明细。"
+        } catch {
+            if (error as? BIWebSession.Failure)?.status == .needsLogin {
+                connectedAccounts.remove(account.id)
+            }
+            if imported {
+                accountStore.notifyDataChanged(accountID: account.id)
+                syncResult = "数据已写入，刷新看板时发生错误。\(error.localizedDescription)"
+            } else {
+                syncResult = "同步未完成。\(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func updateSyncProgress(_ progress: ImportProgress) {
+        syncProgress = progress.message ?? "正在导入投放产品明细（\(progress.processedRows) 行）…"
     }
 
     @discardableResult
@@ -199,7 +290,7 @@ final class BIDownloadStore {
                 guard change(id, { updated in
                     for schedule in due {
                         guard let index = updated.schedules.firstIndex(where: { $0.id == schedule.id }),
-                              let preset = updated.presets.first(where: { $0.id == schedule.presetID }),
+                              let preset = updated.effectivePresets.first(where: { $0.id == schedule.presetID }),
                               let occurrence = BIReportCalendar.occurrence(
                                   hour: schedule.hour, minute: schedule.minute, near: now, next: false
                               ) else { continue }

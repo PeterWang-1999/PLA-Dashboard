@@ -34,7 +34,7 @@ struct SettingsView: View {
             Section {
                 LabeledContent("当前账户", value: accountName)
             } footer: {
-                Text("以下数据保留设置仅对当前账户生效。")
+                Text("品类和数据保留设置仅对当前账户生效。")
             }
 
             Section {
@@ -70,6 +70,10 @@ struct SettingsView: View {
             } footer: {
                 Text("产品数据页面底栏的“数据维护”菜单可清理当前账户中超过保留期的 Ads 日表；产品主表与导入记录始终保留。")
             }
+
+            if accountStore.activeAccount?.kind == .selfBuilt {
+                BIDefaultCategorySettings(accountID: accountID)
+            }
         }
     }
 
@@ -85,8 +89,74 @@ struct SettingsView: View {
     }
 }
 
+private struct BIDefaultCategorySettings: View {
+    @Environment(BIDownloadStore.self) private var downloads
+    @State private var draft = BIFilters()
+    @State private var categories: [BICategory] = []
+    @State private var error: String?
+    @State private var refresh = 0
+    @State private var isLoading = true
+
+    let accountID: String
+
+    private var saved: [BICategory]? { downloads.workspace(accountID).defaultCategories }
+    private var hasChanges: Bool {
+        draft.category.isEmpty && draft.selectedCategories != saved
+    }
+
+    var body: some View {
+        Section {
+            LabeledContent("默认品类") {
+                BICategoryPicker(categories: categories, filters: $draft)
+                    .disabled(isLoading || categories.isEmpty)
+            }
+            if isLoading {
+                ProgressView("正在加载 BI Data 品类…").controlSize(.small)
+            } else if let error {
+                HStack {
+                    Text(error).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("重试") { refresh += 1 }
+                }
+            }
+            HStack {
+                Button("恢复 Toys & Games") {
+                    draft = draft.usingDefaultCategories(nil)
+                    if !downloads.resetDefaultCategories(accountID: accountID) {
+                        error = "无法恢复默认品类。"
+                    }
+                }
+                .disabled(saved == nil)
+                Spacer()
+                Button("保存品类") {
+                    guard let selected = draft.selectedCategories else { return }
+                    error = downloads.saveDefaultCategories(selected, accountID: accountID) ? nil : "无法保存默认品类。"
+                }
+                .disabled(isLoading || !hasChanges || draft.selectedCategories?.isEmpty != false)
+            }
+        } header: {
+            Text("BI Data")
+        } footer: {
+            Text("同步数据和默认下载预设使用这些品类。可以同时选择同一层级的多个品类。")
+        }
+        .task(id: refresh) {
+            draft = BIFilters().usingDefaultCategories(saved)
+            isLoading = true
+            error = nil
+            defer { isLoading = false }
+            do {
+                categories = try await downloads.loadFilterOptions(for: accountID, merchant: "LITB").categoryTree ?? []
+            } catch is CancellationError {
+            } catch let failure {
+                error = failure.localizedDescription
+            }
+        }
+    }
+}
+
 #Preview {
     SettingsView()
         .environment(AccountStore())
         .environment(DashboardSettingsNotifier())
+        .environment(BIDownloadStore())
 }

@@ -177,15 +177,27 @@ if (operation === "productParameters") {
         if (!country) throw new Error("投放产品明细没有所选国家");
     }
     const dimensions = {"日期": "period", "国家": "country", "二级品类": "cms2", "三级品类": "cms3"};
+    const range = productWeekRange(dates, f.firstWeek, f.lastWeek);
+    const daily = !!f.productDetailThroughDay;
+    if (daily) {
+        range.endDate = range.endDate < f.productDetailThroughDay ? range.endDate : f.productDetailThroughDay;
+        if (range.endDate < range.startDate) throw new Error("投放产品明细的起始周晚于今天");
+        const start = Date.parse(range.startDate);
+        const end = Date.parse(range.endDate);
+        const day = 86400000;
+        range.comparedEndDate = new Date(start - day).toISOString().slice(0, 10);
+        range.comparedStarDate = new Date(start - (end - start + day)).toISOString().slice(0, 10);
+    }
     return {
-        dateType: "BY_WEEK", ...productWeekRange(dates, f.firstWeek, f.lastWeek),
+        dateType: daily ? "BY_DAY" : "BY_WEEK", ...range,
         merchantId: Number(merchant.merchant_id), categoryId: Number(categoryNode?.categories_id ?? 0),
         categoryLevel: Number(categoryNode?.categories_level ?? 0),
         bu: unit ? [unit] : names(units, "bu"), country: country ? [country.country_code] : [],
         productType: tags.productTagsList.map(item => Number(item.VALUE)),
         lsin: [], productStateMC: [], label: [], advantage: [], product_line: [], product_line_men: [], productTag: [],
         sort_field: "cost", sort_order: "desc",
-        exportDatatype: Object.keys(dimensions).filter(key => f.dimensions.includes(key)).map(key => dimensions[key])
+        exportDatatype: daily ? ["period", "lsin", "cms1", "cms2", "cms3", "cms4"] :
+            Object.keys(dimensions).filter(key => f.dimensions.includes(key)).map(key => dimensions[key])
     };
 }
 

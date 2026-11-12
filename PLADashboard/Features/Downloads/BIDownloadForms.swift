@@ -667,6 +667,9 @@ struct BIRunDetailSheet: View {
             VStack(spacing: 9) {
                 BIFormRow(title: "报表") { Text(run.reportKind.rawValue) }
                 BIFormRow(title: "来源") { Text(run.origin.rawValue) }
+                if let category = run.filters.categoryLabel {
+                    BIFormRow(title: "品类") { Text(category) }
+                }
                 BIFormRow(title: "报表周") { Text(run.filters.weekLabel) }
                 BIFormRow(title: "状态") { BIStatusLabel(status: run.status) }
             }

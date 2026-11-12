@@ -3,16 +3,36 @@ import Testing
 @testable import PLADashboard
 
 struct BIReportCalendarTests {
-    @Test func scheduledRunCreatesBothFilesWithTheSameResolvedFilters() {
+    @Test func scheduledRunCreatesBothReportsWithTheSameResolvedWeeks() {
         let date = Date(timeIntervalSinceReferenceDate: 816_161_000)
         let filters = BIFilters().resolved(through: date)
         let runs = BIDownloadRun.batch(origin: .scheduled, filters: filters, createdAt: date)
         #expect(runs.map(\.reportKind) == [.channelAnalysis, .productDetail])
         #expect(runs.map(\.reportKind.fileExtension) == ["csv", "xlsx"])
-        #expect(runs.allSatisfy { $0.filters == filters && $0.submittedAt == date })
+        #expect(runs.first?.filters == filters)
+        #expect(runs.last?.filters.firstWeek == filters.firstWeek)
+        #expect(runs.last?.filters.lastWeek == filters.lastWeek)
+        #expect(runs.last?.filters.productDetailThroughDay == BIReportCalendar.dayLabel(date))
+        #expect(runs.allSatisfy { $0.submittedAt == date })
         #expect(Set(runs.map(\.id)).count == 2)
         #expect(BIDownloadRun.batch(origin: .manual, filters: filters, createdAt: date)
             .map(\.reportKind) == [.channelAnalysis])
+    }
+
+    @Test func configuredCategoriesAreCombinedForChannelAndSplitForProductDetail() {
+        let categories = [
+            BICategory(id: "12", parentID: "1", level: 2, name: "Toys & Games", path: "Toys & Hobbies / Toys & Games"),
+            BICategory(id: "13", parentID: "1", level: 2, name: "Pet Supplies", path: "Toys & Hobbies / Pet Supplies")
+        ]
+        var workspace = BIWorkspace()
+        workspace.defaultCategories = categories
+        let now = Date(timeIntervalSinceReferenceDate: 816_161_000)
+        let filters = workspace.effectivePresets[0].filters.resolved(through: now)
+        let scheduled = BIDownloadRun.batch(origin: .scheduled, filters: filters, createdAt: now)
+        #expect(scheduled.map(\.reportKind) == [.channelAnalysis, .productDetail, .productDetail])
+        #expect(scheduled.first?.filters.selectedCategories == categories)
+        let sync = BIDownloadRun.batch(origin: .sync, filters: filters, createdAt: now)
+        #expect(sync.map { $0.filters.selectedCategories?.map(\.id) ?? [] } == [["12"], ["13"]])
     }
 
     @Test func existingRunKeepsItsOriginalReportAndRemoteName() throws {

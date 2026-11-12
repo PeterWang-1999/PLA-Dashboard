@@ -109,6 +109,42 @@ final class PlaDeliveryDetailImporterTests: XCTestCase {
         XCTAssertEqual(XLSXSheetXMLBridge.columnIndex(fromCellReference: "I2"), 8)
         XCTAssertEqual(XLSXSheetXMLBridge.columnIndex(fromCellReference: "AA1"), 26)
     }
+
+    func testIncrementalSyncSkipsIdenticalRowsAndReplacesOnlyChangedKeys() async throws {
+        let databaseClient = try DatabaseClient.makeInMemoryForTesting()
+        let importer = PlaDeliveryDetailImporter(databaseClient: databaseClient)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = directory.appendingPathComponent("first.csv")
+        let second = directory.appendingPathComponent("second.csv")
+        try sampleCSV.write(to: first, atomically: true, encoding: .utf8)
+        let original = try await importer.importFile(sourceURL: first, incrementalSync: true) { _ in }
+
+        let identical = try await importer.importFile(sourceURL: first, incrementalSync: true) { _ in }
+        let identicalCount = try await databaseClient.countAdsProductDaily(importId: identical.importId)
+        XCTAssertEqual(identicalCount, 0)
+
+        try sampleCSV.replacingOccurrences(of: "282.68", with: "300.00").write(to: first, atomically: true, encoding: .utf8)
+        let header = try XCTUnwrap(sampleCSV.split(separator: "\n").first)
+        try "\(header)\n2026-05-24,S9730219,1.00,4,2,1,5,2026-03-01".write(to: second, atomically: true, encoding: .utf8)
+        let updated = try await importer.importFile(
+            sourceURL: first, additionalSyncFiles: [second], incrementalSync: true
+        ) { _ in }
+        let updatedRows = try await databaseClient.fetchAdsProductDaily(importId: updated.importId)
+        XCTAssertEqual(updatedRows.map(\.costMicros), [301_000_000])
+        let retained = try await databaseClient.fetchAdsProductDaily(importId: original.importId)
+        XCTAssertEqual(retained.map(\.itemId), ["S19954192"])
+
+        try "bad header".write(to: second, atomically: true, encoding: .utf8)
+        do {
+            _ = try await importer.importFile(sourceURL: first, additionalSyncFiles: [second], incrementalSync: true) { _ in }
+            XCTFail("Malformed second file should fail the batch")
+        } catch {
+            let afterFailure = try await databaseClient.countAdsProductDaily(importId: updated.importId)
+            XCTAssertEqual(afterFailure, 1)
+        }
+    }
 }
 
 final class PurgeLegacyGoogleAdsImportsTests: XCTestCase {

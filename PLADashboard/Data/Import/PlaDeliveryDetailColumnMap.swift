@@ -36,7 +36,7 @@ struct PlaDeliveryDetailColumnMap: Sendable {
         conversionsIndex = try index(of: "Conversions")
         conversionValueIndex = try index(of: "Conversion Value")
         firstListedAtIndex = normalizedHeaders.firstIndex(of: "首次上架时间")
-        cms3Index = normalizedHeaders.firstIndex(of: "CMS3")
+        cms3Index = normalizedHeaders.firstIndex(of: "CMS3") ?? normalizedHeaders.firstIndex(of: "三级品类")
     }
 
     func value(at index: Int, in fields: [String]) -> String? {
