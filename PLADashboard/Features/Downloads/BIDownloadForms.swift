@@ -174,7 +174,9 @@ struct BIExportSheet: View {
     let presets: [BIPreset]
     private let weeks = BIReportCalendar.weeks(through: .now, count: 104)
     private var options: BIFilterOptions { store.workspace(accountID).options }
-    private var availableWeeks: [String] { options.reportWeeks ?? weeks.map(\.id) }
+    private var availableWeeks: [String] {
+        (options.reportWeeks ?? weeks.map(\.id)).sorted(by: >)
+    }
     private var optionsRequest: OptionsRequest { OptionsRequest(merchant: filters.merchant, attempt: optionsRefresh) }
 
     private var draft: BIFilters {
@@ -244,9 +246,13 @@ struct BIExportSheet: View {
                 Divider()
 
                 exportRow("时间范围") {
-                    BISelectionPicker(title: "时间范围", choices: [false, true], selection: $customRange) { custom in
-                        custom ? "自定义周范围" : "过去 6 个完整周 + 本周"
+                    Picker("时间范围", selection: $customRange) {
+                        Text("过去 6 个完整周 + 本周").tag(false)
+                        Text("自定义周范围").tag(true)
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
                 }
                 if customRange {
                     exportRow("起止周") {
@@ -335,9 +341,8 @@ struct BIExportSheet: View {
     }
 
     private var classificationPicker: some View {
-        BISelectionPicker(
-            title: "分类方式",
-            choices: [BIClassification.businessUnit, .category],
+        Picker(
+            "分类方式",
             selection: Binding(
                 get: { filters.classificationMode },
                 set: { mode in
@@ -348,7 +353,13 @@ struct BIExportSheet: View {
                     }
                 }
             )
-        ) { $0 == .businessUnit ? "BU" : "品类" }
+        ) {
+            Text("BU").tag(BIClassification.businessUnit)
+            Text("品类").tag(BIClassification.category)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
     }
 
     private func exportRow(_ title: String, @ViewBuilder content: () -> some View) -> some View {
