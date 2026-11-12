@@ -1,7 +1,7 @@
 {
   "configurations" : [
     {
-      "id" : "PLA-PERF-RELEASE",
+      "id" : "2CD2E527-9644-4C80-90F8-3B40E276444A",
       "name" : "Release",
       "options" : {
         "codeCoverage" : false,

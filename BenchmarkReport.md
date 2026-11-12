@@ -7,17 +7,15 @@
 ```bash
 xcodebuild -project PLADashboard.xcodeproj \
   -scheme PLADashboard \
+  -testPlan PLADashboardPerformance \
   -configuration Release \
   -destination 'platform=macOS' \
-  -parallel-testing-enabled NO \
-  -only-testing:PLADashboardTests/AdsImportPerformanceTests \
-  -only-testing:PLADashboardTests/DashboardQueryPerformanceTests \
   ENABLE_TESTABILITY=YES test
 ```
 
 如果使用本地临时签名且测试宿主因 Team ID 校验拒绝加载测试包，可在本次测试命令中加入 `CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= ENABLE_HARDENED_RUNTIME=NO`。这些参数仅用于本地测试构建。
 
-如需重跑后续对照，将上面两个 `-only-testing` 参数替换为目标测试类，例如 `-only-testing:PLADashboardTests/IncrementalWeeklyMetricsPerformanceTests`。以下表格列出了各场景对应的测试类。
+性能计划运行 `AdsImportPerformanceTests` 和 `DashboardQueryPerformanceTests`。如需重跑表格中的其他对照，将 `-testPlan PLADashboardPerformance` 替换为 `-testPlan PLADashboardDefault`，再加上目标测试类，例如 `-only-testing:PLADashboardTests/IncrementalWeeklyMetricsPerformanceTests`。
 
 导入与查询基准默认使用 10,000 条 Ads 明细和 500 条 Merchant SKU。百万行导入可先生成测试文件，再在 Xcode 的 **Edit Scheme → Test → Arguments** 中给测试进程添加环境变量 `PLA_RUN_FULL_BENCHMARK=1`，运行 `AdsImportPerformanceTests/testAdsImportAndETLWithinReasonableTime`。缺少文件或环境变量时，该用例使用默认数据量。
 

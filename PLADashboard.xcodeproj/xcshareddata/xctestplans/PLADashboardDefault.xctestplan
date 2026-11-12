@@ -1,0 +1,23 @@
+{
+  "configurations" : [
+    {
+      "id" : "FDAA2E03-10D5-4C55-8F77-70C88A3A5E0E",
+      "name" : "Default",
+      "options" : {
+      }
+    }
+  ],
+  "defaultOptions" : {
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:PLADashboard.xcodeproj",
+        "identifier" : "PLA00222F4056970012CB78",
+        "name" : "PLADashboardTests"
+      }
+    }
+  ],
+  "version" : 1
+}
