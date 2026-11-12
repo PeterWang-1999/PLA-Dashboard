@@ -4,30 +4,32 @@ PLA Dashboard 是面向 Google Shopping 产品投放分析的 macOS 本地应用
 
 ## 下载与系统要求
 
-- 最新版本：`1.2 (4)`
+- 最新安装包：`1.2 (4)`（GitHub 标签 `v1.2`）
 - 系统要求：macOS 14.4 或更高版本
 - 处理器：Apple Silicon 与 Intel Mac（Universal 2）
 - 下载地址：[GitHub Releases](https://github.com/PeterWang-1999/PLA-Dashboard/releases/latest)
 
 发布页提供两种安装包：
 
-- `PLADashboard-macOS-Universal-v1.2.dmg`：推荐，打开后将 `PLADashboard.app` 拖到“应用程序”。
-- `PLADashboard-macOS-Universal-v1.2.zip`：解压后将 `PLADashboard.app` 拖到“应用程序”。
+- `PLADashboard-macOS-Universal-v1.2.dmg`：打开镜像后将应用拖到“应用程序”。
+- `PLADashboard-macOS-Universal-v1.2.zip`：解压后将 `PLA Dashboard.app` 拖到“应用程序”。
+
+仓库 `main` 包含 1.2 之后的源码变更。对应的功能和修复见 [更新日志的未发布章节](CHANGELOG.md#未发布)。
 
 ## 安装与首次打开
 
 1. 从 Release 页面下载 DMG 或 ZIP。
 2. 若使用 DMG，双击挂载镜像；若使用 ZIP，双击解压。
-3. 将 `PLADashboard.app` 拖入“应用程序”文件夹。
-4. 在 Finder 的“应用程序”中按住 Control 点击 `PLADashboard`，选择“打开”，并在确认框中再次选择“打开”。
+3. 将应用拖入“应用程序”文件夹。
+4. 在 Finder 的“应用程序”中按住 Control 点击“PLA Dashboard”，选择“打开”，并在确认框中再次选择“打开”。
 
-当前发布包采用本地 ad-hoc 签名，未使用 Developer ID 签名和 Apple 公证。若 macOS 阻止首次打开，请进入“系统设置 → 隐私与安全性”，确认应用来源后选择“仍要打开”。请只使用本仓库 Release 页面提供的文件，并在发布说明中核对 SHA-256。
+当前发布包采用 ad-hoc 签名，尚未公证。若 macOS 阻止首次打开，请进入“系统设置 → 隐私与安全性”，确认应用来自 GitHub Releases 后选择“仍要打开”。可在发布资产列表核对文件的 SHA-256。
 
 如系统仍提示文件已损坏，可在确认下载来源和 SHA-256 后执行：
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/PLADashboard.app
-open /Applications/PLADashboard.app
+xattr -dr com.apple.quarantine "/Applications/PLA Dashboard.app"
+open "/Applications/PLA Dashboard.app"
 ```
 
 公司设备可能受 MDM 或安全策略限制；这种情况下需要联系设备管理员放行未公证应用。
@@ -58,7 +60,7 @@ open /Applications/PLADashboard.app
 2. **投放产品明细（CSV/XLSX）**：必需字段为 `日期`、`LSIN`、`Market Cost`、`Impressions`、`Clicks`、`Conversions`、`Conversion Value`；`首次上架时间` 与 `CMS3` 为可选字段。
 3. **Product Sales CSV**：必需字段为 `日期`、`LSIN`、`Gross Sales($)`、`毛利额($)`。
 
-导入结果会显示有效行、无效行和错误信息；可导出错误 CSV 进行修正。重复导入同一文件时，应用会依据文件指纹避免重复写入。
+导入结果会显示有效行、错误和警告；可导出错误与警告 CSV 进行修正。「导入历史」按数据源显示最近的批次。应用使用文件指纹防止重复写入。
 
 ### 3. 使用产品数据看板
 
@@ -67,7 +69,7 @@ open /Applications/PLADashboard.app
 - 排序与分页：支持消费、ROI 等已接入后端排序的字段；菜单“看板”提供首页、上一页、下一页和尾页快捷操作。
 - 产品明细：三方站账户可双击产品记录打开明细浮窗，也可选中记录后按 `Command-O` 或使用右键菜单；浮窗展示原始 SKU 维度的消费、ROI、点击和转化，并支持导出与访问落地页。自建站暂不提供此功能。
 - 趋势：查看最近 6 个完整周及当前未完成周的消费/销售趋势；悬停柱形可查看周区间、合计和日均值。
-- 导出：导出当前筛选与排序条件下的 CSV，可选择是否包含点击与转化字段。
+- 导出：按当前筛选与排序条件导出 CSV，上限为 50,000 条产品记录，可选择是否包含点击与转化字段。
 - 刷新：使用工具栏刷新，或按 `Shift-Command-R` 重建聚合并刷新看板。
 
 指标表中的当前周按已导入日期参与消费、ROI、CPA、ARPU、CPC、CVR、AOS、点击与转化等展示。底栏会显示当前报告周期、当前周截止日和覆盖天数，避免把未完整周误读为整周。
@@ -85,8 +87,8 @@ open /Applications/PLADashboard.app
 ### 5. 设置与数据维护
 
 - “设置”中可调整每页行数和 Ads 日表保留期限；账户级设置仅作用于当前账户。
-- 产品数据页底栏的“数据维护”可清理当前账户的过期 Ads 日表。
-- 重置标签历史和清理数据属于破坏性操作，应用会先显示影响范围并要求确认。
+- 产品数据页底栏的“数据维护”提供过期 Ads 数据清理、产品图数据诊断和 S 前缀产品记录合并。清理与合并前会显示确认提示。
+- 从旧版升级到当前源码构建时，数据库迁移会清理旧预警标签历史。Merchant Center 自定义标签和「未匹配到 GMC 商品目录」提示继续提供。
 
 ## 数据与隐私
 
@@ -125,7 +127,7 @@ open /Applications/PLADashboard.app
 
 ## 开发与验证
 
-技术栈：SwiftUI、Observation、SQLite、GRDB.swift、App Sandbox。
+项目使用 SwiftUI、Observation、SQLite、GRDB.swift 和 App Sandbox。请使用完整的 Xcode 打开 `PLADashboard.xcodeproj`，选择共享的 `PLADashboard` 方案。若命令行默认使用 Command Line Tools，可为单次命令设置 `DEVELOPER_DIR`，指向本机 Xcode 的 `Contents/Developer`。
 
 ```bash
 # 构建
@@ -133,25 +135,16 @@ xcodebuild -project PLADashboard.xcodeproj \
   -scheme PLADashboard \
   -destination 'platform=macOS' build
 
-# 功能与性能回归（Debug，含 10k 行基准）
+# 功能与性能回归（Debug）
 xcodebuild -project PLADashboard.xcodeproj \
   -scheme PLADashboard \
-  -destination 'platform=macOS' test
-
-# Release 性能 Test Plan
-xcodebuild -project PLADashboard.xcodeproj \
-  -scheme PLADashboard \
-  -testPlan PLADashboard.xcodeproj/xcshareddata/xctestplans/PLADashboardPerformance.xctestplan \
-  -configuration Release \
   -destination 'platform=macOS' test
 ```
 
-性能基准详见 [BenchmarkReport.md](BenchmarkReport.md)，版本变更详见 [CHANGELOG.md](CHANGELOG.md)。
+Release 性能测试命令和历史对照见 [性能基准](BenchmarkReport.md)。近期开发状态见 [开发进度](DEV_PROGRESS.md)。
 
 ## 许可证
 
 当前仓库中的 PLA Dashboard 开源代码采用 [Apache License 2.0](LICENSE) 授权，版权归 Ziao Wang 所有。你可以在许可证约束下使用、修改和分发代码；重新分发时需保留许可证、版权与 [NOTICE](NOTICE) 声明。
 
 第三方依赖仍分别遵循其自身的许可证。本许可证仅适用于当前仓库中明确发布的内容，不自动适用于其他私有仓库、未来闭源模块、商标、Logo 或独立商业服务。
-
-预警标签功能已移除。升级时会删除预警专用周快照与旧标签字段；产品、投放、销售、导入记录和核心指标保留。Merchant Center 自定义标签与 GMC 缺失的数据完整性提示继续保留。
