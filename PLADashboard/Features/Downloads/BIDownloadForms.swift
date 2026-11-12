@@ -20,9 +20,9 @@ private struct BIFormSheet<Content: View, Actions: View>: View {
             content
             Divider()
             HStack(spacing: 8) {
-                Spacer()
                 actions
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 19)
@@ -43,17 +43,38 @@ private struct BIFormRow<Content: View>: View {
     }
 }
 
-private struct BISearchableSelection: View {
+private struct BISelectionLabel: View {
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(value).lineLimit(1)
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct BISelectionPicker<Value: Hashable>: View {
     let title: String
-    let choices: [String]
-    var allLabel: String?
-    @Binding var selection: String
+    let choices: [Value]
+    @Binding var selection: Value
+    var searchesChoices = false
+    let label: (Value) -> String
+
     @State private var isPresented = false
     @State private var search = ""
     @FocusState private var isSearchFocused: Bool
 
-    private var visibleChoices: [String] {
-        search.isEmpty ? choices : choices.filter { $0.localizedStandardContains(search) }
+    private var displayedValue: String { label(selection) }
+    private var showsSearch: Bool { searchesChoices || choices.count > 8 }
+
+    private var visibleChoices: [Value] {
+        search.isEmpty ? choices : choices.filter { label($0).localizedStandardContains(search) }
     }
 
     var body: some View {
@@ -61,53 +82,53 @@ private struct BISearchableSelection: View {
             search = ""
             isPresented = true
         } label: {
-            HStack {
-                Text(selection.isEmpty ? allLabel ?? title : selection)
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.caption2)
-                    .accessibilityHidden(true)
-            }
+            BISelectionLabel(value: displayedValue)
         }
+        .buttonStyle(.bordered)
         .accessibilityLabel(title)
-        .accessibilityValue(selection.isEmpty ? allLabel ?? "" : selection)
+        .accessibilityValue(displayedValue)
+        .help(displayedValue)
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 8) {
-                TextField("搜索\(title)", text: $search)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($isSearchFocused)
-                List {
-                    if let allLabel, search.isEmpty {
-                        choiceButton(allLabel, value: "")
+            if showsSearch {
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("搜索\(title)", text: $search)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($isSearchFocused)
+                    List {
+                        ForEach(visibleChoices, id: \.self, content: choiceButton)
+                        if visibleChoices.isEmpty {
+                            Text("没有匹配的选项").foregroundStyle(.secondary)
+                        }
                     }
-                    ForEach(visibleChoices, id: \.self) { choice in
-                        choiceButton(choice, value: choice)
-                    }
-                    if visibleChoices.isEmpty && (allLabel == nil || !search.isEmpty) {
-                        Text("没有匹配的选项").foregroundStyle(.secondary)
-                    }
+                    .listStyle(.plain)
                 }
-                .listStyle(.plain)
+                .padding(12)
+                .frame(width: 360, height: 300)
+                .defaultFocus($isSearchFocused, true)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(choices, id: \.self, content: choiceButton)
+                }
+                .padding(8)
+                .frame(width: 360)
             }
-            .padding(12)
-            .frame(width: 360, height: 300)
-            .defaultFocus($isSearchFocused, true)
         }
     }
 
-    private func choiceButton(_ label: String, value: String) -> some View {
+    private func choiceButton(_ value: Value) -> some View {
         Button {
             selection = value
             isPresented = false
         } label: {
             HStack {
-                Text(label)
-                Spacer()
+                Text(label(value))
+                Spacer(minLength: 8)
                 if selection == value {
                     Image(systemName: "checkmark").accessibilityHidden(true)
                 }
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -155,34 +176,32 @@ struct BIExportSheet: View {
 
     var body: some View {
         BIFormSheet(title: "临时导出", subtitle: "从预设填入筛选条件。更改仅用于本次导出。", width: 576) {
-            VStack(spacing: 9) {
-                BIFormRow(title: "筛选预设") {
-                    Picker("筛选预设", selection: $presetID) {
-                        ForEach(presets) { preset in Text(preset.name).tag(preset.id) }
-                    }
-                    .labelsHidden()
-                    .frame(width: 286, alignment: .leading)
-                    Button("另存为预设…") { showSavePreset = true }
-                        .buttonStyle(.link)
-                        .disabled(!valid)
-                }
-                BIFormRow(title: "报表") { Text("渠道投放分析") }
-            }
-            Divider()
-            if isLoadingOptions {
-                HStack {
-                    ProgressView().controlSize(.small)
-                    Text("正在加载筛选项…").foregroundStyle(.secondary)
-                }
-            } else if let optionsError {
-                HStack {
-                    Text(optionsError).foregroundStyle(.secondary)
-                    if store.connectedAccounts.contains(accountID) {
-                        Button("重试") { optionsRefresh += 1 }
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 9) {
+                exportRow("筛选预设") {
+                    BISelectionPicker(title: "筛选预设", choices: presets.map(\.id), selection: $presetID) { id in
+                        presets.first { $0.id == id }?.name ?? "选择预设"
                     }
                 }
-            }
-            VStack(spacing: 9) {
+                exportRow("报表") { Text("渠道投放分析") }
+                Divider()
+
+                if isLoadingOptions || optionsError != nil {
+                    exportRow("") {
+                        HStack(spacing: 8) {
+                            if isLoadingOptions {
+                                ProgressView().controlSize(.small)
+                                Text("正在加载筛选项…")
+                            } else if let optionsError {
+                                Text(optionsError)
+                                if store.connectedAccounts.contains(accountID) {
+                                    Button("重试") { optionsRefresh += 1 }
+                                }
+                            }
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    }
+                }
                 filterPicker("商户", selection: Binding(
                     get: { filters.merchant ?? "" },
                     set: { merchant in
@@ -191,76 +210,62 @@ struct BIExportSheet: View {
                     }
                 ), values: options.merchants ?? [], all: "BI Data 默认商户")
                 filterPicker("渠道分组", selection: $filters.channel, values: options.channels, all: "全部渠道")
-                BIFormRow(title: "分类方式") {
-                    Picker("分类方式", selection: Binding(
-                        get: { filters.classificationMode },
-                        set: { mode in
-                            filters.classification = mode
-                            switch mode {
-                            case .businessUnit: filters.category = ""
-                            case .category: filters.businessUnit = ""
-                            }
-                        }
-                    )) {
-                        Text("BU").tag(BIClassification.businessUnit)
-                        Text("品类").tag(BIClassification.category)
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.segmented)
-                    .frame(width: 170)
+                exportRow("分类方式") {
+                    classificationPicker
                 }
                 switch filters.classificationMode {
                 case .businessUnit:
                     filterPicker("BU", selection: $filters.businessUnit, values: options.businessUnits, all: "全部 BU")
                 case .category:
-                    BIFormRow(title: "品类") {
-                        BISearchableSelection(
-                            title: "品类", choices: options.categories, allLabel: "全部品类", selection: $filters.category
-                        )
-                        .frame(width: 286, alignment: .leading)
+                    exportRow("品类") {
+                        searchablePicker("品类", choices: options.categories, selection: $filters.category, all: "全部品类")
                         .disabled(isLoadingOptions || optionsError != nil)
                     }
                 }
-                BIFormRow(title: "国家") {
-                    BISearchableSelection(
-                        title: "国家", choices: options.countries, allLabel: "全部国家", selection: $filters.country
-                    )
-                    .frame(width: 286, alignment: .leading)
+                exportRow("国家") {
+                    searchablePicker("国家", choices: options.countries, selection: $filters.country, all: "全部国家")
                 }
-                BIFormRow(title: "时间范围") {
-                    Picker("时间范围", selection: $customRange) {
-                        Text("过去 6 个完整周 + 本周").tag(false)
-                        Text("自定义周范围").tag(true)
+                Divider()
+
+                exportRow("时间范围") {
+                    BISelectionPicker(title: "时间范围", choices: [false, true], selection: $customRange) { custom in
+                        custom ? "自定义周范围" : "过去 6 个完整周 + 本周"
                     }
-                    .labelsHidden()
-                    .frame(width: 286, alignment: .leading)
                 }
                 if customRange {
-                    BIFormRow(title: "起止周") {
-                        weekPicker("起始周", selection: $firstWeek)
-                        Text("至").foregroundStyle(.secondary)
-                        weekPicker("结束周", selection: $lastWeek)
+                    exportRow("起止周") {
+                        HStack(spacing: 8) {
+                            searchablePicker("起始周", choices: availableWeeks, selection: $firstWeek)
+                            Text("至").foregroundStyle(.secondary)
+                            searchablePicker("结束周", choices: availableWeeks, selection: $lastWeek)
+                        }
                     }
                 }
-                BIFormRow(title: "") {
+                exportRow("") {
                     Text(rangeSummary)
                         .font(.caption)
                         .foregroundStyle(valid ? Color.secondary : Color.orange)
                 }
-                BIFormRow(title: "展开维度") {
-                    ForEach(BIDimension.allCases) { dimension in
-                        Toggle(dimension.rawValue, isOn: Binding(
-                            get: { filters.dimensions.contains(dimension) },
-                            set: { selected in
-                                if selected { filters.dimensions.insert(dimension) }
-                                else { filters.dimensions.remove(dimension) }
-                            }
-                        ))
-                        .toggleStyle(.checkbox)
+                exportRow("展开维度") {
+                    HStack(spacing: 12) {
+                        ForEach(BIDimension.allCases) { dimension in
+                            Toggle(dimension.rawValue, isOn: Binding(
+                                get: { filters.dimensions.contains(dimension) },
+                                set: { selected in
+                                    if selected { filters.dimensions.insert(dimension) }
+                                    else { filters.dimensions.remove(dimension) }
+                                }
+                            ))
+                            .toggleStyle(.checkbox)
+                        }
                     }
                 }
             }
         } actions: {
+            Button("另存为预设…") { showSavePreset = true }
+                .buttonStyle(.link)
+                .disabled(!valid)
+            Spacer()
             Button("取消", role: .cancel) { dismiss() }
                 .keyboardShortcut(.cancelAction)
             Button("开始导出") {
@@ -313,22 +318,48 @@ struct BIExportSheet: View {
         return "\(start.start.formatted(BIDateText.day))–\(end.end.formatted(BIDateText.day)) · \(count) 个报表周\(current)"
     }
 
-    private func filterPicker(_ name: String, selection: Binding<String>, values: [String], all: String) -> some View {
-        let selected = selection.wrappedValue
-        let choices = Set(values + [selected]).filter { !$0.isEmpty }.sorted()
-        return BIFormRow(title: name) {
-            Picker(name, selection: selection) {
-                Text(all).tag("")
-                ForEach(choices, id: \.self) { Text($0).tag($0) }
-            }
-            .labelsHidden()
-            .frame(width: 286, alignment: .leading)
+    private var classificationPicker: some View {
+        BISelectionPicker(
+            title: "分类方式",
+            choices: [BIClassification.businessUnit, .category],
+            selection: Binding(
+                get: { filters.classificationMode },
+                set: { mode in
+                    filters.classification = mode
+                    switch mode {
+                    case .businessUnit: filters.category = ""
+                    case .category: filters.businessUnit = ""
+                    }
+                }
+            )
+        ) { $0 == .businessUnit ? "BU" : "品类" }
+    }
+
+    private func exportRow(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        GridRow {
+            Text(title).frame(width: 88, alignment: .leading)
+            content().frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    private func weekPicker(_ name: String, selection: Binding<String>) -> some View {
-        BISearchableSelection(title: name, choices: availableWeeks, selection: selection)
-            .frame(width: 128, alignment: .leading)
+    private func filterPicker(_ title: String, selection: Binding<String>, values: [String], all: String) -> some View {
+        let choices = Set(values + [selection.wrappedValue]).filter { !$0.isEmpty }.sorted()
+        return exportRow(title) {
+            BISelectionPicker(title: title, choices: [""] + choices, selection: selection) {
+                $0.isEmpty ? all : $0
+            }
+        }
+    }
+
+    private func searchablePicker(
+        _ title: String, choices: [String], selection: Binding<String>, all: String? = nil
+    ) -> some View {
+        BISelectionPicker(
+            title: title, choices: all == nil ? choices : [""] + choices,
+            selection: selection, searchesChoices: true
+        ) {
+            $0.isEmpty ? all ?? title : $0
+        }
     }
 }
 
