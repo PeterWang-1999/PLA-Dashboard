@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct PLADashboardApp: App {
     @State private var accountStore = AccountStore()
+    @State private var downloads = BIDownloadStore()
     @State private var dashboardSettingsNotifier = DashboardSettingsNotifier()
 
     var body: some Scene {
@@ -18,6 +19,8 @@ struct PLADashboardApp: App {
                     RootView()
                         .environment(accountStore)
                         .environment(dashboardSettingsNotifier)
+                        .environment(downloads)
+                        .task { downloads.start() }
                 case .failed(let message):
                     ContentUnavailableView {
                         Label("无法打开数据库", systemImage: "externaldrive.badge.exclamationmark")

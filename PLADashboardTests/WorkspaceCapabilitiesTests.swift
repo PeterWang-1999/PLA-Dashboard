@@ -17,10 +17,10 @@ final class WorkspaceCapabilitiesTests: XCTestCase {
         XCTAssertFalse(capabilities.importSourceKinds.contains(.adsProduct))
     }
 
-    func testSidebarItemsEqualForV1() {
+    func testDownloadsAreAvailableOnlyForSelfBuiltAccounts() {
         let thirdParty = WorkspaceCapabilities.forKind(.thirdParty)
         let selfBuilt = WorkspaceCapabilities.forKind(.selfBuilt)
-        XCTAssertEqual(thirdParty.sidebarNavigationItems, selfBuilt.sidebarNavigationItems)
+        XCTAssertEqual(selfBuilt.sidebarNavigationItems, AppNavigationItem.defaultSidebarCases + [.downloads])
         XCTAssertEqual(thirdParty.sidebarNavigationItems, AppNavigationItem.defaultSidebarCases)
         XCTAssertEqual(
             AppNavigationItem.defaultSidebarCases,

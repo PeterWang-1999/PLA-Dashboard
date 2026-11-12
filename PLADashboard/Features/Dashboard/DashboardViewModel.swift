@@ -50,7 +50,7 @@ final class DashboardViewModel {
     }
 
     private func refreshVisiblePage() async {
-        if followsVisiblePage, visiblePage == .imports { return }
+        if followsVisiblePage, !visiblePage.showsDashboardData { return }
         if followsVisiblePage, visiblePage == .dataDashboard {
             await refreshDataDashboard()
         } else {
@@ -350,7 +350,7 @@ final class DashboardViewModel {
         let requestID = invalidateTableRequest()
         chartRequestID &+= 1
         isLoadingDataDashboard = false
-        guard !followsVisiblePage || visiblePage != .imports else { return }
+        guard !followsVisiblePage || visiblePage.showsDashboardData else { return }
         let generation = loadGeneration
         let page = visiblePage
         refreshTask = Task { @MainActor in

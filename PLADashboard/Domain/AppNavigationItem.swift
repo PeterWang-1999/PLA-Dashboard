@@ -4,6 +4,7 @@ enum AppNavigationItem: String, CaseIterable, Identifiable {
     case dashboard = "产品数据"
     case dataDashboard = "数据看板"
     case imports = "数据导入"
+    case downloads = "数据下载"
 
     var id: String { rawValue }
 
@@ -16,11 +17,14 @@ enum AppNavigationItem: String, CaseIterable, Identifiable {
         WorkspaceCapabilities.forKind(kind).sidebarNavigationItems
     }
 
+    var showsDashboardData: Bool { self == .dashboard || self == .dataDashboard }
+
     var systemImage: String {
         switch self {
         case .dashboard: "chart.bar.doc.horizontal"
         case .dataDashboard: "chart.xyaxis.line"
         case .imports: "square.and.arrow.down"
+        case .downloads: "arrow.down.to.line"
         }
     }
 }

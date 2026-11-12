@@ -157,6 +157,13 @@ struct RootView: View {
                     }
                 )
             }
+        case .downloads:
+            if let account = accountStore.activeAccount, account.kind == .selfBuilt {
+                NavigationStack {
+                    BIDownloadsView(accountID: account.id)
+                }
+                .id(account.id)
+            }
         case .imports:
             NavigationStack {
                 ImportsView(viewModel: importViewModel)
@@ -171,6 +178,9 @@ struct RootView: View {
             return
         }
 
+        if let selectedNavigationItem, !sidebarNavigationItems.contains(selectedNavigationItem) {
+            self.selectedNavigationItem = .dashboard
+        }
         dashboardViewModel.setVisiblePage(selectedNavigationItem ?? .dashboard)
         dashboardViewModel.resetForAccountSwitch()
         importViewModel.resetForAccountSwitch()
@@ -178,11 +188,6 @@ struct RootView: View {
         await dashboardViewModel.reloadFilterCatalogsFromDatabase()
         await dashboardViewModel.bootstrapDashboard()
         await importViewModel.loadHistory()
-        if let capabilities = accountStore.activeCapabilities,
-           let selected = selectedNavigationItem,
-           !capabilities.sidebarNavigationItems.contains(selected) {
-            selectedNavigationItem = .dashboard
-        }
     }
 
     private func configureViewModels(databaseClient: DatabaseClient) {
