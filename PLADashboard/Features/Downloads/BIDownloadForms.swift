@@ -89,29 +89,45 @@ private struct BISelectionPicker<Value: Hashable>: View {
         .accessibilityValue(displayedValue)
         .help(displayedValue)
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
-            if showsSearch {
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("搜索\(title)", text: $search)
-                        .textFieldStyle(.roundedBorder)
-                        .focused($isSearchFocused)
-                    List {
-                        ForEach(visibleChoices, id: \.self, content: choiceButton)
-                        if visibleChoices.isEmpty {
-                            Text("没有匹配的选项").foregroundStyle(.secondary)
-                        }
+            VStack(spacing: 0) {
+                if showsSearch {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        TextField("搜索\(title)", text: $search)
+                            .textFieldStyle(.plain)
+                            .focused($isSearchFocused)
                     }
-                    .listStyle(.plain)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 7)
+                    Divider().padding(.horizontal, 8).padding(.bottom, 4)
                 }
-                .padding(12)
-                .frame(width: 360, height: 300)
-                .defaultFocus($isSearchFocused, true)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(choices, id: \.self, content: choiceButton)
+
+                if visibleChoices.count > 8 {
+                    ScrollView {
+                        LazyVStack(spacing: 0) { choiceRows }
+                    }
+                    .frame(height: 208)
+                } else {
+                    VStack(spacing: 0) { choiceRows }
                 }
-                .padding(8)
-                .frame(width: 360)
             }
+            .padding(8)
+            .frame(width: 360)
+            .defaultFocus($isSearchFocused, showsSearch)
+        }
+    }
+
+    @ViewBuilder
+    private var choiceRows: some View {
+        ForEach(visibleChoices, id: \.self, content: choiceButton)
+        if visibleChoices.isEmpty {
+            Text("没有匹配的选项")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
         }
     }
 
