@@ -5,38 +5,45 @@ struct BISyncProgressBanner: View {
     let onCancel: () -> Void
 
     var body: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("同步投放产品明细")
-                    .font(.headline)
-                    .accessibilityAddTraits(.isHeader)
-                Text(status)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .accessibilityAddTraits(.updatesFrequently)
-                if let fraction {
-                    ProgressView(value: fraction)
-                        .accessibilityLabel("导入进度")
-                } else {
-                    ProgressView()
-                        .progressViewStyle(.linear)
-                        .accessibilityLabel("同步进行中")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("同步投放产品明细")
+                        .font(.headline)
+                        .accessibilityAddTraits(.isHeader)
+                    Text(status)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if phase.canCancel {
+                    Button("取消同步", action: onCancel)
+                        .buttonStyle(.bordered)
+                        .fixedSize()
                 }
             }
-            .frame(maxWidth: 340, alignment: .leading)
-
-            Spacer(minLength: 0)
-
-            if phase.canCancel {
-                Button("取消同步", action: onCancel)
-                    .buttonStyle(.bordered)
-            }
+            progressBar
+                .progressViewStyle(.linear)
+                .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
         .background(Color.accentColor.opacity(0.1))
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
+    }
+
+    @ViewBuilder
+    private var progressBar: some View {
+        if let fraction {
+            ProgressView(value: fraction)
+                .accessibilityLabel("导入进度")
+        } else {
+            ProgressView()
+                .accessibilityLabel("同步进行中")
+        }
     }
 
     private var status: String {
