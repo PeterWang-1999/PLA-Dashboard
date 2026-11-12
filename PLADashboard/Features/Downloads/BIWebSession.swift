@@ -2,7 +2,7 @@ import Foundation
 import WebKit
 
 @MainActor
-final class BIWebSession: NSObject, WKUIDelegate, WKDownloadDelegate {
+final class BIWebSession: NSObject, WKUIDelegate, WKNavigationDelegate, WKDownloadDelegate {
     struct Failure: LocalizedError {
         let status: BIDownloadRun.Status
         let message: String
@@ -33,6 +33,7 @@ final class BIWebSession: NSObject, WKUIDelegate, WKDownloadDelegate {
         webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1400, height: 900), configuration: configuration)
         super.init()
         webView.uiDelegate = self
+        webView.navigationDelegate = self
     }
 
     private static let loginLayoutScript = """
@@ -93,10 +94,22 @@ final class BIWebSession: NSObject, WKUIDelegate, WKDownloadDelegate {
     ) async throws {
         let files = FileManager.default
         if files.fileExists(atPath: output.path) {
-            try Self.validateCSV(at: output, dimensions: run.filters.dimensions)
+            try Self.validateReport(at: output, for: run)
             return
         }
         try files.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if run.reportKind == .productDetail {
+            let parameters = try await productExportParameters(filters: run.filters)
+            onSubmissionStarted()
+            progress(.downloading)
+            try await downloadReport(to: output, for: run) {
+                let downloaded = try await evaluate("downloadProduct", arguments: ["parameters": parameters])
+                guard downloaded as? Bool == true else {
+                    throw Failure(status: .failed, message: "BI Data 未返回有效的投放产品明细 XLSX。")
+                }
+            }
+            return
+        }
         try await waitForReport(timeout: .seconds(20))
 
         let marker = output.deletingPathExtension().appendingPathExtension("submitted")
@@ -122,7 +135,10 @@ final class BIWebSession: NSObject, WKUIDelegate, WKDownloadDelegate {
                     throw Failure(status: .failed, message: "BI Data 返回了无法识别的下载地址。")
                 }
                 progress(.downloading)
-                try await downloadCSV(from: url, to: output, dimensions: run.filters.dimensions)
+                try await downloadReport(to: output, for: run) {
+                    let active = await webView.startDownload(using: URLRequest(url: url))
+                    trackDownload(active)
+                }
                 return
             case "pending":
                 checkedList = true
@@ -148,6 +164,24 @@ final class BIWebSession: NSObject, WKUIDelegate, WKDownloadDelegate {
             throw Failure(status: .failed, message: "BI Data 下载列表尚未出现这条任务。重试会继续查询原任务。")
         }
         throw Failure(status: .failed, message: "报表仍未就绪。重试时会继续查询本次任务。")
+    }
+
+    private func productExportParameters(filters: BIFilters) async throws -> [String: Any] {
+        guard filters.supportsProductDetail else {
+            throw Failure(status: .failed, message: "Market Performance 的投放产品明细只支持 Google PLA，请调整定时任务的筛选预设。")
+        }
+        guard try await waitForAuthentication() else {
+            if try await signInFormIsVisible() {
+                throw Failure(status: .needsLogin, message: "BI Data 显示了公司登录表单，请重新登录后重试。")
+            }
+            throw Failure(status: .connectionFailed, message: "未能连接 BI Data，请检查网络连接后重试。")
+        }
+        let encoded = try JSONEncoder().encode(filters)
+        let arguments = ["filters": try JSONSerialization.jsonObject(with: encoded)]
+        guard let parameters = try await evaluate("productParameters", arguments: arguments) as? [String: Any] else {
+            throw Failure(status: .failed, message: "无法生成投放产品明细的导出参数。")
+        }
+        return parameters
     }
 
     func waitForReport(timeout: Duration) async throws {
@@ -215,13 +249,12 @@ final class BIWebSession: NSObject, WKUIDelegate, WKDownloadDelegate {
         return result
     }
 
-    private func downloadCSV(from url: URL, to output: URL, dimensions: Set<BIDimension>) async throws {
+    private func downloadReport(
+        to output: URL, for run: BIDownloadRun, start: () async throws -> Void
+    ) async throws {
         let partial = output.deletingLastPathComponent().appendingPathComponent("\(UUID().uuidString).part")
         destination = partial
         downloadResult = nil
-        let active = await webView.startDownload(using: URLRequest(url: url))
-        active.delegate = self
-        download = active
         defer {
             destination = nil
             download = nil
@@ -229,19 +262,53 @@ final class BIWebSession: NSObject, WKUIDelegate, WKDownloadDelegate {
         }
 
         do {
+            try await start()
             let deadline = ContinuousClock.now + .seconds(90)
             while downloadResult == nil && ContinuousClock.now < deadline {
                 try await Task.sleep(for: .milliseconds(200))
             }
             guard let downloadResult else {
-                throw Failure(status: .failed, message: "CSV 下载超时，可以从任务记录继续。")
+                throw Failure(status: .failed, message: "报表下载超时，可以从任务记录重试。")
             }
             try downloadResult.get()
-            try Self.validateCSV(at: partial, dimensions: dimensions)
+            try Self.validateReport(at: partial, for: run)
             try FileManager.default.moveItem(at: partial, to: output)
         } catch {
-            _ = await active.cancel()
+            _ = await download?.cancel()
             throw error
+        }
+    }
+
+    private func trackDownload(_ download: WKDownload) {
+        download.delegate = self
+        self.download = download
+    }
+
+    func webView(
+        _ webView: WKWebView, decidePolicyFor action: WKNavigationAction
+    ) async -> WKNavigationActionPolicy {
+        if destination != nil, action.shouldPerformDownload, action.request.url?.scheme == "blob" {
+            return .download
+        }
+        return .allow
+    }
+
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        trackDownload(download)
+    }
+
+    private static func validateReport(at url: URL, for run: BIDownloadRun) throws {
+        switch run.reportKind {
+        case .channelAnalysis:
+            try validateCSV(at: url, dimensions: run.filters.dimensions)
+        case .productDetail:
+            let manifest = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: manifest) }
+            do {
+                try ZipEntryExtractor.extractEntry(named: "xl/workbook.xml", from: url, to: manifest)
+            } catch {
+                throw Failure(status: .failed, message: "BI Data 未返回有效的投放产品明细 XLSX。")
+            }
         }
     }
 
@@ -284,6 +351,6 @@ final class BIWebSession: NSObject, WKUIDelegate, WKDownloadDelegate {
     func downloadDidFinish(_ download: WKDownload) { downloadResult = .success(()) }
 
     func download(_ download: WKDownload, didFailWithError error: any Error, resumeData: Data?) {
-        downloadResult = .failure(Failure(status: .failed, message: "无法下载 BI Data CSV，可以从任务记录继续。"))
+        downloadResult = .failure(Failure(status: .failed, message: "无法下载 BI Data 报表，可以从任务记录重试。"))
     }
 }

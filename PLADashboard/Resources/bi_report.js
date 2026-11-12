@@ -64,15 +64,13 @@ if (operation === "ready") {
     }
     return false;
 }
-needed(query, "查询");
-
 const metadata = async (path, parameters = {}, method = "GET") => {
-    const url = new URL(path, report.URL);
+    const url = new URL(path, location.origin);
     const fields = new URLSearchParams(parameters);
     const request = {method, credentials: "same-origin"};
     if (method === "GET") url.search = fields.toString();
     else request.body = fields;
-    const response = await report.defaultView.fetch(url, request);
+    const response = await fetch(url, request);
     if (!response.ok || response.redirected) throw new Error("BI Data 筛选接口请求失败：" + path);
     return response.json();
 };
@@ -95,6 +93,108 @@ const categoryChoices = async merchantId => {
 };
 const names = (items, key) => [...new Set(items.map(item => item[key]).filter(name => typeof name === "string" && name))];
 const weekLabel = optionName => optionName.trim().split(/\s+/)[0];
+
+const productReportBase = "/fe/MarketPerformance/PLAMarketCostPerformance";
+const productWeekRange = (dates, firstWeek, lastWeek) => {
+    const byWeek = new Map();
+    for (const day of dates) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day.dt)) continue;
+        const key = `${day.year}-W${String(day.week).padStart(2, "0")}`;
+        const days = byWeek.get(key) ?? [];
+        days.push(day.dt);
+        byWeek.set(key, days);
+    }
+    const weeks = [...byWeek].map(([key, days]) => {
+        const sorted = [...new Set(days)].sort();
+        return {key, start: sorted[0], end: sorted[sorted.length - 1], count: sorted.length};
+    }).sort((a, b) => a.start.localeCompare(b.start));
+    const first = weeks.findIndex(week => week.key === firstWeek);
+    const last = weeks.findIndex(week => week.key === lastWeek);
+    const previous = first - (last - first + 1);
+    if (first < 0 || last < first || previous < 0 ||
+        weeks.slice(previous, last + 1).some(week => week.count !== 7)) {
+        throw new Error("BI Data 无法确认所选报表周及对比周");
+    }
+    return {
+        startDate: weeks[first].start, endDate: weeks[last].end,
+        comparedStarDate: weeks[previous].start, comparedEndDate: weeks[first - 1].end
+    };
+};
+
+if (operation === "productParameters") {
+    const f = args.filters;
+    const [merchants, dates, units, countries, tags] = await Promise.all([
+        metadata("/fe/common/getMerchantList"),
+        metadata("/fe/common/getLitbWeekList"),
+        metadata("/fe/common/getBUList"),
+        f.country ? metadata(productReportBase + "/getCountryList") : [],
+        metadata("/common/getProductTags")
+    ]);
+    const merchant = needed(merchants.find(item => item.merchant_name === (f.merchant || "LITB")), "商户");
+    const isCategory = f.classification === "category" || (!f.classification && !!f.category);
+    const unit = isCategory ? "" : f.businessUnit;
+    if (unit && !units.some(item => item.bu === unit)) throw new Error("投放产品明细没有所选 BU");
+    const choices = (isCategory ? f.category : unit) ? await categoryChoices(merchant.merchant_id) : [];
+    const category = isCategory ? f.category : unit;
+    const exact = choices.filter(choice => choice.label === category);
+    const matchingCategories = exact.length ? exact : choices.filter(choice =>
+        choice.path[choice.path.length - 1].categories_name === category);
+    if (isCategory && category && matchingCategories.length !== 1) {
+        throw new Error("投放产品明细无法确认所选品类");
+    }
+    const categoryNode = isCategory
+        ? matchingCategories[0]?.path.slice(-1)[0]
+        : choices.find(choice => choice.path.length === 1 && choice.label === unit)?.path[0];
+    const countryKey = f.country.trim().toUpperCase();
+    let country = countries.find(item =>
+        item.country_name.trim().toUpperCase() === countryKey || item.country_code.toUpperCase() === countryKey);
+    if (f.country && !country) {
+        const sets = await metadata("/Country/getCountrySet", {ignorePrivilege: false});
+        if (sets.length) {
+            const list = await metadata("/Country/getCountryOfCountrySet", {countrySet: sets.map(item => item.VALUE).join(",")});
+            const code = list.find(item => item.NAME.trim().toUpperCase() === countryKey)?.VALUE;
+            country = countries.find(item => item.country_code === code);
+        }
+        if (!country) throw new Error("投放产品明细没有所选国家");
+    }
+    const dimensions = {"日期": "period", "国家": "country", "二级品类": "cms2", "三级品类": "cms3"};
+    return {
+        dateType: "BY_WEEK", ...productWeekRange(dates, f.firstWeek, f.lastWeek),
+        merchantId: Number(merchant.merchant_id), categoryId: Number(categoryNode?.categories_id ?? 0),
+        categoryLevel: Number(categoryNode?.categories_level ?? 0),
+        bu: unit ? [unit] : names(units, "bu"), country: country ? [country.country_code] : [],
+        productType: tags.productTagsList.map(item => Number(item.VALUE)),
+        lsin: [], productStateMC: [], label: [], advantage: [], product_line: [], product_line_men: [], productTag: [],
+        sort_field: "cost", sort_order: "desc",
+        exportDatatype: Object.keys(dimensions).filter(key => f.dimensions.includes(key)).map(key => dimensions[key])
+    };
+}
+
+if (operation === "downloadProduct") {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 300000);
+    try {
+        const response = await fetch(productReportBase + "/exportProductData", {
+            method: "POST", credentials: "same-origin", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify(args.parameters), signal: controller.signal
+        });
+        if (!response.ok || response.redirected) return false;
+        const file = await response.blob();
+        const signature = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+        if (signature.join(",") !== "80,75,3,4") return false;
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(file);
+        link.download = "投放产品明细.xlsx";
+        document.body.append(link);
+        link.click();
+        link.remove();
+        return true;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+needed(query, "查询");
 
 if (operation === "options") {
     const [channels, businessUnits, countrySets, weeks, merchants] = await Promise.all([

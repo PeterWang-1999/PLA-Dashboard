@@ -69,6 +69,8 @@ struct BIFilters: Codable, Equatable {
         classification ?? (category.isEmpty ? .businessUnit : .category)
     }
 
+    var supportsProductDetail: Bool { channel == "Google PLA" }
+
     func resolved(through now: Date) -> BIFilters {
         guard firstWeek == nil || lastWeek == nil else { return self }
         let weeks = BIReportCalendar.weeks(through: now, count: 7)
@@ -124,6 +126,14 @@ struct BISchedule: Codable, Identifiable {
     }
 }
 
+enum BIReport: String, Codable {
+    case channelAnalysis = "渠道投放分析"
+    case productDetail = "投放产品明细"
+
+    var fileExtension: String { self == .productDetail ? "xlsx" : "csv" }
+    var openTitle: String { "打开 \(fileExtension.uppercased())" }
+}
+
 struct BIDownloadRun: Codable, Identifiable {
     enum Origin: String, Codable {
         case scheduled = "定时下载"
@@ -140,7 +150,14 @@ struct BIDownloadRun: Codable, Identifiable {
     let submittedAt: Date
     var status: Status = .queued
     var detail: String?
-    var remoteTaskName: String { "渠道投放分析__PLA_\(id.uuidString)" }
+    private var report: BIReport?
+    var reportKind: BIReport { report ?? .channelAnalysis }
+    var remoteTaskName: String { "\(reportKind.rawValue)__PLA_\(id.uuidString)" }
+
+    static func batch(origin: Origin, filters: BIFilters, createdAt: Date) -> [Self] {
+        let reports: [BIReport] = origin == .scheduled ? [.channelAnalysis, .productDetail] : [.channelAnalysis]
+        return reports.map { BIDownloadRun(origin: origin, filters: filters, submittedAt: createdAt, report: $0) }
+    }
 }
 
 struct BIWorkspace: Codable {

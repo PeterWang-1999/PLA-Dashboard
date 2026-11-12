@@ -121,8 +121,8 @@ final class BIDownloadStore {
     func enqueue(_ filters: BIFilters, origin: BIDownloadRun.Origin, accountID: String) -> Bool {
         guard workspaces[accountID]?.portal != nil else { return false }
         let now = Date()
-        let run = BIDownloadRun(origin: origin, filters: filters.resolved(through: now), submittedAt: now)
-        guard change(accountID, { $0.runs.insert(run, at: 0) }) else { return false }
+        let runs = BIDownloadRun.batch(origin: origin, filters: filters.resolved(through: now), createdAt: now)
+        guard change(accountID, { $0.runs.insert(contentsOf: runs, at: 0) }) else { return false }
         dispatchNext()
         return true
     }
@@ -135,8 +135,9 @@ final class BIDownloadStore {
         dispatchNext()
     }
 
-    func downloadURL(for id: UUID, accountID: String) -> URL? {
-        accountDirectory(accountID)?.appendingPathComponent(id.uuidString).appendingPathComponent("渠道投放分析.csv")
+    func downloadURL(for run: BIDownloadRun, accountID: String) -> URL? {
+        accountDirectory(accountID)?.appendingPathComponent(run.id.uuidString)
+            .appendingPathComponent(run.reportKind.rawValue).appendingPathExtension(run.reportKind.fileExtension)
     }
 
     static func copyToDownloads(_ source: URL, for run: BIDownloadRun) throws -> URL {
@@ -145,12 +146,13 @@ final class BIDownloadStore {
         let weeks = [run.filters.firstWeek, run.filters.lastWeek].compactMap { $0 }.filter {
             $0.range(of: #"^[0-9]{4}-W[0-9]{2}$"#, options: .regularExpression) != nil
         }
-        let stem = (["渠道投放分析"] + weeks + [String(run.id.uuidString.prefix(8))]).joined(separator: "_")
-        var destination = folder.appendingPathComponent(stem).appendingPathExtension("csv")
+        let stem = ([run.reportKind.rawValue] + weeks + [String(run.id.uuidString.prefix(8))]).joined(separator: "_")
+        let fileExtension = run.reportKind.fileExtension
+        var destination = folder.appendingPathComponent(stem).appendingPathExtension(fileExtension)
         var copy = 2
         while files.fileExists(atPath: destination.path) {
             if files.contentsEqual(atPath: source.path, andPath: destination.path) { return destination }
-            destination = folder.appendingPathComponent("\(stem)_\(copy)").appendingPathExtension("csv")
+            destination = folder.appendingPathComponent("\(stem)_\(copy)").appendingPathExtension(fileExtension)
             copy += 1
         }
         try files.copyItem(at: source, to: destination)
@@ -201,12 +203,12 @@ final class BIDownloadStore {
                               let occurrence = BIReportCalendar.occurrence(
                                   hour: schedule.hour, minute: schedule.minute, near: now, next: false
                               ) else { continue }
-                        let run = BIDownloadRun(
+                        let runs = BIDownloadRun.batch(
                             origin: .scheduled,
                             filters: preset.filters.resolved(through: occurrence),
-                            submittedAt: now
+                            createdAt: now
                         )
-                        updated.runs.insert(run, at: 0)
+                        updated.runs.insert(contentsOf: runs, at: 0)
                         updated.schedules[index].updateNextRun(after: now)
                     }
                 }) else { return }
@@ -227,7 +229,7 @@ final class BIDownloadStore {
     private func export(_ run: BIDownloadRun, accountID: String) {
         guard let portal = workspaces[accountID]?.portal,
               let account = UUID(uuidString: accountID),
-              let output = downloadURL(for: run.id, accountID: accountID) else { return }
+              let output = downloadURL(for: run, accountID: accountID) else { return }
         preparingRun = run.id
         activeRuns.insert(run.id)
         if run.status == .queued {
@@ -256,7 +258,7 @@ final class BIDownloadStore {
                 do {
                     _ = try Self.copyToDownloads(output, for: run)
                 } catch {
-                    self.errorMessage = "CSV 已保存在应用中，但无法复制到「下载」。\(error.localizedDescription)"
+                    self.errorMessage = "报表已保存在应用中，但无法复制到「下载」。\(error.localizedDescription)"
                 }
             } catch {
                 let failure = error as? BIWebSession.Failure

@@ -402,12 +402,17 @@ struct BIScheduleSheet: View {
                         ForEach(presets) { preset in Text(preset.name).tag(preset.id) }
                     }
                     .pickerStyle(.menu)
+                    LabeledContent("报表", value: "渠道投放分析、投放产品明细")
                 } header: {
                     Text("下载内容")
                 } footer: {
                     if let filters = preset?.filters {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("报表周 · \(filters.rangeRule)")
+                            if !filters.supportsProductDetail {
+                                Text("投放产品明细仅支持 Google PLA，请选择对应的筛选预设。")
+                                    .foregroundStyle(.orange)
+                            }
                             if filters.firstWeek == nil, let nextRun {
                                 Text("下次下载范围 · \(filters.resolved(through: nextRun).weekLabel)")
                             }
@@ -446,7 +451,7 @@ struct BIScheduleSheet: View {
             }
             .buttonStyle(.borderedProminent)
             .keyboardShortcut(.defaultAction)
-            .disabled(trimmedName.isEmpty || preset == nil)
+            .disabled(trimmedName.isEmpty || preset?.filters.supportsProductDetail != true)
         }
         .defaultFocus($isNameFocused, true)
     }
@@ -602,7 +607,7 @@ struct BIRunDetailSheet: View {
             width: 486
         ) {
             VStack(spacing: 9) {
-                BIFormRow(title: "报表") { Text("渠道投放分析") }
+                BIFormRow(title: "报表") { Text(run.reportKind.rawValue) }
                 BIFormRow(title: "来源") { Text(run.origin.rawValue) }
                 BIFormRow(title: "报表周") { Text(run.filters.weekLabel) }
                 BIFormRow(title: "状态") { BIStatusLabel(status: run.status) }

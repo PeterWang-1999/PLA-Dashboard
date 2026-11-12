@@ -94,7 +94,7 @@ struct BIDownloadsView: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text("BI Data").font(.title.bold()).accessibilityAddTraits(.isHeader)
-                Text("渠道投放分析 · CSV").foregroundStyle(.secondary)
+                Text("渠道投放分析 · 投放产品明细").foregroundStyle(.secondary)
             }
             Spacer()
             if connected {
@@ -133,6 +133,9 @@ struct BIDownloadsView: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(task.name).font(.headline)
+                    Text("渠道投放分析 · 投放产品明细")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
                     Text("每天 \(task.timeLabel)（北京时间） · \(preset?.filters.rangeRule ?? "预设不可用")")
                         .foregroundStyle(.secondary)
                         .font(.subheadline)
@@ -173,7 +176,7 @@ struct BIDownloadsView: View {
                 Table(workspace.runs) {
                     TableColumn("报表 / 来源") { run in
                         HStack(spacing: 8) {
-                            Text("渠道投放分析").fontWeight(.medium)
+                            Text(run.reportKind.rawValue).fontWeight(.medium)
                             Text(run.origin.rawValue).font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -191,7 +194,7 @@ struct BIDownloadsView: View {
                     }
                     .width(min: 76, ideal: 96)
                     TableColumn("操作") { run in
-                        Button(actionTitle(run.status)) { open(run) }
+                        Button(actionTitle(run)) { open(run) }
                             .buttonStyle(.link)
                     }
                     .width(min: 66, ideal: 86)
@@ -205,9 +208,9 @@ struct BIDownloadsView: View {
         }
     }
 
-    private func actionTitle(_ status: BIDownloadRun.Status) -> String {
-        switch status {
-        case .completed: "打开 CSV"
+    private func actionTitle(_ run: BIDownloadRun) -> String {
+        switch run.status {
+        case .completed: run.reportKind.openTitle
         case .failed, .connectionFailed, .needsLogin: "查看原因"
         default: "查看进度"
         }
@@ -218,9 +221,9 @@ struct BIDownloadsView: View {
             sheet = .detail(run.id)
             return
         }
-        guard let source = store.downloadURL(for: run.id, accountID: accountID),
+        guard let source = store.downloadURL(for: run, accountID: accountID),
               FileManager.default.fileExists(atPath: source.path) else {
-            store.errorMessage = "找不到这份 CSV，可在 BI Data 中重新导出。"
+            store.errorMessage = "找不到这份报表，可在 BI Data 中重新导出。"
             return
         }
         let url: URL
@@ -229,13 +232,13 @@ struct BIDownloadsView: View {
             url = try BIDownloadStore.copyToDownloads(source, for: run)
         } catch {
             url = source
-            copyError = "无法复制 CSV 到「下载」。\(error.localizedDescription)"
+            copyError = "无法复制报表到「下载」。\(error.localizedDescription)"
         }
         if NSWorkspace.shared.open(url) {
             store.errorMessage = copyError
         } else {
             NSWorkspace.shared.activateFileViewerSelecting([url])
-            store.errorMessage = [copyError, "无法使用默认应用打开 CSV，已在 Finder 中定位文件。"]
+            store.errorMessage = [copyError, "无法使用默认应用打开报表，已在 Finder 中定位文件。"]
                 .compactMap { $0 }.joined(separator: "\n")
         }
     }
