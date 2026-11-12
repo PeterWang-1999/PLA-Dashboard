@@ -213,7 +213,7 @@ final class BIDownloadStore {
                 refreshDashboard: { await accountStore.notifyDataChanged(accountID: accountID) }
             )
             let changed = try await client.countAdsProductDaily(importId: result.importId)
-            syncResult = changed == 0 ? "同步完成，投放产品明细没有变更。" : "同步完成，新增或更新 \(changed) 条投放产品明细。"
+            syncResult = changed == 0 ? "同步完成，投放指标没有变更。" : "同步完成，新增或更新 \(changed) 条投放指标记录。"
         } catch {
             if (error as? BIWebSession.Failure)?.status == .needsLogin {
                 connectedAccounts.remove(accountID)

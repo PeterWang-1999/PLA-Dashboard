@@ -5,6 +5,7 @@ struct DashboardQueryFilters: Sendable, Hashable {
     var searchText: String = ""
     var customLabelFilter: CustomLabelFilterSelection = .all
     var categoryFilter: CategoryFilterSelection = .all
+    var productTag: String?
     var sort: DashboardTableSort = .default
 }
 

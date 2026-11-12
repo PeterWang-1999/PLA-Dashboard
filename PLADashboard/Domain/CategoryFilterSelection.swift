@@ -5,6 +5,7 @@ enum CategoryFilterSelection: Hashable, Codable {
     case all
     case level2(String)
     case level3(level2: String, level3: String)
+    case plaPath(String)
 
     static let defaultTitle = "全部类目"
 
@@ -16,6 +17,8 @@ enum CategoryFilterSelection: Hashable, Codable {
             level2
         case .level3(_, let level3):
             level3
+        case .plaPath(let path):
+            path.components(separatedBy: ProductCategoryPath.storageSeparator).last ?? path
         }
     }
 
@@ -33,6 +36,8 @@ enum CategoryFilterSelection: Hashable, Codable {
             level2
         case .level3(let level2, let level3):
             "\(level2) > \(level3)"
+        case .plaPath(let path):
+            path
         }
     }
 
@@ -44,7 +49,7 @@ enum CategoryFilterSelection: Hashable, Codable {
 
     var sqlMatch: SQLMatch? {
         switch self {
-        case .all:
+        case .all, .plaPath:
             return nil
         case .level2(let level2):
             let suffix = " > \(level2)"

@@ -339,7 +339,21 @@ extension DatabaseClient {
             arguments += [value]
         }
 
-        if let categoryMatch = filters.categoryFilter.sqlMatch {
+        if let tag = filters.productTag {
+            sql += """
+                 AND EXISTS (
+                    SELECT 1 FROM pla_product_tags tags
+                    WHERE tags.product_id = p.product_id AND tags.tag = ?
+                 )
+                """
+            arguments += [tag]
+        }
+
+        if case .plaPath(let path) = filters.categoryFilter {
+            let prefix = path + ProductCategoryPath.storageSeparator
+            sql += " AND (p.pla_category_path = ? OR instr(p.pla_category_path, ?) = 1)"
+            arguments += [path, prefix]
+        } else if let categoryMatch = filters.categoryFilter.sqlMatch {
             sql += """
              AND (
                 p.google_product_category LIKE ?

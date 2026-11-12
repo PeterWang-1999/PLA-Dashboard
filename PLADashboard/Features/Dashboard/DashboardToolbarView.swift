@@ -6,6 +6,9 @@ struct DashboardToolbarContent: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             DashboardToolbarCustomLabelFilterPicker(viewModel: viewModel)
+            if viewModel.accountKind == .selfBuilt {
+                DashboardToolbarProductTagFilter(viewModel: viewModel)
+            }
             DashboardToolbarCategoryFilter(viewModel: viewModel)
         }
     }

@@ -121,15 +121,18 @@ actor PlaDeliveryDetailImporter {
             job.status = ImportJobStatus.succeeded.rawValue
             let errors = try await databaseClient.fetchImportErrors(importId: importId)
             let firstListedDates = state.firstListedByProductID.map { (productId: $0.key, firstListedAt: $0.value) }
-            let categories = state.cms3CostMicrosByProductID.compactMap { productId, costs in
-                costs.max { ($0.value, $0.key) < ($1.value, $1.key) }.map { (productId: productId, plaCms3: $0.key) }
+            let categories = state.categoryCostsByProductID.compactMap { productId, costs in
+                costs.max {
+                    ($0.value, $0.key.path ?? "", $0.key.cms3 ?? "") < ($1.value, $1.key.path ?? "", $1.key.cms3 ?? "")
+                }.map { (productId: productId, category: $0.key) }
             }
             if incrementalSync {
                 await onProgress(.fromJob(phase: .finalizing, job: job, message: "正在提交数据库变更…"))
             }
             try Task.checkCancellation()
             try await databaseClient.finishProductDetailImport(
-                job, firstListedDates: firstListedDates, categories: categories, replacingExisting: incrementalSync
+                job, firstListedDates: firstListedDates, categories: categories,
+                productTags: state.productTagsByID, replacingExisting: incrementalSync
             )
             return ImportResult(
                 importId: importId,
@@ -414,13 +417,15 @@ actor PlaDeliveryDetailImporter {
                 }
             }
 
-            if let cms3Index = columnMap.cms3Index,
-               let cms3Raw = columnMap.value(at: cms3Index, in: fields) {
-                let cms3 = cms3Raw.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !cms3.isEmpty {
-                    var byCMS3 = state.cms3CostMicrosByProductID[normalized.productID] ?? [:]
-                    byCMS3[cms3, default: 0] += costMicros
-                    state.cms3CostMicrosByProductID[normalized.productID] = byCMS3
+            if let category = columnMap.category(in: fields) {
+                state.categoryCostsByProductID[normalized.productID, default: [:]][category, default: 0] += costMicros
+            }
+            if let tags = columnMap.productTags(in: fields) {
+                let productID = normalized.productID
+                if let existing = state.productTagsByID[productID], existing.reportDay == isoDate {
+                    state.productTagsByID[productID]?.tags.formUnion(tags)
+                } else if state.productTagsByID[productID].map({ $0.reportDay < isoDate }) ?? true {
+                    state.productTagsByID[productID] = PlaProductTagSnapshot(reportDay: isoDate, tags: tags)
                 }
             }
 
@@ -500,8 +505,9 @@ private final class ImportAccumulationState: @unchecked Sendable {
     var errorBatch: [ImportRowErrorRecord] = []
     /// product_id → 本文件内最早的首次上架日（`yyyy-MM-dd`）。
     var firstListedByProductID: [String: String] = [:]
-    /// product_id → CMS3 → 本文件累计花费（micros），用于选主类目。
-    var cms3CostMicrosByProductID: [String: [String: Int]] = [:]
+    /// product_id → 类目 → 本批累计花费（micros），用于选主类目。
+    var categoryCostsByProductID: [String: [PlaProductCategory: Int]] = [:]
+    var productTagsByID: [String: PlaProductTagSnapshot] = [:]
     var processedRows = 0
     var validRows = 0
     var invalidRows = 0

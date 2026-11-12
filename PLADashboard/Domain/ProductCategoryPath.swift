@@ -1,5 +1,34 @@
 import Foundation
 
+struct PlaProductCategory: Hashable, Sendable {
+    let path: String?
+    let cms3: String?
+}
+
+struct PlaCategoryNode: Identifiable, Sendable {
+    let name: String
+    let path: String
+    let children: [Self]
+
+    var id: String { path }
+
+    static func tree(from paths: [String]) -> [Self] {
+        build(paths.map { $0.components(separatedBy: ProductCategoryPath.storageSeparator)[...] }, parent: [])
+    }
+
+    private static func build(_ paths: [ArraySlice<String>], parent: [String]) -> [Self] {
+        let byName = Dictionary(grouping: paths.filter { !$0.isEmpty }, by: { $0.first ?? "" })
+        return byName.keys.sorted().map { name in
+            let levels = parent + [name]
+            return Self(
+                name: name,
+                path: levels.joined(separator: ProductCategoryPath.storageSeparator),
+                children: build((byName[name] ?? []).map { $0.dropFirst() }, parent: levels)
+            )
+        }
+    }
+}
+
 /// Merchant Center 类目路径：三方站与自建站导出格式不同，统一解析为展示层级与存储路径。
 enum ProductCategoryPath {
     /// 自建站各层级之间的分隔符（`cXXXX_` 代码后缀后的 ` > `）。

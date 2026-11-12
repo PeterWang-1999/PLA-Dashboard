@@ -10,7 +10,10 @@ final class DashboardViewModel {
     var customLabelCatalog: CustomLabelCatalog = .empty
     var selectedCustomLabelFilter: CustomLabelFilterSelection = .all
     var categoryCatalog: GoogleProductCategoryCatalog = .empty
+    var plaCategories: [PlaCategoryNode] = []
     var selectedCategoryFilter: CategoryFilterSelection = .all
+    private(set) var productTags: [String] = []
+    var selectedProductTag: String?
     var currentPage = 1
     /// 仅新页成功落地时重置表格滚动容器，保留加载期间的当前内容。
     private(set) var tablePageRevision = 0
@@ -152,6 +155,7 @@ final class DashboardViewModel {
         searchText = ""
         selectedCustomLabelFilter = .all
         selectedCategoryFilter = .all
+        selectedProductTag = nil
         currentPage = 1
         totalPages = 1
         reportingPeriodLabel = nil
@@ -169,6 +173,8 @@ final class DashboardViewModel {
         isExporting = false
         exportErrorMessage = nil
         categoryCatalog = .empty
+        plaCategories = []
+        productTags = []
         customLabelCatalog = .empty
     }
 
@@ -464,7 +470,7 @@ final class DashboardViewModel {
         let generation = loadGeneration
         guard let databaseClient else { return }
         do {
-            let snapshot = try await databaseClient.buildFilterCatalogSnapshot()
+            let snapshot = try await databaseClient.buildFilterCatalogSnapshot(accountKind: accountKind)
             guard generation == loadGeneration else { return }
             applyFilterCatalogSnapshot(snapshot)
         } catch {
@@ -475,9 +481,12 @@ final class DashboardViewModel {
 
     private func clearFilterCatalogs() {
         categoryCatalog = .empty
+        plaCategories = []
         customLabelCatalog = .empty
         selectedCategoryFilter = .all
         selectedCustomLabelFilter = .all
+        productTags = []
+        selectedProductTag = nil
     }
 
     /// 当前账户尚无 Merchant 产品数据时，用于 Toolbar 空态提示（HIG empty state）。
@@ -489,6 +498,9 @@ final class DashboardViewModel {
 
     var categoryFilterEmptyHelp: String? {
         guard dataSource != .preview else { return nil }
+        if accountKind == .selfBuilt {
+            return plaCategories.isEmpty ? "请先同步投放产品明细以加载类目选项" : nil
+        }
         return categoryCatalog.groups.isEmpty
             ? "请先在当前账户导入 Merchant Center 数据以显示类目选项"
             : nil
@@ -496,7 +508,12 @@ final class DashboardViewModel {
 
     func applyFilterCatalogSnapshot(_ snapshot: DatabaseClient.FilterCatalogSnapshot) {
         categoryCatalog = snapshot.categoryCatalog
+        plaCategories = snapshot.plaCategories
         customLabelCatalog = snapshot.customLabelCatalog
+        productTags = snapshot.productTags
+        if let selectedProductTag, !productTags.contains(selectedProductTag) {
+            self.selectedProductTag = nil
+        }
         selectedCategoryFilter = .all
         selectedCustomLabelFilter = .all
     }
@@ -509,6 +526,7 @@ final class DashboardViewModel {
             searchText: searchText,
             customLabelFilter: selectedCustomLabelFilter,
             categoryFilter: selectedCategoryFilter,
+            productTag: selectedProductTag,
             sort: tableSort
         )
     }

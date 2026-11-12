@@ -59,6 +59,23 @@ struct AppDatabaseMigrator {
         migrator.registerMigration("v11_weekly_metrics_refresh") { db in
             try Migration_v11_WeeklyMetricsRefresh.migrate(db)
         }
+        migrator.registerMigration("v12_product_pla_category_path") { db in
+            try db.execute(sql: "ALTER TABLE products ADD COLUMN pla_category_path TEXT;")
+        }
+        migrator.registerMigration("v13_pla_product_tags") { db in
+            try db.execute(sql: """
+                CREATE TABLE pla_product_tag_snapshots (
+                    product_id TEXT PRIMARY KEY NOT NULL,
+                    report_day TEXT NOT NULL
+                );
+                CREATE TABLE pla_product_tags (
+                    product_id TEXT NOT NULL REFERENCES pla_product_tag_snapshots(product_id) ON DELETE CASCADE,
+                    tag TEXT NOT NULL,
+                    PRIMARY KEY (product_id, tag)
+                );
+                CREATE INDEX idx_pla_product_tags_tag ON pla_product_tags(tag);
+                """)
+        }
 
         if let target {
             try migrator.migrate(dbQueue, upTo: target)

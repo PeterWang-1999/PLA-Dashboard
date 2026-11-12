@@ -175,6 +175,67 @@ final class PlaDeliveryDetailImporterTests: XCTestCase {
             XCTAssertEqual(previousRows.map(\.costMicros).sorted(), [127_990_000, 282_680_000])
         }
     }
+
+    func testSelfBuiltCategoryFilterUsesFullProductDetailPath() async throws {
+        let client = try DatabaseClient.makeInMemoryForTesting()
+        let csv = """
+        日期,LSIN,CMS1,CMS2,CMS3,CMS4,Market Cost,Impressions,Clicks,Conversions,Conversion Value
+        2026-05-24,S9730219,Toys & Hobbies,Toys & Games,Games,Accessories,10,100,5,1,20
+        2026-05-24,S19954192,Toys & Hobbies,Pet Supplies,Games,Accessories,20,200,10,2,40
+        """
+        let file = try BenchmarkTestSupport.writeTemporaryFile(name: "pla-category.csv", contents: csv)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let importer = PlaDeliveryDetailImporter(databaseClient: client)
+        _ = try await importer.importFile(sourceURL: file, incrementalSync: true) { _ in }
+        try await client.refreshProductWeeklyMetricsAfterImport()
+
+        let catalog = try await client.buildFilterCatalogSnapshot(accountKind: .selfBuilt)
+        let root = try XCTUnwrap(catalog.plaCategories.first)
+        XCTAssertEqual(root.name, "Toys & Hobbies")
+        XCTAssertEqual(root.children.map(\.name), ["Pet Supplies", "Toys & Games"])
+        let toys = try XCTUnwrap(root.children.last)
+        let accessories = try XCTUnwrap(toys.children.first?.children.first)
+        XCTAssertEqual(accessories.name, "Accessories")
+
+        for (path, expected) in [(root.path, ["9730219", "19954192"]), (toys.path, ["9730219"]), (accessories.path, ["9730219"])] {
+            let selection = try await client.fetchDataDashboardProductSelection(filters: DashboardQueryFilters(categoryFilter: .plaPath(path)))
+            XCTAssertEqual(Set(selection.productIDs), Set(expected))
+        }
+    }
+
+    func testProductTagFilterUsesLatestReportDayAndCombinesWithCategory() async throws {
+        let client = try DatabaseClient.makeInMemoryForTesting()
+        let importer = PlaDeliveryDetailImporter(databaseClient: client)
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".csv")
+        defer { try? FileManager.default.removeItem(at: file) }
+        let header = "日期,LSIN,CMS1,CMS2,Product Tag,Market Cost,Impressions,Clicks,Conversions,Conversion Value"
+        let latest = "2026-05-24,S9730219,Toys & Hobbies,Toys & Games,高效,10,100,5,1,20"
+        let older = "2026-05-23,S9730219,Toys & Hobbies,Toys & Games,低效,10,100,5,1,20"
+        let pet = "2026-05-24,S19954192,Toys & Hobbies,Pet Supplies,高效,20,200,10,2,40"
+        try [header.replacingOccurrences(of: "Product Tag", with: "ProductTag"), latest, older, pet]
+            .joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
+        _ = try await importer.importFile(sourceURL: file, incrementalSync: true) { _ in }
+        try await client.refreshProductWeeklyMetricsAfterImport()
+
+        let catalog = try await client.buildFilterCatalogSnapshot(accountKind: .selfBuilt)
+        XCTAssertEqual(catalog.productTags, ["高效"])
+        let filters = DashboardQueryFilters(categoryFilter: .plaPath("Toys & Hobbies > Toys & Games"), productTag: "高效")
+        let page = try await client.fetchDashboardPage(filters: filters, page: 1, pageSize: 30)
+        XCTAssertEqual(page.rows.map(\.id), ["9730219"])
+
+        try [header, older].joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
+        _ = try await importer.importFile(sourceURL: file, incrementalSync: true) { _ in }
+        let afterOlderImport = try await client.fetchDataDashboardProductSelection(filters: filters)
+        XCTAssertEqual(afterOlderImport.productIDs, ["9730219"])
+
+        let untagged = latest.replacingOccurrences(of: ",高效,", with: ",,")
+        try [header, untagged].joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
+        _ = try await importer.importFile(sourceURL: file, incrementalSync: true) { _ in }
+        let afterTagRemoval = try await client.fetchDataDashboardProductSelection(filters: filters)
+        XCTAssertTrue(afterTagRemoval.productIDs.isEmpty)
+        let thirdParty = try await client.buildFilterCatalogSnapshot()
+        XCTAssertTrue(thirdParty.productTags.isEmpty)
+    }
 }
 
 final class PurgeLegacyGoogleAdsImportsTests: XCTestCase {

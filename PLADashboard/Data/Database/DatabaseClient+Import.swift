@@ -24,7 +24,8 @@ extension DatabaseClient {
     func finishProductDetailImport(
         _ job: ImportJobRecord,
         firstListedDates: [(productId: String, firstListedAt: String)],
-        categories: [(productId: String, plaCms3: String)],
+        categories: [(productId: String, category: PlaProductCategory)],
+        productTags: [String: PlaProductTagSnapshot],
         replacingExisting: Bool
     ) throws {
         try dbQueue.write { db in
@@ -44,8 +45,28 @@ extension DatabaseClient {
             }
             try upsertProductFirstListedDates(firstListedDates, importId: job.id, importedAt: job.importedAt, db: db)
             try upsertProductPlaCategories(categories, importId: job.id, importedAt: job.importedAt, db: db)
+            try updatePlaProductTags(productTags, db: db)
         }
         invalidateDashboardCache()
+    }
+
+    private func updatePlaProductTags(_ snapshots: [String: PlaProductTagSnapshot], db: Database) throws {
+        guard !snapshots.isEmpty else { return }
+        let saveDay = try db.makeStatement(sql: """
+            INSERT INTO pla_product_tag_snapshots (product_id, report_day) VALUES (?, ?)
+            ON CONFLICT(product_id) DO UPDATE SET report_day = excluded.report_day
+            WHERE excluded.report_day >= pla_product_tag_snapshots.report_day;
+            """)
+        let removeTags = try db.makeStatement(sql: "DELETE FROM pla_product_tags WHERE product_id = ?;")
+        let insertTag = try db.makeStatement(sql: "INSERT INTO pla_product_tags (product_id, tag) VALUES (?, ?);")
+        for (productID, snapshot) in snapshots {
+            try saveDay.execute(arguments: [productID, snapshot.reportDay])
+            guard db.changesCount > 0 else { continue }
+            try removeTags.execute(arguments: [productID])
+            for tag in snapshot.tags {
+                try insertTag.execute(arguments: [productID, tag])
+            }
+        }
     }
 
     private func discardUnchangedAds(for job: ImportJobRecord, db: Database) throws {
@@ -484,63 +505,26 @@ extension DatabaseClient {
         }
     }
 
-    /// 写入投放明细主 CMS3（按本文件花费最高的类目覆盖）。
+    /// 写入投放明细的主类目路径及 CMS3。
     private func upsertProductPlaCategories(
-        _ entries: [(productId: String, plaCms3: String)],
+        _ entries: [(productId: String, category: PlaProductCategory)],
         importId: String,
         importedAt: String,
         db: Database
     ) throws {
-        guard !entries.isEmpty else { return }
-        let ids = entries.map(\.productId)
-        let existingRows = try ProductRecord
-            .filter(ids.contains(ProductRecord.Columns.productId))
-            .fetchAll(db)
-        var existingByID = Dictionary(uniqueKeysWithValues: existingRows.map { ($0.productId, $0) })
-
-        var toInsert: [ProductRecord] = []
-        var toUpdate: [ProductRecord] = []
-
-        for entry in entries {
-            let cms3 = entry.plaCms3.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !cms3.isEmpty else { continue }
-
-            if var existing = existingByID[entry.productId] {
-                guard existing.plaCms3 != cms3 else { continue }
-                existing.plaCms3 = cms3
-                existing.lastSeenAt = importedAt
-                existing.updatedFromImportId = importId
-                toUpdate.append(existing)
-                existingByID[entry.productId] = existing
-            } else {
-                let product = ProductRecord(
-                    productId: entry.productId,
-                    title: nil,
-                    canonicalLink: nil,
-                    imageUrl: nil,
-                    customLabel0: nil,
-                    customLabel1: nil,
-                    customLabel2: nil,
-                    customLabel3: nil,
-                    customLabel4: nil,
-                    lsin: nil,
-                    googleProductCategory: nil,
-                    firstListedAt: nil,
-                    plaCms3: cms3,
-                    firstSeenAt: importedAt,
-                    lastSeenAt: importedAt,
-                    updatedFromImportId: importId
-                )
-                toInsert.append(product)
-                existingByID[entry.productId] = product
-            }
-        }
-
-        if !toInsert.isEmpty {
-            try db.insertRecords(toInsert)
-        }
-        for product in toUpdate {
-            try product.update(db)
+        let statement = try db.makeStatement(sql: """
+            INSERT INTO products (product_id, pla_category_path, pla_cms3, first_seen_at, last_seen_at, updated_from_import_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(product_id) DO UPDATE SET
+                pla_category_path = excluded.pla_category_path,
+                pla_cms3 = excluded.pla_cms3,
+                last_seen_at = excluded.last_seen_at,
+                updated_from_import_id = excluded.updated_from_import_id
+            WHERE (excluded.pla_category_path IS NOT NULL OR products.pla_category_path IS NULL)
+              AND (products.pla_category_path IS NOT excluded.pla_category_path OR products.pla_cms3 IS NOT excluded.pla_cms3);
+            """)
+        for (productID, category) in entries {
+            try statement.execute(arguments: [productID, category.path, category.cms3, importedAt, importedAt, importId])
         }
     }
 
@@ -610,14 +594,28 @@ extension DatabaseClient {
 
     struct FilterCatalogSnapshot: Sendable {
         let categoryCatalog: GoogleProductCategoryCatalog
+        let plaCategories: [PlaCategoryNode]
+        let productTags: [String]
         let customLabelCatalog: CustomLabelCatalog
     }
 
-    func buildFilterCatalogSnapshot() throws -> FilterCatalogSnapshot {
-        let categoryPaths = try fetchDistinctGoogleProductCategories()
+    func buildFilterCatalogSnapshot(accountKind: WorkspaceAccountKind = .thirdParty) throws -> FilterCatalogSnapshot {
+        let categoryCatalog = accountKind == .selfBuilt ? .empty :
+            GoogleProductCategoryCatalog.build(fromCategoryPaths: try fetchDistinctGoogleProductCategories())
+        let plaCategories = accountKind == .selfBuilt ? try dbQueue.read { db in
+            try String.fetchAll(db, sql: """
+                SELECT DISTINCT pla_category_path FROM products
+                WHERE pla_category_path IS NOT NULL AND pla_category_path != '';
+                """)
+        } : []
         let customLabelValues = try fetchDistinctCustomLabelValues()
+        let productTags = accountKind == .selfBuilt ? try dbQueue.read { db in
+            try String.fetchAll(db, sql: "SELECT DISTINCT tag FROM pla_product_tags ORDER BY tag;")
+        } : []
         return FilterCatalogSnapshot(
-            categoryCatalog: GoogleProductCategoryCatalog.build(fromCategoryPaths: categoryPaths),
+            categoryCatalog: categoryCatalog,
+            plaCategories: PlaCategoryNode.tree(from: plaCategories),
+            productTags: productTags,
             customLabelCatalog: CustomLabelCatalog.build(valuesByColumn: customLabelValues)
         )
     }

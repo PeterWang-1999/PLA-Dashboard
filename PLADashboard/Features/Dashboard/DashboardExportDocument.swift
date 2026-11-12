@@ -46,6 +46,9 @@ struct DashboardExportCSVDocument: FileDocument, Sendable {
         lines.append("# search=\(Self.escapeCSV(filters.searchText))")
         lines.append("# custom_label_filter=\(Self.escapeCSV(filters.customLabelFilter.menuTitle))")
         lines.append("# category_filter=\(Self.escapeCSV(filters.categoryFilter.menuTitle))")
+        if let productTag = filters.productTag {
+            lines.append("# product_tag_filter=\(Self.escapeCSV(productTag))")
+        }
         lines.append("# sort=\(Self.escapeCSV(filters.sort.exportLabel))")
 
         var headers = [

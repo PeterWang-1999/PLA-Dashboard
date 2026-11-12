@@ -71,6 +71,35 @@ struct DashboardToolbarCustomLabelFilterPicker: View {
     }
 }
 
+struct DashboardToolbarProductTagFilter: View {
+    @Bindable var viewModel: DashboardViewModel
+
+    private let allTags = "全部效果标签"
+
+    var body: some View {
+        Menu {
+            Picker("效果标签", selection: $viewModel.selectedProductTag) {
+                Text(allTags).tag(nil as String?)
+                ForEach(viewModel.productTags, id: \.self) { tag in
+                    Text(tag).tag(tag as String?)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            DashboardToolbarFilterLabel(
+                title: viewModel.selectedProductTag ?? allTags,
+                usesPrimaryStyle: viewModel.selectedProductTag != nil
+            )
+        }
+        .dashboardToolbarPullDownMenuChrome()
+        .accessibilityLabel("效果标签筛选")
+        .accessibilityValue(viewModel.selectedProductTag ?? allTags)
+        .modifier(DashboardToolbarFilterEmptyHelp(
+            message: viewModel.productTags.isEmpty ? "同步投放产品明细后，这里会显示可选的效果标签" : nil
+        ))
+    }
+}
+
 struct DashboardToolbarCategoryFilter: View {
     @Bindable var viewModel: DashboardViewModel
 
@@ -82,6 +111,9 @@ struct DashboardToolbarCategoryFilter: View {
 
             Divider()
 
+            ForEach(viewModel.plaCategories) { category in
+                PlaCategoryMenuItem(category: category, selection: $viewModel.selectedCategoryFilter)
+            }
             ForEach(viewModel.categoryCatalog.groups) { group in
                 if group.hasLevel3Children {
                     Menu(group.level2) {
@@ -116,6 +148,25 @@ struct DashboardToolbarCategoryFilter: View {
         .accessibilityLabel("类目筛选")
         .accessibilityValue(viewModel.selectedCategoryFilter.menuTitle)
         .modifier(DashboardToolbarFilterEmptyHelp(message: viewModel.categoryFilterEmptyHelp))
+    }
+}
+
+private struct PlaCategoryMenuItem: View {
+    let category: PlaCategoryNode
+    @Binding var selection: CategoryFilterSelection
+
+    var body: some View {
+        if category.children.isEmpty {
+            Button(category.name) { selection = .plaPath(category.path) }
+        } else {
+            Menu(category.name) {
+                Button("全部 \(category.name)") { selection = .plaPath(category.path) }
+                Divider()
+                ForEach(category.children) { child in
+                    PlaCategoryMenuItem(category: child, selection: $selection)
+                }
+            }
+        }
     }
 }
 

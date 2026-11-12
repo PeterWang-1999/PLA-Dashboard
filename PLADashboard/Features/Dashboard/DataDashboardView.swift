@@ -56,6 +56,7 @@ struct DataDashboardView: View {
 
         .onChange(of: viewModel.selectedCustomLabelFilter) { _, _ in viewModel.onFiltersChanged() }
         .onChange(of: viewModel.selectedCategoryFilter) { _, _ in viewModel.onFiltersChanged() }
+        .onChange(of: viewModel.selectedProductTag) { _, _ in viewModel.onFiltersChanged() }
         .onChange(of: viewModel.isLoadingDataDashboard) { _, isLoading in
             if isLoading {
                 // 刷新开始：把当前已展示的数据冻结为插值起点，避免新数据到达时瞬时跳变。

@@ -45,6 +45,9 @@ struct DashboardView: View {
             .onChange(of: viewModel.selectedCategoryFilter) { _, _ in
                 viewModel.onFiltersChanged()
             }
+            .onChange(of: viewModel.selectedProductTag) { _, _ in
+                viewModel.onFiltersChanged()
+            }
             .onChange(of: columnSortOrder) { _, newOrder in
                 if DashboardTableSort.from(columnSortOrder: newOrder) != nil {
                     viewModel.applyColumnSort(newOrder)
