@@ -12,12 +12,7 @@ struct ImportHistoryView: View {
 
     var body: some View {
         if jobs.isEmpty {
-            ContentUnavailableView(
-                "暂无导入记录",
-                systemImage: "tray",
-                description: Text("导入数据后将在此显示历史批次。")
-            )
-            .frame(minHeight: 160)
+            emptyState
         } else {
             Table(jobs) {
                 TableColumn("时间") { job in
@@ -61,6 +56,28 @@ struct ImportHistoryView: View {
                 alignment: .topLeading
             )
         }
+    }
+
+    private var emptyState: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "tray")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("暂无导入记录")
+                    .font(.subheadline.weight(.semibold))
+                Text("导入数据后，历史批次将显示在这里。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color.primary.opacity(0.05), in: .rect(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
     }
 
     private var tableHeight: CGFloat {

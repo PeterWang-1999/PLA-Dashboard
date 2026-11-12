@@ -4,6 +4,8 @@ struct ImportsView: View {
     @Bindable var viewModel: ImportViewModel
 
     var body: some View {
+        let historyJobs = ImportJobRecord.latestPerSourceKind(from: viewModel.importJobs)
+
         VStack(alignment: .leading, spacing: 20) {
             headerSection
 
@@ -13,12 +15,16 @@ struct ImportsView: View {
                     errors: viewModel.latestErrors,
                     isLoadingErrors: viewModel.isLoadingImportErrors
                 )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            } else {
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: historyJobs.isEmpty ? nil : .infinity,
+                    alignment: .topLeading
+                )
+            } else if !historyJobs.isEmpty {
                 Spacer(minLength: 0)
             }
 
-            historySection
+            historySection(jobs: historyJobs)
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -45,11 +51,12 @@ struct ImportsView: View {
         )
     }
 
-    private var historySection: some View {
+    private func historySection(jobs: [ImportJobRecord]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("导入历史")
                 .font(.headline)
-            ImportHistoryView(jobs: ImportJobRecord.latestPerSourceKind(from: viewModel.importJobs))
+                .accessibilityAddTraits(.isHeader)
+            ImportHistoryView(jobs: jobs)
         }
     }
 
