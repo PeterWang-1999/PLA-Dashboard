@@ -37,9 +37,9 @@ struct BISyncProgressBanner: View {
 
     @ViewBuilder
     private var progressBar: some View {
-        if let fraction {
-            ProgressView(value: fraction)
-                .accessibilityLabel("当前阶段进度")
+        if let importFraction {
+            ProgressView(value: importFraction)
+                .accessibilityLabel("导入进度")
         } else {
             ProgressView()
                 .accessibilityLabel("同步进行中")
@@ -61,14 +61,8 @@ struct BISyncProgressBanner: View {
         }
     }
 
-    private var fraction: Double? {
-        switch phase {
-        case let .downloading(completed, total) where total > 0:
-            return Double(completed) / Double(total)
-        case let .importing(_, progress):
-            return progress.fractionCompleted
-        default:
-            return nil
-        }
+    private var importFraction: Double? {
+        guard case let .importing(_, progress) = phase else { return nil }
+        return progress.fractionCompleted
     }
 }
